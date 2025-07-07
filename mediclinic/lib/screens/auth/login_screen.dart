@@ -17,17 +17,17 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   void _login() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    // Dummy login logic, replace with your AuthService
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() {
-      _isLoading = false;
-      _error = "Invalid credentials"; // Replace with real error handling
-    });
-  }
+  setState(() {
+    _isLoading = true;
+    _error = null;
+  });
+  await Future.delayed(const Duration(seconds: 2));
+  setState(() {
+    _isLoading = false;
+  });
+  // Temporary: Redirect to PatientLandingPage after login
+  Navigator.pushReplacementNamed(context, '/patientLanding');
+}
 
   @override
   Widget build(BuildContext context) {

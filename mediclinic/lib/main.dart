@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/auth/regester.dart'; 
-
+import 'screens/auth/regester.dart';
+import 'screens/patient/patient_landing_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login_screen': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
-        
+        '/patientLanding': (context) => const PatientLandingPage(),
       },
     );
   }
