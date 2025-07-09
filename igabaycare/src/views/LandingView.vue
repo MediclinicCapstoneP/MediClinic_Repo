@@ -1,17 +1,25 @@
 <script>
-  import BottomNavbar from '@/components/LandingP/BottomNavbar.vue'
+  import Menubar from '@/components/LandingP/Menubar.vue';
+
+  export default{
+    components: {
+      Menubar
+    }
+  }
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-50 flex flex-col">
     <!-- Header -->
-    <header class="bg-white shadow p-4 flex items-center justify-between">
+    <Menubar/>
+
+    <!-- <header class="bg-white shadow p-4 flex items-center justify-between">
       <div>
         <h1 class="text-xl font-bold">Hello, Shahin Alam</h1>
         <p class="text-gray-500 text-sm">Welcome to iGabayAtiCare</p>
       </div>
       <img src="@/assets/avatar.jpg" class="w-12 h-12 rounded-full" alt="User Avatar" />
-    </header>
+    </header> -->
 
     <!-- Main Content -->
     <main class="flex-1 p-4">
@@ -76,7 +84,7 @@
         </div>
       </div>
     </main>
-    <BottomNavbar />
+  
   </div>
 </template>
 

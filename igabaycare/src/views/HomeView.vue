@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import TheWelcome from '../components/TheWelcome.vue'
+import Menubar from '@/components/LandingP/Menubar.vue'
 </script>
 
 <template>
   <main>
-    <TheWelcome />
+    <div>
+    <Menubar/>
+    </div>
   </main>
 </template>
