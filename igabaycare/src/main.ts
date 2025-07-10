@@ -1,30 +1,26 @@
+import { createApp } from 'vue';
+import App from './App.vue';
+import router from './router';
 
-import PrimeVue from 'primevue/config';
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import ToastService from 'primevue/toastservice';
-import App from './App.vue'
-import router from './router'
-
-
-//primevue css   
 import Aura from '@primeuix/themes/aura';
-import 'primeicons/primeicons.css';
+import PrimeVue from 'primevue/config';
+import ConfirmationService from 'primevue/confirmationservice';
+import ToastService from 'primevue/toastservice';
 
-//creation
-const pinia = createPinia();
+import '@/assets/styles.scss';
+
 const app = createApp(App);
 
-// PrimeVue configuration
+app.use(router);
 app.use(PrimeVue, {
     theme: {
-        preset: Aura
+        preset: Aura,
+        options: {
+            darkModeSelector: '.app-dark'
+        }
     }
 });
-
-
-app.use(router)
-app.use(PrimeVue);
 app.use(ToastService);
-app.use(pinia);
-app.mount('#app')
+app.use(ConfirmationService);
+
+app.mount('#app');
