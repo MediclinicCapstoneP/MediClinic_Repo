@@ -9020,11 +9020,11 @@ export const CustomerService = {
         return Promise.resolve(this.getData());
     },
 
-    getCustomers(params) {
+    getCustomers(params?: Record<string, string | number | boolean>) {
         const queryParams = params
             ? Object.keys(params)
-                  .map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
-                  .join('&')
+                .map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])))
+                .join('&')
             : '';
 
         return fetch('https://www.primefaces.org/data/customers?' + queryParams).then((res) => res.json());
