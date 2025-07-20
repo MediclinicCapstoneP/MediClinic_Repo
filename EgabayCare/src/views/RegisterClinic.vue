@@ -71,7 +71,8 @@ export default {
   },
   methods: {
     handleFileUpload(event) {
-      this.certificateFile = event.target.files[0]
+      const file = event.target.files[0]
+      this.certificateFile = file
     },
     async registerClinic() {
       this.error = ''
@@ -92,7 +93,7 @@ export default {
         }
 
         // Step 2: Create Clinic Auth Account
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: this.email,
           password: this.password,
           options: {
@@ -107,6 +108,24 @@ export default {
         })
 
         if (signUpError) throw signUpError
+
+        // Step 3: Insert into clinics table
+        const userId = signUpData.user?.id
+        if (userId) {
+          const { error: dbError } = await supabase
+            .from('clinics')
+            .insert([{
+              id: userId,
+              name: this.clinicName,
+              email: this.email,
+              phone: this.contact,
+              address: this.location,
+              license_number: uploadedFileUrl,
+              created_at: new Date(),
+              is_verified: false
+            }])
+          if (dbError) throw dbError
+        }
 
         alert('Please verify your email to activate the clinic account.')
         this.$router.push('/login')
