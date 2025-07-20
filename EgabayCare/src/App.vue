@@ -1,7 +1,31 @@
-<script setup></script>
-
+<!-- src/App.vue -->
 <template>
-    <router-view />
+  
+   
+    <main class="py-4">
+      <router-view />
+    </main>
+  
 </template>
 
-<style scoped></style>
+<script>
+import Navbar from './layouts/Navbar.vue'
+
+export default {
+  components: {
+    Navbar
+  }
+}
+</script>
+
+<style>
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', sans-serif;
+}
+#app {
+  padding: 0;
+  margin: 0;
+}
+
+</style>
