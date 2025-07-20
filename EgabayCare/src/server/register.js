@@ -20,24 +20,37 @@ const transporter = nodemailer.createTransport({
 });
 
 app.post('/register', async (req, res) => {
-  const { first_name, last_name, email, gender, phone_number, user_address, birthdate, password, role } = req.body;
+  const {
+    name,
+    email,
+    phone,
+    address,
+    license_number,
+    accreditation,
+    owner_name,
+    password
+  } = req.body;
+
   const password_hash = await bcrypt.hash(password, 10);
   const verification_code = crypto.randomBytes(16).toString('hex');
 
   try {
-    // Insert user into database
+    // Insert clinic into database
     await pool.query(
-      `INSERT INTO users (first_name, last_name, email, gender, phone_number, course, user_address, birthdate, user_password, verification_code, role)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [first_name, last_name, email, gender, phone_number, course, user_address, birthdate, password_hash, verification_code, role]
+      `INSERT INTO clinics (
+        name, email, phone, address, license_number, accreditation, owner_name, password_hash, created_at, is_verified, verification_code
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, now(), false, $9
+      )`,
+      [name, email, phone, address, license_number, accreditation, owner_name, password_hash, verification_code]
     );
 
     // Send verification email
     const mailOptions = {
       from: 'yourgmail@gmail.com',
       to: email,
-      subject: 'Account Verification',
-      html: `Click the link to verify your account: <a href="http://localhost:3000/verify?code=${verification_code}">Verify Account</a>`
+      subject: 'Clinic Account Verification',
+      html: `Click the link to verify your clinic account: <a href="http://localhost:3000/verify?code=${verification_code}">Verify Account</a>`
     };
 
     await transporter.sendMail(mailOptions);
