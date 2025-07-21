@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 
 const app = express();
 const pool = new Pool({
-  connectionString: 'YOUR_POSTGRES_CONNECTION_STRING' // Replace with your actual connection string
+  connectionString: 'postgresql://postgres:143Death-4ever@db.warwewbeirhmqhbpdxoj.supabase.co:5432/postgres' // Replace with your actual connection string
 });
 
 app.get('/verify', async (req, res) => {

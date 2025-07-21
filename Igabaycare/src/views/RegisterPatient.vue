@@ -3,7 +3,7 @@
   <div class="register-container">
     <div class="register-card">
       <div class="register-header">
-        <img src="/vite.svg" alt="iGabayAtiCare Logo" class="register-logo" />
+        <img src="/favicon.ico" alt="iGabayAtiCare Logo" class="register-logo" />
         <h2>iGabayAtiCare</h2>
         <p class="register-welcome">Create your patient account</p>
       </div>
@@ -21,12 +21,12 @@
           <input type="password" v-model="password" class="form-control" required />
         </div>
         <div class="form-group">
-          <label>Location</label>
-          <input type="text" v-model="location" class="form-control" />
+          <label>Phone</label>
+          <input type="text" v-model="phone" class="form-control" />
         </div>
         <div class="form-group">
-          <label>Contact</label>
-          <input type="text" v-model="contact" class="form-control" />
+          <label>Address</label>
+          <input type="text" v-model="address" class="form-control" />
         </div>
         <button class="btn-register" type="submit" :disabled="loading">
           <span v-if="loading">Registering...</span>
@@ -43,7 +43,7 @@
 </template>
 
 <script>
-import { supabase } from '../services/supabase'
+import { supabase } from '../supabase'
 
 export default {
   data() {
@@ -51,8 +51,8 @@ export default {
       fullName: '',
       email: '',
       password: '',
-      location: '',
-      contact: '',
+      phone: '',
+      address: '',
       error: '',
       loading: false
     }
@@ -104,20 +104,21 @@ export default {
           this.loading = false
           return
         }
+        const userId = authData.user?.id
 
         // Insert patient data into patients table
-        const { data: patientData, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from('patients')
           .insert([
             {
-              name: this.fullName,
+              id: userId,
               email: this.email,
-              location: this.location || null,
-              contact: this.contact || null,
+              phone: this.phone || null,
+              full_name: this.fullName,
+              address: this.address || null,
               created_at: new Date().toISOString()
             }
           ])
-          .select()
 
         if (insertError) {
           console.error('Error inserting patient:', insertError)
@@ -262,8 +263,12 @@ export default {
 
 @media (max-width: 500px) {
   .register-card {
-    padding: 1.5rem 0.7rem 1.2rem 0.7rem;
-    max-width: 98vw;
+    padding: 1.5rem 0.7rem 1.2rem 0.7rem !important;
+    max-width: 98vw !important;
+  }
+
+  .register-form {
+    padding: 0 !important;
   }
 }
 </style>

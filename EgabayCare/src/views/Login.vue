@@ -33,63 +33,84 @@
     </div>
 </template>
 
+
 <script>
 import { supabase } from '../services/supabase'
 
 export default {
-    data() {
-        return {
-            email: '',
-            password: '',
-            error: '',
-            loading: false
-        }
-    },
-    methods: {
-        async login() {
-            this.error = ''
-            this.loading = true
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: this.email,
-                password: this.password
-            })
-            this.loading = false
-            if (error) {
-                this.error = error.message
-                return
-            }
-
-            // Get the logged-in user's ID
-            const userId = data.user.id
-
-            // Try to find the user in clinics table
-            const { data: clinic } = await supabase
-                .from('clinics')
-                .select('id')
-                .eq('id', userId)
-                .single()
-
-            if (clinic) {
-                this.$router.push('/clinic-home')
-                return
-            }
-
-            // Try to find the user in patients table
-            const { data: patient } = await supabase
-                .from('patients')
-                .select('id')
-                .eq('id', userId)
-                .single()
-
-            if (patient) {
-                this.$router.push('/patient-home')
-                return
-            }
-
-            // Default fallback
-            this.$router.push('/')
-        }
+  data() {
+    return {
+      email: '',
+      password: '',
+      error: '',
+      loading: false
     }
+  },
+  methods: {
+    async login() {
+      this.error = ''
+      this.loading = true
+
+      try {
+        // Attempt Supabase sign-in
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: this.email,
+          password: this.password
+        })
+
+        if (error) {
+          this.error = 'Invalid email or password.'
+          this.loading = false
+          return
+        }
+
+        const user = data.user
+        const email = user.email
+
+        // Check which role the user belongs to
+        const clinic = await supabase
+          .from('clinics')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle()
+
+        if (clinic.data) {
+          this.$router.push('/clinic-dashboard')
+          return
+        }
+
+        const patient = await supabase
+          .from('patients')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle()
+
+        if (patient.data) {
+          this.$router.push('/patient-dashboard')
+          return
+        }
+
+        const doctor = await supabase
+          .from('doctors')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle()
+
+        if (doctor.data) {
+          this.$router.push('/doctor-dashboard')
+          return
+        }
+
+        // No matching role
+        this.error = 'Your account was found but no role is assigned. Contact support.'
+      } catch (err) {
+        console.error('Login error:', err)
+        this.error = 'Something went wrong during login.'
+      } finally {
+        this.loading = false
+      }
+    }
+  }
 }
 </script>
 

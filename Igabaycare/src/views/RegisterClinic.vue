@@ -1,138 +1,123 @@
-<!-- src/views/RegisterPatient.vue -->
 <template>
   <div class="register-container">
     <div class="register-card">
       <div class="register-header">
-        <img src="/vite.svg" alt="iGabayAtiCare Logo" class="register-logo" />
+        <img src="/favicon.ico" alt="iGabayAtiCare Logo" class="register-logo" />
         <h2>iGabayAtiCare</h2>
-        <p class="register-welcome">Create your patient account</p>
+        <p class="register-welcome">Register Your Clinic</p>
       </div>
-      <form @submit.prevent="register" class="register-form">
+      <form @submit.prevent="registerClinic" class="register-form" enctype="multipart/form-data">
         <div class="form-group">
-          <label>Full Name</label>
-          <input type="text" v-model="fullName" class="form-control" required />
+          <label>Clinic Name</label>
+          <input type="text" v-model="name" class="form-control" required />
         </div>
         <div class="form-group">
           <label>Email</label>
           <input type="email" v-model="email" class="form-control" required />
         </div>
         <div class="form-group">
+          <label>Contact Number</label>
+          <input type="text" v-model="phone" class="form-control" required />
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" v-model="address" class="form-control" required />
+        </div>
+        <div class="form-group">
+          <label>License Number</label>
+          <input type="text" v-model="license_number" class="form-control" required />
+        </div>
+        <div class="form-group">
+          <label>Accreditation</label>
+          <input type="text" v-model="accreditation" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Owner Name</label>
+          <input type="text" v-model="owner_name" class="form-control" required />
+        </div>
+        <div class="form-group">
           <label>Password</label>
           <input type="password" v-model="password" class="form-control" required />
         </div>
-        <div class="form-group">
-          <label>Location</label>
-          <input type="text" v-model="location" class="form-control" />
-        </div>
-        <div class="form-group">
-          <label>Contact</label>
-          <input type="text" v-model="contact" class="form-control" />
-        </div>
         <button class="btn-register" type="submit" :disabled="loading">
-          <span v-if="loading">Registering...</span>
-          <span v-else>Register</span>
+          <span v-if="loading">Submitting...</span>
+          <span v-else>Register Clinic</span>
         </button>
         <p class="login-link">
-          Already have an account?
+          Already registered?
           <router-link to="/login">Login here</router-link>
         </p>
+        <div v-if="error" class="alert-error">{{ error }}</div>
       </form>
-      <div v-if="error" class="alert-error">{{ error }}</div>
     </div>
   </div>
 </template>
 
 <script>
-import { supabase } from '../services/supabase'
+import { supabase } from '../supabase'
 
 export default {
   data() {
     return {
-      fullName: '',
+      name: '',
       email: '',
+      phone: '',
+      address: '',
+      license_number: '',
+      accreditation: '',
+      owner_name: '',
       password: '',
-      location: '',
-      contact: '',
       error: '',
       loading: false
     }
   },
   methods: {
-    async register() {
+    async registerClinic() {
       this.error = ''
       this.loading = true
-
       try {
-        // Validate required fields
-        if (!this.fullName || !this.email || !this.password) {
-          this.error = 'Please fill in all required fields.'
-          this.loading = false
-          return
-        }
-
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(this.email)) {
-          this.error = 'Please enter a valid email address.'
-          this.loading = false
-          return
-        }
-
-        // Check if email already exists in patients table
-        const { data: existingPatient, error: checkError } = await supabase
-          .from('patients')
-          .select('id')
-          .eq('email', this.email)
-          .maybeSingle()
-
-        if (checkError) {
-          console.error('Error checking existing patient:', checkError)
-        } else if (existingPatient) {
-          this.error = 'An account with this email already exists.'
-          this.loading = false
-          return
-        }
-
-        // Create Supabase auth user
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // Step 1: Register with Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
           email: this.email,
-          password: this.password
-        })
-
-        if (authError) {
-          this.error = authError.message
-          this.loading = false
-          return
-        }
-
-        // Insert patient data into patients table
-        const { data: patientData, error: insertError } = await supabase
-          .from('patients')
-          .insert([
-            {
-              name: this.fullName,
-              email: this.email,
-              location: this.location || null,
-              contact: this.contact || null,
-              created_at: new Date().toISOString()
+          password: this.password,
+          options: {
+            data: {
+              name: this.name,
+              phone: this.phone,
+              address: this.address,
+              license_number: this.license_number,
+              accreditation: this.accreditation,
+              owner_name: this.owner_name,
+              role: 'clinic'
             }
-          ])
-          .select()
+          }
+        })
+        if (error) throw error
 
-        if (insertError) {
-          console.error('Error inserting patient:', insertError)
-          this.error = 'Failed to create patient account. Please try again.'
-          this.loading = false
-          return
+        // Step 2: Insert into clinics table
+        const userId = data.user?.id
+        if (userId) {
+          const { error: dbError } = await supabase
+            .from('clinics')
+            .insert([{
+              id: userId,
+              name: this.name,
+              email: this.email,
+              phone: this.phone,
+              address: this.address,
+              license_number: this.license_number,
+              accreditation: this.accreditation,
+              owner_name: this.owner_name,
+              password_hash: '', // Supabase Auth stores password securely
+              is_verified: false
+            }])
+          if (dbError) throw dbError
         }
 
-        // Success
-        alert('Account created successfully! Please check your email to verify your account.')
+        alert('Registration successful! Please check your email for verification.')
         this.$router.push('/login')
-
       } catch (err) {
-        console.error('Registration error:', err)
-        this.error = 'Something went wrong during registration. Please try again.'
+        this.error = err.message
       } finally {
         this.loading = false
       }
@@ -262,8 +247,12 @@ export default {
 
 @media (max-width: 500px) {
   .register-card {
-    padding: 1.5rem 0.7rem 1.2rem 0.7rem;
-    max-width: 98vw;
+    padding: 1.5rem 0.7rem 1.2rem 0.7rem !important;
+    max-width: 98vw !important;
+  }
+
+  .register-form {
+    padding: 0 !important;
   }
 }
 </style>

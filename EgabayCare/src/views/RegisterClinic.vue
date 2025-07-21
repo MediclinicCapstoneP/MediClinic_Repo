@@ -54,6 +54,8 @@
 </template>
 
 <script>
+import { supabase } from '../services/supabase'
+
 export default {
   data() {
     return {
@@ -74,28 +76,46 @@ export default {
       this.error = ''
       this.loading = true
       try {
-        const formData = {
-          name: this.name,
+        // Step 1: Register with Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
           email: this.email,
-          phone: this.phone,
-          address: this.address,
-          license_number: this.license_number,
-          accreditation: this.accreditation,
-          owner_name: this.owner_name,
-          password: this.password
-        }
-        const response = await fetch('http://localhost:3000/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
+          password: this.password,
+          options: {
+            data: {
+              name: this.name,
+              phone: this.phone,
+              address: this.address,
+              license_number: this.license_number,
+              accreditation: this.accreditation,
+              owner_name: this.owner_name,
+              role: 'clinic'
+            }
+          }
         })
-        const result = await response.json()
-        if (result.res === 'success') {
-          alert(result.msg)
-          this.$router.push('/login')
-        } else {
-          this.error = result.msg
+        if (error) throw error
+
+        // Step 2: Insert into clinics table
+        const userId = data.user?.id
+        if (userId) {
+          const { error: dbError } = await supabase
+            .from('clinics')
+            .insert([{
+              id: userId,
+              name: this.name,
+              email: this.email,
+              phone: this.phone,
+              address: this.address,
+              license_number: this.license_number,
+              accreditation: this.accreditation,
+              owner_name: this.owner_name,
+              password_hash: '', // Supabase Auth stores password securely
+              is_verified: false
+            }])
+          if (dbError) throw dbError
         }
+
+        alert('Registration successful! Please check your email for verification.')
+        this.$router.push('/login')
       } catch (err) {
         this.error = err.message
       } finally {
