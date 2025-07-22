@@ -31,9 +31,29 @@ const router = createRouter({
       component: () => import('../views/clinicside/ClinicDashboard.vue'),
     },
     {
-      path: '/patient-dashboard',
-      name: 'patient-dashboard',
-      component: () => import('../views/patientside/PatientDashboard.vue'),
+      path: '/patient-homepage',
+      name: 'patient-homepage',
+      component: () => import('../views/patientside/Homepage.vue'),
+    },
+    {
+      path: '/patient-appointments',
+      name: 'patient-appointments',
+      component: () => import('../views/patientside/MyAppointments.vue'),
+    },
+    {
+      path: '/patient-medical-records',
+      name: 'patient-medical-records',
+      component: () => import('../views/patientside/MedicalRecords.vue'),
+    },
+    {
+      path: '/patient-profile',
+      name: 'patient-profile',
+      component: () => import('../views/patientside/PatientProfile.vue'),
+    },
+    {
+      path: '/patient-book-appointment',
+      name: 'patient-book-appointment',
+      component: () => import('../views/patientside/BookAppointment.vue'),
     },
     {
       path: '/doctor-dashboard',
