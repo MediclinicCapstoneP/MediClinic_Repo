@@ -96,7 +96,15 @@ export default {
         // Create Supabase auth user
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: this.email,
-          password: this.password
+          password: this.password,
+          options: {
+            data: {
+              full_name: this.fullName,
+              phone: this.phone,
+              address: this.address,
+              role: 'patient'
+            }
+          }
         })
 
         if (authError) {
@@ -114,9 +122,10 @@ export default {
               id: userId,
               email: this.email,
               phone: this.phone || null,
+              password_hash: 'managed_by_auth',
               full_name: this.fullName,
-              address: this.address || null,
-              created_at: new Date().toISOString()
+              address: this.address || null
+              // created_at will use DB default
             }
           ])
 
