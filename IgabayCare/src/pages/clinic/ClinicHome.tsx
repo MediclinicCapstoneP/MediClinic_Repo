@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calendar, Users, Clock, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '../ui/Card';
+import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 
 export const ClinicHome: React.FC = () => {
   const stats = [

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Navigation } from '../layout/Navigation';
-import { Header } from '../layout/Header';
-import { ClinicHome } from './ClinicHome';
-import { ClinicAppointments } from './ClinicAppointments';
-import { ClinicDoctors } from './ClinicDoctors';
-import { ClinicPatients } from './ClinicPatients';
-import { ClinicSettings } from './ClinicSettings';
+import { Navigation } from '../../components/layout/Navigation';
+import { Header } from '../../components/layout/Header';
+import { ClinicHome } from '../../pages/clinic/ClinicHome';
+import { ClinicAppointments } from '../../components/clinic/ClinicAppointments';
+import { ClinicDoctors } from '../../components/clinic/ClinicDoctors';
+import { ClinicPatients } from '../../components/clinic/ClinicPatients';
+import { ClinicSettings } from '../../pages/clinic/ClinicSettings';
 
 export const ClinicDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
