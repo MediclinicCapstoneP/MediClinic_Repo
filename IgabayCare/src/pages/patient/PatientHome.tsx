@@ -1,6 +1,6 @@
 import React from 'react';
 import { Search, MapPin, Calendar, History, MessageCircle, Heart } from 'lucide-react';
-import { Card, CardContent } from '../ui/Card';
+import { Card, CardContent } from '../../components/ui/newcard';
 
 interface PatientHomeProps {
   onNavigate: (tab: string) => void;
