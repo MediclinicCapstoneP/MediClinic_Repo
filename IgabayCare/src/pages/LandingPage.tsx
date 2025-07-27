@@ -75,7 +75,8 @@ const LandingPage = () => {
           <nav className="hidden md:flex items-center gap-6">
             <a href="#features" className="text-muted-foreground hover:text-primary-600 transition-colors font-medium">Features</a>
             <a href="#about" className="text-muted-foreground hover:text-primary-600 transition-colors font-medium">About</a>
-            <Button variant="outline" size="sm" onClick={() => navigate("/signin")} className="border-primary-200 text-primary-600 hover:bg-primary-50">Sign In</Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/signin")} className="border-primary-200 text-primary-600 hover:bg-primary-50">Patient Sign In</Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/clinic-signin")} className="border-secondary-200 text-secondary-600 hover:bg-secondary-50">Clinic Sign In</Button>
           </nav>
         </div>
       </header>
