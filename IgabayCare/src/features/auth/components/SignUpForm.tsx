@@ -21,9 +21,30 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showResendButton, setShowResendButton] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    setError('');
+    
+    try {
+      const result = await authService.resendVerificationEmail(formData.email);
+      
+      if (result.success) {
+        setSuccess('Verification email sent again! Please check your inbox.');
+      } else {
+        setError(result.error || 'Failed to resend verification email. Please try again.');
+      }
+    } catch (err) {
+      setError('Failed to resend verification email. Please try again.');
+    } finally {
+      setResendLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,11 +78,17 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSuccess }) => {
       const result = await authService.signUp(signUpData);
       
       if (result.success) {
-        setSuccess('Patient registered successfully! Please check your email to verify your account.');
+        setSuccess(
+          'Account created successfully! 📧 We\'ve sent a verification email to your inbox. ' +
+          'Please check your email and click the verification link to activate your account. ' +
+          'You won\'t be able to access your dashboard until your email is verified.'
+        );
+        setShowResendButton(true);
         
-        if (onSuccess) {
-          onSuccess();
-        }
+        // Don't automatically navigate - user needs to verify email first
+        // if (onSuccess) {
+        //   onSuccess();
+        // }
       } else {
         setError(result.error || 'Registration failed. Please try again.');
       }
@@ -203,6 +230,21 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onSuccess }) => {
           {success && (
             <div className="text-green-600 text-sm text-center bg-green-50 p-3 rounded-lg">
               {success}
+              {showResendButton && (
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResendVerification}
+                    loading={resendLoading}
+                    className="w-full"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Resend Verification Email
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </form>
