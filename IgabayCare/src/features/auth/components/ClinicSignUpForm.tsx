@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mail, Lock, Eye, EyeOff, Building, MapPin, Phone, Globe, FileText, Clock, Users, CheckCircle, Upload, X, File } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { authService } from '../utils/authService';
 
 interface ClinicSignUpFormProps {
   onSuccess?: () => void;
@@ -68,6 +69,8 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showResendButton, setShowResendButton] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [customSpecialtyInput, setCustomSpecialtyInput] = useState('');
   const [customServiceInput, setCustomServiceInput] = useState('');
@@ -138,6 +141,25 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
       localStorage.removeItem(STEP_STORAGE_KEY);
     } catch (error) {
       console.error('Error clearing form data:', error);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    setError('');
+    
+    try {
+      const result = await authService.resendVerificationEmail(formData.email);
+      
+      if (result.success) {
+        setSuccess('Verification email sent again! Please check your inbox.');
+      } else {
+        setError(result.error || 'Failed to resend verification email. Please try again.');
+      }
+    } catch (err) {
+      setError('Failed to resend verification email. Please try again.');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -350,38 +372,34 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
       return;
     }
 
+    // Password validation
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // TODO: Replace with actual registration logic using Supabase
-      // const { data, error } = await supabase.auth.signUp({
-      //   email: formData.email,
-      //   password: formData.password,
-      //   options: {
-      //     data: {
-      //       clinic_name: formData.clinicName,
-      //       role: 'clinic',
-      //       phone: formData.phone,
-      //       address: formData.address,
-      //       license: formData.license,
-      //       specialties: formData.specialties,
-      //       services: formData.services,
-      //       operating_hours: formData.operatingHours,
-      //       description: formData.description,
-      //     }
-      //   }
-      // });
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      setSuccess('Clinic registered successfully! We will review your application and contact you within 24-48 hours.');
+      const result = await authService.clinicSignUp(formData);
       
-      // Clear saved form data after successful submission
-      clearFormData();
-      
-      if (onSuccess) {
-        onSuccess();
+      if (result.success) {
+        setSuccess(
+          'Clinic account created successfully! 📧 We\'ve sent a verification email to your inbox. ' +
+          'Please check your email and click the verification link to activate your account. ' +
+          'You won\'t be able to access your clinic dashboard until your email is verified.'
+        );
+        setShowResendButton(true);
+        
+        // Clear saved form data after successful submission
+        clearFormData();
+        
+        // Don't automatically navigate - user needs to verify email first
+        // if (onSuccess) {
+        //   onSuccess();
+        // }
+      } else {
+        setError(result.error || 'Registration failed. Please try again.');
       }
     } catch (err) {
       setError('Registration failed. Please try again.');
@@ -1190,6 +1208,21 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
           {success && (
             <div className="text-green-600 text-sm text-center bg-green-50 p-3 rounded-lg">
               {success}
+              {showResendButton && (
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResendVerification}
+                    loading={resendLoading}
+                    className="w-full"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Resend Verification Email
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
