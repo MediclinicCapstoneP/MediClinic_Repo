@@ -6,8 +6,8 @@ const SignUpPage: React.FC = () => {
   const navigate = useNavigate();
 
   const handleSuccess = () => {
-    // Redirect to patient dashboard after successful registration
-    navigate('/patient/dashboard');
+    // Don't redirect automatically - user needs to verify email first
+    // navigate('/patient/dashboard');
   };
 
   return (
