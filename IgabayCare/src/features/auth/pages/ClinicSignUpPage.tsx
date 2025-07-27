@@ -6,8 +6,8 @@ const ClinicSignUpPage: React.FC = () => {
   const navigate = useNavigate();
 
   const handleSuccess = () => {
-    // Redirect to clinic dashboard after successful registration
-    navigate('/clinic/dashboard');
+    // Don't redirect automatically - user needs to verify email first
+    // navigate('/clinic/dashboard');
   };
 
   return (
