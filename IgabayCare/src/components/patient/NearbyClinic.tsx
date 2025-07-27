@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MapPin, Navigation, Star, Clock } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { Card, CardContent } from '../ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Card, CardContent } from '../../components/ui/Card';
 
 export const NearbyClinic: React.FC = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -70,7 +70,6 @@ export const NearbyClinic: React.FC = () => {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Nearby Clinics</h1>
-        <p className="text-gray-600">Find healthcare providers close to your location</p>
       </div>
 
       {/* Location Card */}
