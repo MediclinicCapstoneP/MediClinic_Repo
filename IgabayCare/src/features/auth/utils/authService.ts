@@ -1,5 +1,6 @@
 import { supabase } from '../../../supabaseClient';
 import { patientService } from './patientService';
+import { clinicService } from './clinicService';
 
 export interface AuthUser {
   id: string;
@@ -155,16 +156,82 @@ export const authService = {
     }
   },
 
+  // Clinic sign up
+  async clinicSignUp(clinicData: any): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: clinicData.email,
+        password: clinicData.password,
+        options: {
+          data: {
+            clinic_name: clinicData.clinicName,
+            role: 'clinic',
+          }
+        }
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      // If user registration is successful, create clinic profile
+      if (authData.user) {
+        const clinicResult = await clinicService.createClinic({
+          user_id: authData.user.id,
+          clinic_name: clinicData.clinicName,
+          email: clinicData.email,
+          phone: clinicData.phone,
+          website: clinicData.website,
+          address: clinicData.address,
+          city: clinicData.city,
+          state: clinicData.state,
+          zip_code: clinicData.zipCode,
+          license_number: clinicData.license,
+          accreditation: clinicData.accreditation,
+          tax_id: clinicData.taxId,
+          year_established: clinicData.yearEstablished ? parseInt(clinicData.yearEstablished) : undefined,
+          specialties: clinicData.specialties,
+          custom_specialties: clinicData.customSpecialties,
+          services: clinicData.services,
+          custom_services: clinicData.customServices,
+          operating_hours: clinicData.operatingHours,
+          number_of_doctors: clinicData.numberOfDoctors ? parseInt(clinicData.numberOfDoctors) : undefined,
+          number_of_staff: clinicData.numberOfStaff ? parseInt(clinicData.numberOfStaff) : undefined,
+          description: clinicData.description,
+        });
+
+        if (!clinicResult.success) {
+          console.error('Failed to create clinic profile:', clinicResult.error);
+          // Note: We don't return error here because the user account was created successfully
+          // The clinic profile can be created later when they first log in
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Clinic sign up failed';
+      return { success: false, error: errorMessage };
+    }
+  },
+
   // Sign in
   async signIn(data: SignInData): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
 
       if (error) {
         return { success: false, error: error.message };
+      }
+
+      // Check if email is verified
+      if (authData.user && !authData.user.email_confirmed_at) {
+        return { 
+          success: false, 
+          error: 'Please verify your email address before signing in. Check your inbox for a verification link.' 
+        };
       }
 
       return { success: true };
@@ -204,6 +271,28 @@ export const authService = {
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Password reset failed';
+      return { success: false, error: errorMessage };
+    }
+  },
+
+  // Resend verification email
+  async resendVerificationEmail(email: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        }
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to resend verification email';
       return { success: false, error: errorMessage };
     }
   },
