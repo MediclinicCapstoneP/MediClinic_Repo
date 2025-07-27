@@ -6,13 +6,11 @@ import { authService } from '../utils/authService';
 
 interface SignInFormProps {
   onSuccess?: () => void;
-  defaultRole?: 'patient' | 'clinic';
 }
 
-export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, defaultRole = 'patient' }) => {
+export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'patient' | 'clinic'>(defaultRole);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -47,37 +45,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, defaultRole =
             <User className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Welcome Back</h1>
-          <p className="text-muted-foreground">Sign in to your {role} account</p>
-        </div>
-
-        {/* Role Selection */}
-        <div className="mb-6">
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              type="button"
-              onClick={() => setRole('patient')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                role === 'patient'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <User className="h-4 w-4" />
-              Patient
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole('clinic')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                role === 'clinic'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Building className="h-4 w-4" />
-              Clinic
-            </button>
-          </div>
+          <p className="text-muted-foreground">Sign in to your patient account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -88,7 +56,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, defaultRole =
             onChange={(e) => setEmail(e.target.value)}
             icon={<Mail size={20} className="text-gray-400" />}
             required
-            placeholder={role === 'clinic' ? 'clinic@example.com' : 'patient@example.com'}
+            placeholder="patient@example.com"
           />
           
           <div className="relative">
@@ -144,6 +112,19 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, defaultRole =
               onClick={() => window.location.href = '/signup'}
             >
               Sign up here
+            </button>
+          </p>
+        </div>
+
+        <div className="mt-4 text-center">
+          <p className="text-sm text-gray-500">
+            Are you a clinic?{' '}
+            <button 
+              type="button" 
+              className="text-secondary-600 hover:text-secondary-700 font-medium"
+              onClick={() => window.location.href = '/clinic-signin'}
+            >
+              Sign in to clinic portal
             </button>
           </p>
         </div>
