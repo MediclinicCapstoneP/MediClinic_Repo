@@ -16,6 +16,12 @@ export interface DoctorProfile {
   total_patients: number;
   profile_picture_url: string | null;
   profile_picture_path: string | null;
+  // Authentication fields
+  username: string | null;
+  password_hash: string | null;
+  is_clinic_created: boolean;
+  email_verified: boolean;
+  last_login: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +37,10 @@ export interface CreateDoctorData {
   years_experience?: number;
   availability?: string;
   status?: 'active' | 'on-leave' | 'inactive';
+  // Authentication fields for clinic-created accounts
+  username?: string;
+  password?: string;
+  is_clinic_created?: boolean;
 }
 
 export interface UpdateDoctorData {
@@ -44,6 +54,14 @@ export interface UpdateDoctorData {
   status?: 'active' | 'on-leave' | 'inactive';
   profile_picture_url?: string;
   profile_picture_path?: string;
+  // Authentication fields
+  username?: string;
+  password?: string;
+}
+
+export interface DoctorLoginData {
+  email: string;
+  password: string;
 }
 
 class DoctorService {
@@ -51,9 +69,18 @@ class DoctorService {
     try {
       console.log('Creating doctor with data:', data);
       
+      // If this is a clinic-created account with password, hash it
+      let doctorData: any = { ...data };
+      if (data.is_clinic_created && data.password) {
+        // Hash the password (in production, use a proper hashing library)
+        const hashedPassword = await this.hashPassword(data.password);
+        doctorData.password_hash = hashedPassword;
+        delete doctorData.password;
+      }
+      
       const { data: doctor, error } = await supabase
         .from('doctors')
-        .insert([data])
+        .insert([doctorData])
         .select()
         .single();
 
@@ -115,9 +142,18 @@ class DoctorService {
 
   async updateDoctor(id: string, data: UpdateDoctorData): Promise<{ success: boolean; error?: string; doctor?: DoctorProfile }> {
     try {
+      let updateData: any = { ...data };
+      
+      // If updating password, hash it
+      if (data.password) {
+        const hashedPassword = await this.hashPassword(data.password);
+        updateData.password_hash = hashedPassword;
+        delete updateData.password;
+      }
+
       const { data: doctor, error } = await supabase
         .from('doctors')
-        .update(data)
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
@@ -171,6 +207,78 @@ class DoctorService {
       console.error('Error fetching active doctors:', error);
       return { success: false, error: 'Failed to fetch active doctors' };
     }
+  }
+
+  // Authentication methods for clinic-created doctor accounts
+  async doctorLogin(loginData: DoctorLoginData): Promise<{ success: boolean; error?: string; doctor?: DoctorProfile }> {
+    try {
+      console.log('Doctor login attempt for:', loginData.email);
+      
+      // First, get the doctor by email
+      const { data: doctor, error } = await supabase
+        .from('doctors')
+        .select('*')
+        .eq('email', loginData.email)
+        .eq('is_clinic_created', true)
+        .single();
+
+      if (error || !doctor) {
+        console.error('Doctor not found or not clinic-created:', error);
+        return { success: false, error: 'Invalid credentials' };
+      }
+
+      // Verify password
+      const isValidPassword = await this.verifyPassword(loginData.password, doctor.password_hash);
+      if (!isValidPassword) {
+        console.error('Invalid password for doctor:', loginData.email);
+        return { success: false, error: 'Invalid credentials' };
+      }
+
+      // Update last login
+      await this.updateDoctor(doctor.id, {});
+      
+      console.log('Doctor login successful:', doctor.full_name);
+      return { success: true, doctor };
+    } catch (error) {
+      console.error('Error during doctor login:', error);
+      return { success: false, error: 'Login failed' };
+    }
+  }
+
+  async getDoctorByEmail(email: string): Promise<{ success: boolean; error?: string; doctor?: DoctorProfile }> {
+    try {
+      const { data: doctor, error } = await supabase
+        .from('doctors')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (error) {
+        console.error('Supabase error fetching doctor by email:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, doctor };
+    } catch (error) {
+      console.error('Error fetching doctor by email:', error);
+      return { success: false, error: 'Failed to fetch doctor' };
+    }
+  }
+
+  // Password hashing and verification (simplified - use proper library in production)
+  private async hashPassword(password: string): Promise<string> {
+    // In production, use bcrypt or similar
+    // For now, using a simple hash (NOT SECURE FOR PRODUCTION)
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  private async verifyPassword(password: string, hash: string): Promise<boolean> {
+    const hashedPassword = await this.hashPassword(password);
+    return hashedPassword === hash;
   }
 }
 

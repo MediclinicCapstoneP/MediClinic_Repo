@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, LogOut, Building, Menu, X, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Building, Menu, X, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 interface NavigationItem {
@@ -14,7 +14,7 @@ interface SidebarProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
   user: any;
-  variant?: 'patient' | 'clinic';
+  variant?: 'patient' | 'clinic' | 'doctor';
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,10 +27,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const isPatient = variant === 'patient';
-  const Icon = isPatient ? User : Building;
+  const isDoctor = variant === 'doctor';
+  const Icon = isPatient ? User : isDoctor ? User : Building;
   const title = 'iGabayAtiCare';
-  const subtitle = isPatient ? 'Patient Portal' : 'Clinic Portal';
-  const userName = isPatient ? user?.firstName : user?.clinicName;
+  const subtitle = isPatient ? 'Patient Portal' : isDoctor ? 'Doctor Portal' : 'Clinic Portal';
+  const userName = isPatient ? user?.firstName : isDoctor ? user?.full_name : user?.clinicName;
   const userEmail = user?.email;
 
   // Auto-collapse on medium screens
@@ -53,7 +54,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getActiveClasses = (isActive: boolean) => {
     if (isActive) {
       return isPatient 
-        ? 'bg-primary-50 text-primary-700 border border-primary-200' 
+        ? 'bg-theme-light text-theme-dark border border-theme' 
+        : isDoctor
+        ? 'bg-purple-50 text-purple-700 border border-purple-200'
         : 'bg-secondary-50 text-secondary-700 border border-secondary-200';
     }
     return 'text-gray-600 hover:bg-gray-50 hover:text-gray-900';
@@ -61,18 +64,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const getIconClasses = () => {
     return isPatient 
-      ? 'bg-gradient-to-r from-primary-500 to-primary-600' 
+      ? 'bg-gradient-to-r from-theme to-theme-dark' 
+      : isDoctor
+      ? 'bg-gradient-to-r from-purple-500 to-purple-600'
       : 'bg-gradient-to-r from-secondary-500 to-secondary-600';
   };
 
   const getUserIconClasses = () => {
     return isPatient 
-      ? 'bg-primary-100 text-primary-600' 
+      ? 'bg-theme-light text-theme-dark' 
+      : isDoctor
+      ? 'bg-purple-100 text-purple-600'
       : 'bg-secondary-100 text-secondary-600';
   };
 
   const SidebarContent = () => (
-    <div className={`bg-white shadow-lg border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${
+    <div className={` bg-blue-100 shadow-lg border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${
       isCollapsed ? 'w-16' : 'w-64'
     }`}>
       {/* Logo and Brand */}
@@ -137,7 +144,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
+      {/* User Profile and Logout Section */}
+      <div className="border-t border-gray-200 p-4">
+        {/* User Info */}
+        <div className="flex items-center space-x-3 mb-4">
+          <div className={`p-2 ${getUserIconClasses()} rounded-lg flex-shrink-0`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          {!isCollapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {userName || 'User'}
+              </p>
+              <p className="text-xs text-gray-500 truncate">
+                {userEmail || 'user@example.com'}
+              </p>
+            </div>
+          )}
+        </div>
 
+
+      </div>
     </div>
   );
 
@@ -176,6 +203,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="hidden md:block">
         <SidebarContent />
       </div>
+
+
     </>
   );
 }; 

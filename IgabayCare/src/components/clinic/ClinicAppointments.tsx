@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, MoreHorizontal, CheckCircle, XCircle } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { Card, CardContent } from '../ui/Card';
-import { Modal } from '../ui/Modal';
+import { Calendar, Clock, User, Phone, MoreHorizontal, CheckCircle, XCircle, UserPlus } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
+import { Card, CardContent } from '../../components/ui/Card';
+import { Modal } from '../../components/ui/Modal';
+import { AssignDoctor } from './AssignDoctor';
 
 export const ClinicAppointments: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showAssignDoctorModal, setShowAssignDoctorModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+  const [clinicId, setClinicId] = useState('clinic-123'); // TODO: Get from auth context
 
   const mockAppointments = [
     {
@@ -93,6 +96,16 @@ export const ClinicAppointments: React.FC = () => {
   const handleCancelAppointment = (appointmentId: number) => {
     // TODO: Cancel appointment in Supabase
     console.log('Cancelling appointment:', appointmentId);
+  };
+
+  const handleAssignDoctor = (appointment: any) => {
+    setSelectedAppointment(appointment);
+    setShowAssignDoctorModal(true);
+  };
+
+  const handleAssignSuccess = () => {
+    // TODO: Refresh appointments list
+    console.log('Doctor assigned successfully');
   };
 
   const getStatusColor = (status: string) => {
@@ -193,6 +206,15 @@ export const ClinicAppointments: React.FC = () => {
                   >
                     View Details
                   </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAssignDoctor(appointment)}
+                  >
+                    <UserPlus size={16} className="mr-1" />
+                    {appointment.doctor ? 'Change Doctor' : 'Assign Doctor'}
+                  </Button>
                   
                   {appointment.status === 'waiting' || appointment.status === 'in-progress' ? (
                     <Button
@@ -266,8 +288,23 @@ export const ClinicAppointments: React.FC = () => {
                   <p className="font-medium">{selectedAppointment.duration} minutes</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Doctor</p>
-                  <p className="font-medium">{selectedAppointment.doctor}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">Doctor</p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setShowAssignDoctorModal(true);
+                        setShowDetailsModal(false);
+                      }}
+                    >
+                      <UserPlus size={14} className="mr-1" />
+                      {selectedAppointment.doctor ? 'Change' : 'Assign'}
+                    </Button>
+                  </div>
+                  <p className="font-medium">
+                    {selectedAppointment.doctor || 'No doctor assigned'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Type</p>
@@ -316,6 +353,19 @@ export const ClinicAppointments: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Assign Doctor Modal */}
+      {selectedAppointment && (
+        <AssignDoctor
+          isOpen={showAssignDoctorModal}
+          onClose={() => setShowAssignDoctorModal(false)}
+          appointmentId={selectedAppointment.id.toString()}
+          clinicId={clinicId}
+          onAssignSuccess={handleAssignSuccess}
+          currentDoctorId={selectedAppointment.doctorId}
+          currentDoctorName={selectedAppointment.doctor}
+        />
+      )}
     </div>
   );
 };

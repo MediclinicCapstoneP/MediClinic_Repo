@@ -1,3 +1,228 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom CSS Variables for Theme Color #91C8E4 */
+:root {
+  --theme-primary: #91C8E4;
+  --theme-primary-light: #a8d2ea;
+  --theme-primary-dark: #7bb8d4;
+  --theme-primary-darker: #65a8c4;
+  --theme-primary-darkest: #4f98b4;
+  --theme-primary-50: #f0f9ff;
+  --theme-primary-100: #e0f2fe;
+  --theme-primary-200: #bae6fd;
+  --theme-primary-300: #7dd3fc;
+  --theme-primary-400: #91C8E4;
+  --theme-primary-500: #7bb8d4;
+  --theme-primary-600: #65a8c4;
+  --theme-primary-700: #4f98b4;
+  --theme-primary-800: #3988a4;
+  --theme-primary-900: #237894;
+  
+  /* Gradient variations */
+  --theme-gradient: linear-gradient(135deg, #91C8E4 0%, #7bb8d4 100%);
+  --theme-gradient-light: linear-gradient(135deg, #a8d2ea 0%, #91C8E4 100%);
+  --theme-gradient-dark: linear-gradient(135deg, #7bb8d4 0%, #65a8c4 100%);
+  --theme-gradient-hero: linear-gradient(135deg, #91C8E4 0%, #14b8a6 50%, #22c55e 100%);
+}
+
+/* Custom utility classes for the theme color */
+@layer utilities {
+  .bg-theme {
+    background-color: var(--theme-primary);
+  }
+  
+  .bg-theme-light {
+    background-color: var(--theme-primary-light);
+  }
+  
+  .bg-theme-dark {
+    background-color: var(--theme-primary-dark);
+  }
+  
+  .text-theme {
+    color: var(--theme-primary);
+  }
+  
+  .text-theme-light {
+    color: var(--theme-primary-light);
+  }
+  
+  .text-theme-dark {
+    color: var(--theme-primary-dark);
+  }
+  
+  .border-theme {
+    border-color: var(--theme-primary);
+  }
+  
+  .border-theme-light {
+    border-color: var(--theme-primary-light);
+  }
+  
+  .border-theme-dark {
+    border-color: var(--theme-primary-dark);
+  }
+  
+  .bg-gradient-theme {
+    background: var(--theme-gradient);
+  }
+  
+  .bg-gradient-theme-light {
+    background: var(--theme-gradient-light);
+  }
+  
+  .bg-gradient-theme-dark {
+    background: var(--theme-gradient-dark);
+  }
+  
+  .bg-gradient-theme-hero {
+    background: var(--theme-gradient-hero);
+  }
+  
+  .shadow-theme {
+    box-shadow: 0 0 20px rgba(145, 200, 228, 0.3);
+  }
+  
+  .shadow-theme-glow {
+    box-shadow: 0 0 20px rgba(145, 200, 228, 0.5);
+  }
+  
+  .hover\:bg-theme:hover {
+    background-color: var(--theme-primary);
+  }
+  
+  .hover\:bg-theme-dark:hover {
+    background-color: var(--theme-primary-dark);
+  }
+  
+  .hover\:text-theme:hover {
+    color: var(--theme-primary);
+  }
+  
+  .hover\:border-theme:hover {
+    border-color: var(--theme-primary);
+  }
+  
+  .focus\:ring-theme:focus {
+    --tw-ring-color: var(--theme-primary);
+  }
+  
+  .focus\:border-theme:focus {
+    border-color: var(--theme-primary);
+  }
+}
+
+/* Custom component styles using the theme color */
+@layer components {
+  .btn-theme {
+    @apply bg-theme text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:bg-theme-dark focus:ring-2 focus:ring-theme focus:ring-opacity-50;
+  }
+  
+  .btn-theme-outline {
+    @apply border-2 border-theme text-theme px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:bg-theme hover:text-white focus:ring-2 focus:ring-theme focus:ring-opacity-50;
+  }
+  
+  .card-theme {
+    @apply bg-white rounded-lg shadow-card border border-gray-100 hover:shadow-hover transition-shadow duration-200;
+  }
+  
+  .card-theme-accent {
+    @apply bg-gradient-theme text-white rounded-lg shadow-theme-glow;
+  }
+  
+  .input-theme {
+    @apply border border-gray-300 rounded-lg px-3 py-2 focus:border-theme focus:ring-2 focus:ring-theme focus:ring-opacity-50 transition-colors duration-200;
+  }
+  
+  .badge-theme {
+    @apply bg-theme text-white px-2 py-1 rounded-full text-xs font-medium;
+  }
+  
+  .badge-theme-light {
+    @apply bg-theme-light text-theme-dark px-2 py-1 rounded-full text-xs font-medium;
+  }
+}
+
+/* Global styles */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar with theme colors */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--theme-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-primary-dark);
+}
+
+/* Selection color */
+::selection {
+  background-color: var(--theme-primary);
+  color: white;
+}
+
+/* Focus styles */
+*:focus {
+  outline: 2px solid var(--theme-primary);
+  outline-offset: 2px;
+}
+
+/* Animation for theme elements */
+@keyframes themePulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.animate-theme-pulse {
+  animation: themePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.leaflet-popup-content {
+  margin: 8px 12px;
+  line-height: 1.4;
+}
+
+.leaflet-popup-tip {
+  background: white;
+}
+
+.custom-div-icon {
+  background: transparent;
+  border: none;
+}

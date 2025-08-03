@@ -4,18 +4,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Healthcare theme colors
+        // Healthcare theme colors - Updated with #91C8E4
         primary: {
           50: '#f0f9ff',
           100: '#e0f2fe',
           200: '#bae6fd',
           300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+          400: '#91C8E4', // Your chosen color
+          500: '#7bb8d4',
+          600: '#65a8c4',
+          700: '#4f98b4',
+          800: '#3988a4',
+          900: '#237894',
         },
         secondary: {
           50: '#f0fdfa',
@@ -67,12 +67,13 @@ export default {
         'muted-foreground': '#64748b',
       },
       backgroundImage: {
-        'gradient-primary': 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
+        'gradient-primary': 'linear-gradient(135deg, #91C8E4 0%, #7bb8d4 100%)',
         'gradient-secondary': 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
         'gradient-medical': 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-        'gradient-hero': 'linear-gradient(135deg, #0ea5e9 0%, #14b8a6 50%, #22c55e 100%)',
+        'gradient-hero': 'linear-gradient(135deg, #91C8E4 0%, #14b8a6 50%, #22c55e 100%)',
         'gradient-card': 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
         'gradient-accent': 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+        'gradient-theme': 'linear-gradient(135deg, #91C8E4 0%, #7bb8d4 50%, #65a8c4 100%)',
       },
       animation: {
         'slide-up': 'slideUp 0.6s ease-out',
@@ -109,14 +110,14 @@ export default {
           '50%': { transform: 'translateY(-20px)' },
         },
         glow: {
-          '0%': { boxShadow: '0 0 5px rgba(14, 165, 233, 0.5)' },
-          '100%': { boxShadow: '0 0 20px rgba(14, 165, 233, 0.8)' },
+          '0%': { boxShadow: '0 0 5px rgba(145, 200, 228, 0.5)' },
+          '100%': { boxShadow: '0 0 20px rgba(145, 200, 228, 0.8)' },
         },
       },
       boxShadow: {
         'card': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
         'hover': '0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-        'glow': '0 0 20px rgba(14, 165, 233, 0.3)',
+        'glow': '0 0 20px rgba(145, 200, 228, 0.3)',
         'medical': '0 0 20px rgba(34, 197, 94, 0.3)',
         'accent': '0 0 20px rgba(249, 115, 22, 0.3)',
       },

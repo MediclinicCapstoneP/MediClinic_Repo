@@ -7,6 +7,7 @@ import { ChatMessage } from '../../types';
 export const FloatingChatBot: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -17,7 +18,6 @@ export const FloatingChatBot: React.FC = () => {
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {

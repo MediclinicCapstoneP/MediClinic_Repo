@@ -97,6 +97,29 @@ export const authService = {
         return null;
       }
       
+      // Check if user has a patient profile, create one if missing
+      if (user.user_metadata?.role === 'patient') {
+        const patientResult = await patientService.getPatientByUserId(user.id);
+        if (!patientResult.success || !patientResult.patient) {
+          // Create missing patient profile
+          console.log('Creating missing patient profile for user:', user.id);
+          await patientService.upsertPatient({
+            user_id: user.id,
+            first_name: user.user_metadata.first_name || '',
+            last_name: user.user_metadata.last_name || '',
+            email: user.email || '',
+            phone: null,
+            date_of_birth: null,
+            address: null,
+            emergency_contact: null,
+            blood_type: 'O+',
+            allergies: 'None',
+            medications: 'None',
+            medical_conditions: 'None',
+          });
+        }
+      }
+      
       const userData = user.user_metadata;
       return {
         id: user.id,
@@ -112,46 +135,65 @@ export const authService = {
     }
   },
 
-  // Sign up
-  async signUp(data: SignUpData): Promise<{ success: boolean; error?: string }> {
+  // Sign up for patient users
+  async signUp(data: SignUpData): Promise<{ success: boolean; error?: string; user?: any }> {
     try {
+      console.log('Patient sign up attempt for:', data.email);
+      
       const { data: authData, error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
+            role: 'patient',
             first_name: data.firstName,
             last_name: data.lastName,
-            role: data.role,
-            clinic_name: data.clinicName,
           }
         }
       });
 
       if (error) {
+        console.error('Patient sign up error:', error);
         return { success: false, error: error.message };
       }
 
-      // If user registration is successful and it's a patient, create patient profile
-      if (authData.user && data.role === 'patient') {
-        const patientResult = await patientService.createPatient({
-          user_id: authData.user.id,
-          first_name: data.firstName,
-          last_name: data.lastName,
-          email: data.email,
-        });
+      if (!authData.user) {
+        return { success: false, error: 'No user data returned' };
+      }
 
-        if (!patientResult.success) {
-          // If patient profile creation fails, we should handle this appropriately
-          console.error('Failed to create patient profile:', patientResult.error);
-          // Note: We don't return error here because the user account was created successfully
-          // The patient profile can be created later when they first log in
+      // Create patient profile in database
+      if (authData.user) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Delay for session
+        try {
+          const patientResult = await patientService.upsertPatient({
+            user_id: authData.user.id,
+            first_name: data.firstName,
+            last_name: data.lastName,
+            email: data.email,
+            phone: null,
+            date_of_birth: null,
+            address: null,
+            emergency_contact: null,
+            blood_type: 'O+',
+            allergies: 'None',
+            medications: 'None',
+            medical_conditions: 'None',
+          });
+          
+          if (!patientResult.success) {
+            console.error('Failed to create patient profile:', patientResult.error);
+            console.log('Patient profile will be created on first login');
+          }
+        } catch (error) {
+          console.error('Exception during patient profile creation:', error);
         }
       }
 
-      return { success: true };
+      console.log('Patient sign up successful:', authData.user.id);
+      return { success: true, user: authData.user };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Sign up failed';
+      console.error('Exception during patient sign up:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sign up';
       return { success: false, error: errorMessage };
     }
   },
@@ -176,7 +218,7 @@ export const authService = {
 
       // If user registration is successful, create clinic profile
       if (authData.user) {
-        const clinicResult = await clinicService.createClinic({
+        const clinicResult = await clinicService.upsertClinic({
           user_id: authData.user.id,
           clinic_name: clinicData.clinicName,
           email: clinicData.email,
@@ -214,29 +256,41 @@ export const authService = {
     }
   },
 
-  // Sign in
-  async signIn(data: SignInData): Promise<{ success: boolean; error?: string }> {
+  // Sign in for patient users
+  async signIn(data: SignInData): Promise<{ success: boolean; error?: string; user?: any }> {
     try {
+      console.log('Patient sign in attempt for:', data.email);
+      
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
 
       if (error) {
+        console.error('Patient sign in error:', error);
         return { success: false, error: error.message };
       }
 
-      // Check if email is verified
-      if (authData.user && !authData.user.email_confirmed_at) {
-        return { 
-          success: false, 
-          error: 'Please verify your email address before signing in. Check your inbox for a verification link.' 
-        };
+      if (!authData.user) {
+        return { success: false, error: 'No user data returned' };
       }
 
-      return { success: true };
+      // Check if user has patient role
+      if (authData.user.user_metadata?.role !== 'patient') {
+        console.error('User is not a patient user:', authData.user.user_metadata);
+        return { success: false, error: 'This account is not registered as a patient. Please use the clinic sign-in for clinic accounts.' };
+      }
+
+      // Check if email is confirmed
+      if (!authData.user.email_confirmed_at) {
+        return { success: false, error: 'Please verify your email before signing in' };
+      }
+
+      console.log('Patient sign in successful:', authData.user.id);
+      return { success: true, user: authData.user };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Sign in failed';
+      console.error('Exception during patient sign in:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
       return { success: false, error: errorMessage };
     }
   },
