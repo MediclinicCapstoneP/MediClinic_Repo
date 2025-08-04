@@ -422,7 +422,7 @@ export const ClinicDoctors: React.FC = () => {
       const result = await doctorService.createDoctor(doctorData);
       if (result.success) {
         alert(
-          'Doctor added successfully! They can now log in with their email and password.'
+          'Doctor added successfully! The doctor can now log in with their email and password. Their email has been automatically confirmed.'
         );
         setShowAddModal(false);
         await fetchDoctors(clinicId);

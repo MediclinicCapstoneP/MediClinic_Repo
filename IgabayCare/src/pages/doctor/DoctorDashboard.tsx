@@ -13,6 +13,7 @@ import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthService';
+import { prescriptionService, PrescriptionWithPatient, CreatePrescriptionData } from '../../features/auth/utils/prescriptionService';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { DoctorAppointments } from './DoctorAppointments';
 import { SkeletonDashboard } from '../../components/ui/Skeleton';
@@ -45,17 +46,7 @@ interface Patient {
   currentMedications?: string;
 }
 
-interface Prescription {
-  id: string;
-  patientId: string;
-  patientName: string;
-  date: string;
-  medications: string[];
-  dosage: string[];
-  instructions: string[];
-  followUpDate?: string;
-  status: 'active' | 'completed';
-}
+// Using PrescriptionWithPatient from prescriptionService instead of local interface
 
 export const DoctorDashboard: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -63,7 +54,7 @@ export const DoctorDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('appointments');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [prescriptions, setPrescriptions] = useState<PrescriptionWithPatient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -76,8 +67,10 @@ export const DoctorDashboard: React.FC = () => {
   const [prescriptionData, setPrescriptionData] = useState({
     medications: [''],
     dosage: [''],
+    frequency: [''],
+    duration: [''],
     instructions: [''],
-    followUpDate: ''
+    refills_remaining: [0]
   });
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -105,7 +98,7 @@ export const DoctorDashboard: React.FC = () => {
     checkAuth();
   }, [navigate]);
 
-  const loadMockData = () => {
+  const loadMockData = async () => {
     // Mock appointments data
     const mockAppointments: Appointment[] = [
       {
@@ -199,35 +192,20 @@ export const DoctorDashboard: React.FC = () => {
       }
     ];
 
-    // Mock prescriptions data
-    const mockPrescriptions: Prescription[] = [
-      {
-        id: 'PR001',
-        patientId: 'P001',
-        patientName: 'John Smith',
-        date: '2024-01-08',
-        medications: ['Lisinopril', 'Metformin'],
-        dosage: ['10mg daily', '500mg twice daily'],
-        instructions: ['Take in the morning', 'Take with meals'],
-        followUpDate: '2024-01-22',
-        status: 'active'
-      },
-      {
-        id: 'PR002',
-        patientId: 'P003',
-        patientName: 'Michael Brown',
-        date: '2024-01-12',
-        medications: ['Metformin', 'Atorvastatin'],
-        dosage: ['500mg twice daily', '20mg daily'],
-        instructions: ['Take with meals', 'Take in the evening'],
-        followUpDate: '2024-01-26',
-        status: 'active'
-      }
-    ];
-
     setAppointments(mockAppointments);
     setPatients(mockPatients);
-    setPrescriptions(mockPrescriptions);
+    
+    // Load real prescriptions if user is authenticated
+    if (currentUser?.user?.id) {
+      try {
+        const result = await prescriptionService.getPrescriptionsByDoctor(currentUser.user.id);
+        if (result.success && result.prescriptions) {
+          setPrescriptions(result.prescriptions);
+        }
+      } catch (error) {
+        console.error('Error loading prescriptions:', error);
+      }
+    }
   };
 
   const handleSignOut = async () => {
@@ -259,15 +237,17 @@ export const DoctorDashboard: React.FC = () => {
   const handleMakePrescription = (appointment: Appointment) => {
     const patient = patients.find(p => p.id === appointment.patientId);
     if (patient) {
-    setSelectedPatient(patient);
+      setSelectedPatient(patient);
       setSelectedAppointment(appointment);
       setPrescriptionData({
         medications: [''],
         dosage: [''],
+        frequency: [''],
+        duration: [''],
         instructions: [''],
-        followUpDate: ''
+        refills_remaining: [0]
       });
-    setShowPrescriptionModal(true);
+      setShowPrescriptionModal(true);
     }
   };
 
@@ -285,38 +265,63 @@ export const DoctorDashboard: React.FC = () => {
     }
   };
 
-  const confirmPrescription = () => {
-    if (selectedPatient && selectedAppointment) {
-      const newPrescription: Prescription = {
-        id: `PR${Date.now()}`,
-        patientId: selectedPatient.id,
-        patientName: selectedPatient.name,
-        date: new Date().toISOString().split('T')[0],
-        medications: prescriptionData.medications.filter(m => m.trim()),
-        dosage: prescriptionData.dosage.filter(d => d.trim()),
-        instructions: prescriptionData.instructions.filter(i => i.trim()),
-        followUpDate: prescriptionData.followUpDate,
-        status: 'active'
-      };
+  const confirmPrescription = async () => {
+    if (selectedPatient && selectedAppointment && currentUser?.user?.id) {
+      try {
+        // Create multiple prescriptions for each medication
+        const prescriptionsToCreate: CreatePrescriptionData[] = prescriptionData.medications
+          .filter((med, index) => med.trim() && prescriptionData.dosage[index]?.trim())
+          .map((medication, index) => ({
+            patient_id: selectedPatient.id,
+            doctor_id: currentUser.user.id,
+            clinic_id: currentUser.user.clinic_id || '',
+            medication_name: medication.trim(),
+            dosage: prescriptionData.dosage[index]?.trim() || '',
+            frequency: prescriptionData.frequency[index]?.trim() || 'As needed',
+            duration: prescriptionData.duration[index]?.trim() || '',
+            instructions: prescriptionData.instructions[index]?.trim() || '',
+            prescribed_date: new Date().toISOString().split('T')[0],
+            refills_remaining: prescriptionData.refills_remaining[index] || 0,
+            status: 'active'
+          }));
 
-      setPrescriptions(prev => [...prev, newPrescription]);
-      
-      // Update appointment with prescription
-      setAppointments(prev => 
-        prev.map(apt => 
-          apt.id === selectedAppointment.id 
-            ? { 
-                ...apt, 
-                prescription: prescriptionData.medications.join(', '),
-                followUpDate: prescriptionData.followUpDate 
-              }
-            : apt
-        )
-      );
+        if (prescriptionsToCreate.length === 0) {
+          alert('Please add at least one medication with dosage');
+          return;
+        }
 
-      setShowPrescriptionModal(false);
-      setSelectedPatient(null);
-      setSelectedAppointment(null);
+        const result = await prescriptionService.createMultiplePrescriptions(prescriptionsToCreate);
+        
+        if (result.success) {
+          // Reload prescriptions
+          const prescriptionsResult = await prescriptionService.getPrescriptionsByDoctor(currentUser.user.id);
+          if (prescriptionsResult.success && prescriptionsResult.prescriptions) {
+            setPrescriptions(prescriptionsResult.prescriptions);
+          }
+          
+          // Update appointment with prescription info
+          setAppointments(prev => 
+            prev.map(apt => 
+              apt.id === selectedAppointment.id 
+                ? { 
+                    ...apt, 
+                    prescription: prescriptionsToCreate.map(p => p.medication_name).join(', ')
+                  }
+                : apt
+            )
+          );
+
+          alert('Prescription created successfully!');
+          setShowPrescriptionModal(false);
+          setSelectedPatient(null);
+          setSelectedAppointment(null);
+        } else {
+          alert(`Failed to create prescription: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('Error creating prescription:', error);
+        alert('Failed to create prescription');
+      }
     }
   };
 
@@ -325,7 +330,10 @@ export const DoctorDashboard: React.FC = () => {
       ...prev,
       medications: [...prev.medications, ''],
       dosage: [...prev.dosage, ''],
-      instructions: [...prev.instructions, '']
+      frequency: [...prev.frequency, ''],
+      duration: [...prev.duration, ''],
+      instructions: [...prev.instructions, ''],
+      refills_remaining: [...prev.refills_remaining, 0]
     }));
   };
 
@@ -334,11 +342,21 @@ export const DoctorDashboard: React.FC = () => {
       ...prev,
       medications: prev.medications.filter((_, i) => i !== index),
       dosage: prev.dosage.filter((_, i) => i !== index),
-      instructions: prev.instructions.filter((_, i) => i !== index)
+      frequency: prev.frequency.filter((_, i) => i !== index),
+      duration: prev.duration.filter((_, i) => i !== index),
+      instructions: prev.instructions.filter((_, i) => i !== index),
+      refills_remaining: prev.refills_remaining.filter((_, i) => i !== index)
     }));
   };
 
-  const updatePrescriptionField = (index: number, field: 'medications' | 'dosage' | 'instructions', value: string) => {
+  const updatePrescriptionField = (index: number, field: 'medications' | 'dosage' | 'frequency' | 'duration' | 'instructions', value: string) => {
+    setPrescriptionData(prev => ({
+      ...prev,
+      [field]: prev[field].map((item, i) => i === index ? value : item)
+    }));
+  };
+
+  const updatePrescriptionNumberField = (index: number, field: 'refills_remaining', value: number) => {
     setPrescriptionData(prev => ({
       ...prev,
       [field]: prev[field].map((item, i) => i === index ? value : item)
@@ -747,29 +765,38 @@ export const DoctorDashboard: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-900">{prescription.patientName}</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {prescription.patient?.first_name} {prescription.patient?.last_name}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-600">{prescription.date}</span>
+                  <span className="text-sm text-gray-600">{prescription.prescribed_date}</span>
                 </div>
 
-                {prescription.followUpDate && (
+                {prescription.expiry_date && (
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Follow-up: {prescription.followUpDate}</span>
+                    <span className="text-sm text-gray-600">Expires: {prescription.expiry_date}</span>
                   </div>
                 )}
               </div>
 
               <div className="mt-4 space-y-2">
-                {prescription.medications.map((med, index) => (
-                  <div key={index} className="p-2 bg-gray-50 rounded">
-                    <p className="text-sm font-medium text-gray-900">{med}</p>
-                    <p className="text-xs text-gray-600">{prescription.dosage[index]} - {prescription.instructions[index]}</p>
-                  </div>
-                ))}
+                <div className="p-2 bg-gray-50 rounded">
+                  <p className="text-sm font-medium text-gray-900">{prescription.medication_name}</p>
+                  <p className="text-xs text-gray-600">
+                    {prescription.dosage} - {prescription.frequency}
+                    {prescription.duration && ` for ${prescription.duration}`}
+                  </p>
+                  {prescription.instructions && (
+                    <p className="text-xs text-gray-500 mt-1">{prescription.instructions}</p>
+                  )}
+                  {prescription.refills_remaining > 0 && (
+                    <p className="text-xs text-blue-600 mt-1">Refills: {prescription.refills_remaining}</p>
+                  )}
+                </div>
               </div>
                   </CardContent>
                 </Card>
@@ -1014,31 +1041,54 @@ export const DoctorDashboard: React.FC = () => {
               <div className="space-y-4">
                 <label className="block text-sm font-medium text-gray-700">Medications</label>
                 {prescriptionData.medications.map((med, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2">
-                    <Input
-                      placeholder="Medication name"
-                      value={med}
-                      onChange={(e) => updatePrescriptionField(index, 'medications', e.target.value)}
-                    />
-                    <Input
-                      placeholder="Dosage"
-                      value={prescriptionData.dosage[index]}
-                      onChange={(e) => updatePrescriptionField(index, 'dosage', e.target.value)}
-                    />
-                    <div className="flex gap-2">
+                  <div key={index} className="space-y-3 p-4 border rounded-lg">
+                    <div className="grid grid-cols-2 gap-2">
                       <Input
-                        placeholder="Instructions"
+                        placeholder="Medication name"
+                        value={med}
+                        onChange={(e) => updatePrescriptionField(index, 'medications', e.target.value)}
+                      />
+                      <Input
+                        placeholder="Dosage (e.g., 500mg)"
+                        value={prescriptionData.dosage[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'dosage', e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Frequency (e.g., Twice daily)"
+                        value={prescriptionData.frequency[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'frequency', e.target.value)}
+                      />
+                      <Input
+                        placeholder="Duration (e.g., 7 days)"
+                        value={prescriptionData.duration[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'duration', e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Instructions (e.g., Take with meals)"
                         value={prescriptionData.instructions[index]}
                         onChange={(e) => updatePrescriptionField(index, 'instructions', e.target.value)}
                       />
-            <Button
-              variant="outline"
+                      <Input
+                        type="number"
+                        placeholder="Refills remaining"
+                        value={prescriptionData.refills_remaining[index]}
+                        onChange={(e) => updatePrescriptionNumberField(index, 'refills_remaining', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => removePrescriptionField(index)}
                         className="text-red-600 border-red-200 hover:bg-red-50"
-            >
+                      >
                         <X className="h-4 w-4" />
-            </Button>
+                        Remove
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -1048,14 +1098,7 @@ export const DoctorDashboard: React.FC = () => {
                 </Button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Follow-up Date</label>
-                <Input
-                  type="date"
-                  value={prescriptionData.followUpDate}
-                  onChange={(e) => setPrescriptionData(prev => ({ ...prev, followUpDate: e.target.value }))}
-                />
-              </div>
+
 
               <div className="flex gap-2 pt-4">
                 <Button onClick={confirmPrescription}>
@@ -1144,3 +1187,4 @@ export const DoctorDashboard: React.FC = () => {
     </DashboardLayout>
   );
 }; 
+export default DoctorDashboard;

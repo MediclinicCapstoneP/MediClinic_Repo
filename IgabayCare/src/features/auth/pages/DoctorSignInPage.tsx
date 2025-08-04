@@ -6,7 +6,7 @@ const DoctorSignInPage: React.FC = () => {
   const navigate = useNavigate();
 
   const handleSuccess = () => {
-    navigate('/doctor/dashboard');
+    navigate('/doctors-dashboard');
   };
 
   return (

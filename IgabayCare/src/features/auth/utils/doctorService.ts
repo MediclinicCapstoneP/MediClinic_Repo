@@ -69,10 +69,45 @@ class DoctorService {
     try {
       console.log('Creating doctor with data:', data);
       
-      // If this is a clinic-created account with password, hash it
+      // If this is a clinic-created account with password, create Supabase auth user first
+      if (data.is_clinic_created && data.password) {
+        // Create Supabase auth user using regular signup
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password,
+          options: {
+            data: {
+              role: 'doctor',
+              full_name: data.full_name,
+              clinic_id: data.clinic_id,
+              is_clinic_created: true,
+              license_number: data.license_number,
+              specialization: data.specialization
+            }
+          }
+        });
+
+        if (authError) {
+          console.error('Supabase auth error creating doctor user:', authError);
+          return { success: false, error: authError.message };
+        }
+
+        if (!authData.user) {
+          return { success: false, error: 'Failed to create auth user' };
+        }
+
+        // Use the created auth user's ID
+        data.user_id = authData.user.id;
+        
+        // Note: The user will need to confirm their email before they can sign in
+        // For clinic-created accounts, you might want to auto-confirm emails
+        // This would require a server-side function or admin panel action
+      }
+      
+      // Prepare doctor data for database
       let doctorData: any = { ...data };
       if (data.is_clinic_created && data.password) {
-        // Hash the password (in production, use a proper hashing library)
+        // Hash the password for storage in doctors table as backup
         const hashedPassword = await this.hashPassword(data.password);
         doctorData.password_hash = hashedPassword;
         delete doctorData.password;
@@ -214,24 +249,41 @@ class DoctorService {
     try {
       console.log('Doctor login attempt for:', loginData.email);
       
-      // First, get the doctor by email
-      const { data: doctor, error } = await supabase
-        .from('doctors')
-        .select('*')
-        .eq('email', loginData.email)
-        .eq('is_clinic_created', true)
-        .single();
+      // First, try to sign in with Supabase auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: loginData.email,
+        password: loginData.password
+      });
 
-      if (error || !doctor) {
-        console.error('Doctor not found or not clinic-created:', error);
-        return { success: false, error: 'Invalid credentials' };
+      if (authError) {
+        console.error('Supabase auth error during doctor login:', authError);
+        return { success: false, error: authError.message };
       }
 
-      // Verify password
-      const isValidPassword = await this.verifyPassword(loginData.password, doctor.password_hash);
-      if (!isValidPassword) {
-        console.error('Invalid password for doctor:', loginData.email);
-        return { success: false, error: 'Invalid credentials' };
+      if (!authData.user) {
+        return { success: false, error: 'No user data returned' };
+      }
+
+      // Check if the user has doctor role in metadata
+      const userRole = authData.user.user_metadata?.role;
+      if (userRole !== 'doctor') {
+        // Sign out the user since they're not a doctor
+        await supabase.auth.signOut();
+        return { success: false, error: 'Invalid user role' };
+      }
+
+      // Get the doctor profile from the database
+      const { data: doctor, error: doctorError } = await supabase
+        .from('doctors')
+        .select('*')
+        .eq('user_id', authData.user.id)
+        .single();
+
+      if (doctorError || !doctor) {
+        console.error('Doctor profile not found:', doctorError);
+        // Sign out the user since we can't find their profile
+        await supabase.auth.signOut();
+        return { success: false, error: 'Doctor profile not found' };
       }
 
       // Update last login

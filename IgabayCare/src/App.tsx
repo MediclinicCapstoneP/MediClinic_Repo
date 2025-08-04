@@ -12,6 +12,7 @@ import { ClinicDashboard } from './pages/clinic/ClinicDashboard';
 import { FloatingChatBot } from './components/ui/FloatingChatBot';
 import DoctorSignUpPage from './features/auth/pages/DoctorSignUpPage';
 import DoctorSignInPage from './features/auth/pages/DoctorSignInPage';
+import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 
 // Placeholder page
 const App: React.FC = () => {
@@ -31,6 +32,7 @@ const App: React.FC = () => {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/patient/dashboard" element={<PatientDashboard />} />
           <Route path="/clinic/dashboard" element={<ClinicDashboard />} />
+          <Route path="/doctors-dashboard" element={<DoctorDashboard />} />
         </Routes>
         
         {/* Global Floating ChatBot */}
