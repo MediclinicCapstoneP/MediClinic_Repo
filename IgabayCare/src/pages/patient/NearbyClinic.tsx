@@ -3,7 +3,7 @@ import { MapPin, Navigation, Star, Clock, Phone, Globe, Filter, Search, Heart, S
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
-import { ClinicMap } from '../../components/patient/ClinicMap';
+import ClinicMap from '../../components/patient/ClinicMap';
 import { BookAppointment } from '../../components/patient/BookAppointment';
 
 export const NearbyClinic: React.FC = () => {
@@ -259,10 +259,8 @@ export const NearbyClinic: React.FC = () => {
             )}
           </div>
           <ClinicMap
-            clinics={filteredClinics}
             userLocation={userLocation}
-            onClinicClick={handleClinicMapClick}
-            selectedClinicId={selectedClinic}
+            nearestClinicFound={filteredClinics.length > 0 ? filteredClinics[0] : null}
             showRouting={showRouting}
           />
         </CardContent>
