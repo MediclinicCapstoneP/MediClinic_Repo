@@ -20,6 +20,7 @@ export interface PatientAuthData extends BaseAuthData {
 // Clinic authentication data
 export interface ClinicAuthData extends BaseAuthData {
   clinic_name: string;
+  location?: string | { lat: number; lng: number };
   phone?: string;
   website?: string;
   address?: string;
