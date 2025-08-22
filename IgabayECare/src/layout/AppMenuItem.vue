@@ -1,5 +1,5 @@
-<script setup>
-import { useLayout } from '@/layout/composables/layout';
+<script setup lang="ts">
+import { useLayout } from '../layout/composables/layout';
 import { onBeforeMount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 

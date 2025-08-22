@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
+// Home view component
 </script>
 
 <template>
   <main>
-    <TheWelcome />
+    <div class="home-container">
+      <h1>Welcome to MediClinic</h1>
+      <p>Your healthcare management platform</p>
+    </div>
   </main>
 </template>
+
+<style scoped>
+.home-container {
+  padding: 2rem;
+  text-align: center;
+}
+</style>

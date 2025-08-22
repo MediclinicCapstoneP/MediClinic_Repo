@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 
 import AppMenuItem from './AppMenuItem.vue';
@@ -6,7 +6,11 @@ import AppMenuItem from './AppMenuItem.vue';
 const model = ref([
     {
         label: 'Home',
-        items: [{ label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/' }]
+        items: [
+            { label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/' },
+            { label: 'Landing Page', icon: 'pi pi-fw pi-globe', to: '/landing' },
+            { label: 'Learn More', icon: 'pi pi-fw pi-info-circle', to: '/learn-more' }
+        ]
     },
     {
         label: 'UI Components',
