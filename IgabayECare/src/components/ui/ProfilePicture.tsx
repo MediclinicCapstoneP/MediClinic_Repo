@@ -2,8 +2,6 @@ import React, { useState, useRef } from 'react';
 import { Camera, Upload, X, User, Building, Loader2 } from 'lucide-react';
 import { Button } from './Button';
 import { storageService } from '../../features/auth/utils/storageService';
-import { upload } from '../../features/auth/utils/storage';
-import { patientService } from '../../features/auth/utils/patientService';
 
 interface ProfilePictureProps {
   currentImageUrl?: string;
@@ -49,39 +47,52 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
     xl: 40,
   };
 
-const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  // 🔥 Step 1: Create a local preview
-  const preview = URL.createObjectURL(file);
-  setPreviewUrl(preview);
+    // Validate file
+    const validation = storageService.validateImageFile(file);
+    if (!validation.isValid) {
+      setError(validation.error || 'Invalid file');
+      return;
+    }
 
-  setIsUploading(true);
-  setError(null);
+    setError(null);
+    setIsUploading(true);
 
-  try {
-    // 🔥 Step 2: Upload to Supabase
-    const uniqueFilePath = `images/${Date.now()}_${file.name}`;
-    const publicUrl = await upload(file, uniqueFilePath);
+    try {
+      // Generate preview
+      const thumbnail = await storageService.generateThumbnail(file);
+      setPreviewUrl(thumbnail);
 
-    if (!publicUrl) throw new Error("Failed to upload profile picture");
+      // Upload to Supabase
+      const result = await storageService.updateProfilePicture(
+        userId,
+        file,
+        currentImagePath,
+        userType
+      );
 
-    // 🔥 Step 3: Update patient record
-    await patientService.updateProfilePicture(userId, publicUrl);
-
-    // 🔥 Step 4: Use the uploaded image as the new current image
-    onImageUpdate?.(publicUrl, uniqueFilePath);
-
-    setPreviewUrl(publicUrl);
-  } catch (err: any) {
-    console.error("Upload error:", err);
-    setError("Failed to upload image");
-  } finally {
-    setIsUploading(false);
-  }
-};
-
+      if (result.success && result.url && result.path) {
+        setPreviewUrl(null);
+        onImageUpdate?.(result.url, result.path);
+      } else {
+        setError(result.error || 'Failed to upload image');
+        setPreviewUrl(null);
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError('Failed to upload image');
+      setPreviewUrl(null);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleDelete = async () => {
     if (!currentImagePath) return;
@@ -102,12 +113,11 @@ const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
 
-const getDisplayImage = () => {
-  if (previewUrl) return previewUrl;  // stays until replaced by publicUrl
-  if (currentImageUrl) return currentImageUrl;
-  return null;
-};
-
+  const getDisplayImage = () => {
+    if (previewUrl) return previewUrl;
+    if (currentImageUrl) return currentImageUrl;
+    return null;
+  };
 
   const getDefaultIcon = () => {
     const iconSize = iconSizes[size];

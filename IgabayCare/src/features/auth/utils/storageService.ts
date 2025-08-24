@@ -95,6 +95,7 @@ export const storageService = {
       if (error) {
         console.error('Upload error details:', {
           message: error.message,
+          // @ts-ignore
           statusCode: error.statusCode,
           error: error
         });

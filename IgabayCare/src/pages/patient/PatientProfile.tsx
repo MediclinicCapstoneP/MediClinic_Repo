@@ -28,8 +28,7 @@ export const PatientProfileComponent: React.FC = () => {
     allergies: '',
     medications: '',
     medical_conditions: '',
-    profile_picture_url: '',
-    profile_picture_path: '',
+    profile_pic_url: null,
     created_at: '',
     updated_at: '',
   });
@@ -61,8 +60,7 @@ export const PatientProfileComponent: React.FC = () => {
             allergies: patientResult.patient.allergies || '',
             medications: patientResult.patient.medications || '',
             medical_conditions: patientResult.patient.medical_conditions || '',
-            profile_picture_url: patientResult.patient.profile_picture_url || '',
-            profile_picture_path: patientResult.patient.profile_picture_path || '',
+            profile_pic_url: patientResult.patient.profile_pic_url || '',
           };
           setPatientData(sanitizedPatient);
           setOriginalData(sanitizedPatient);
@@ -121,11 +119,10 @@ export const PatientProfileComponent: React.FC = () => {
     setPatientData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleProfilePictureUpdate = (url: string, path: string) => {
+  const handleProfilePictureUpdate = (url: string) => {
     setPatientData(prev => ({
       ...prev,
-      profile_picture_url: url,
-      profile_picture_path: path,
+      profile_pic_url: url,
     }));
   };
 
@@ -148,8 +145,7 @@ export const PatientProfileComponent: React.FC = () => {
       allergies: data.allergies || undefined,
       medications: data.medications || undefined,
       medical_conditions: data.medical_conditions || undefined,
-      profile_picture_url: data.profile_picture_url || undefined,
-      profile_picture_path: data.profile_picture_path || undefined,
+      profile_pic_url: data.profile_pic_url || undefined,
     };
   };
 
@@ -262,8 +258,7 @@ export const PatientProfileComponent: React.FC = () => {
           <Card>
             <CardContent className="p-6 text-center">
               <ProfilePicture
-                currentImageUrl={patientData.profile_picture_url || undefined}
-                currentImagePath={patientData.profile_picture_path || undefined}
+                currentImageUrl={patientData.profile_pic_url || undefined}
                 userId={patientData.user_id}
                 userType="patient"
                 size="xl"
