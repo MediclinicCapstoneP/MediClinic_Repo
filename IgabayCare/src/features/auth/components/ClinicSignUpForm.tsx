@@ -1,11 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Building, Eye, EyeOff, AlertCircle, CheckCircle, Upload, X } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { roleBasedAuthService } from '../utils/roleBasedAuthService';
-import ClinicMap from '../../../components/patient/ClinicMap';
+
+// Tag interface for react-tag-input functionality
+interface Tag {
+  id: string;
+  text: string;
+  className?: string;
+}
+
+// Medical specialties suggestions
+const MEDICAL_SPECIALTIES = [
+  'Cardiology', 'Dermatology', 'Neurology', 'Orthopedics', 'Pediatrics',
+  'Psychiatry', 'Internal Medicine', 'Family Medicine', 'Emergency Medicine',
+  'Surgery', 'Obstetrics & Gynecology', 'Ophthalmology', 'ENT (Ear, Nose, Throat)',
+  'Radiology', 'Anesthesiology', 'Pathology', 'Oncology', 'Endocrinology',
+  'Gastroenterology', 'Pulmonology', 'Nephrology', 'Rheumatology',
+  'Infectious Disease', 'Physical Medicine'
+];
+
+// Medical services suggestions
+const MEDICAL_SERVICES = [
+  'General Consultation', 'Vaccination', 'Physical Therapy', 'Laboratory Tests',
+  'Imaging (X-Ray, MRI, CT)', 'Surgery', 'Emergency Care', 'Preventive Care',
+  'Telemedicine', 'Home Care', 'Dental Care', 'Mental Health Services',
+  "Women's Health", "Men's Health", 'Pediatric Care', 'Geriatric Care',
+  'Chronic Disease Management', 'Pain Management', 'Rehabilitation',
+  'Nutrition Counseling', 'Smoking Cessation', 'Weight Management',
+  'Travel Medicine', 'Occupational Health'
+];
+
 interface ClinicSignUpFormProps {
   onSuccess?: () => void;
 }
@@ -17,8 +46,9 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
-  const [isMapOpen, setIsMapOpen] = useState(false);
-  const [clinicLocation, setClinicLocation] = useState<{ lat: number; lng: number } | null>(null);
+  // Tag input states for specialties and services
+  const [specialtyTags, setSpecialtyTags] = useState<Tag[]>([]);
+  const [serviceTags, setServiceTags] = useState<Tag[]>([]);
 
   // Form data with localStorage persistence
   const [formData, setFormData] = useState(() => {
@@ -26,29 +56,20 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
     return saved
       ? JSON.parse(saved)
       : {
-          // Step 1: Basic Information
           clinic_name: '',
           email: '',
           password: '',
           confirmPassword: '',
-
-          // Step 2: Contact Information
           phone: '',
           website: '',
           address: '',
           city: '',
           state: '',
           zip_code: '',
-
-          // Step 3: Medical Specialties
           specialties: [],
           custom_specialties: [],
-
-          // Step 4: Medical Services
           services: [],
           custom_services: [],
-
-          // Step 5: Business Information
           license_number: '',
           accreditation: '',
           tax_id: '',
@@ -56,8 +77,6 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
           number_of_doctors: '',
           number_of_staff: '',
           description: '',
-
-          // Step 6: Operating Hours
           operating_hours: {
             monday: { open: '08:00', close: '18:00' },
             tuesday: { open: '08:00', close: '18:00' },
@@ -70,10 +89,53 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
         };
   });
 
-  // Persist form data
+  // Persist form data and sync with tags
   useEffect(() => {
     localStorage.setItem('clinicSignUpData', JSON.stringify(formData));
+    
+    const specialtyTagsFromForm = [
+      ...formData.specialties.map((spec: string) => ({ id: spec, text: spec, className: 'specialty-standard' })),
+      ...formData.custom_specialties.map((spec: string) => ({ id: spec, text: spec, className: 'specialty-custom' }))
+    ];
+    setSpecialtyTags(specialtyTagsFromForm);
+    
+    const serviceTagsFromForm = [
+      ...formData.services.map((serv: string) => ({ id: serv, text: serv, className: 'service-standard' })),
+      ...formData.custom_services.map((serv: string) => ({ id: serv, text: serv, className: 'service-custom' }))
+    ];
+    setServiceTags(serviceTagsFromForm);
   }, [formData]);
+
+  // Update form data when tags change
+  useEffect(() => {
+    const standardSpecialties = specialtyTags
+      .filter(tag => tag.className === 'specialty-standard' || MEDICAL_SPECIALTIES.includes(tag.text))
+      .map(tag => tag.text);
+    const customSpecialties = specialtyTags
+      .filter(tag => tag.className === 'specialty-custom' || !MEDICAL_SPECIALTIES.includes(tag.text))
+      .map(tag => tag.text);
+    
+    setFormData(prev => ({
+      ...prev,
+      specialties: standardSpecialties,
+      custom_specialties: customSpecialties
+    }));
+  }, [specialtyTags]);
+
+  useEffect(() => {
+    const standardServices = serviceTags
+      .filter(tag => tag.className === 'service-standard' || MEDICAL_SERVICES.includes(tag.text))
+      .map(tag => tag.text);
+    const customServices = serviceTags
+      .filter(tag => tag.className === 'service-custom' || !MEDICAL_SERVICES.includes(tag.text))
+      .map(tag => tag.text);
+    
+    setFormData(prev => ({
+      ...prev,
+      services: standardServices,
+      custom_services: customServices
+    }));
+  }, [serviceTags]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
@@ -113,7 +175,6 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
         number_of_doctors: formData.number_of_doctors ? parseInt(formData.number_of_doctors) : undefined,
         number_of_staff: formData.number_of_staff ? parseInt(formData.number_of_staff) : undefined,
         description: formData.description || undefined,
-        location: clinicLocation || undefined, // include location if selected
       });
 
       if (result.success) {
@@ -168,8 +229,155 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
         sunday: { open: '10:00', close: '14:00' },
       },
     });
-    setClinicLocation(null);
+    setSpecialtyTags([]);
+    setServiceTags([]);
     setCurrentStep(1);
+  };
+
+  // Custom TagInput component
+  const TagInput: React.FC<{
+    tags: Tag[];
+    suggestions: string[];
+    onAddTag: (tag: Tag) => void;
+    onDeleteTag: (index: number) => void;
+    placeholder: string;
+    className?: string;
+  }> = ({ tags, suggestions, onAddTag, onDeleteTag, placeholder, className = '' }) => {
+    const [inputValue, setInputValue] = useState('');
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
+
+    useEffect(() => {
+      if (inputValue) {
+        const filtered = suggestions.filter(suggestion =>
+          suggestion.toLowerCase().includes(inputValue.toLowerCase()) &&
+          !tags.some(tag => tag.text.toLowerCase() === suggestion.toLowerCase())
+        );
+        setFilteredSuggestions(filtered);
+        setShowSuggestions(filtered.length > 0);
+      } else {
+        setShowSuggestions(false);
+      }
+    }, [inputValue, suggestions, tags]);
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        addTag();
+      }
+    };
+
+    const addTag = (suggestionText?: string) => {
+      const text = suggestionText || inputValue.trim();
+      if (text && !tags.some(tag => tag.text.toLowerCase() === text.toLowerCase())) {
+        const isStandard = suggestions.includes(text);
+        onAddTag({
+          id: text,
+          text: text,
+          className: isStandard ? 'standard' : 'custom'
+        });
+        setInputValue('');
+        setShowSuggestions(false);
+      }
+    };
+
+    const handleCheckboxChange = (suggestion: string, checked: boolean) => {
+      if (checked) {
+        addTag(suggestion);
+      } else {
+        const index = tags.findIndex(tag => tag.text === suggestion);
+        if (index !== -1) {
+          onDeleteTag(index);
+        }
+      }
+    };
+
+    return (
+      <div className={`space-y-4 ${className}`}>
+        {/* Checkbox grid for suggestions */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {suggestions.map((suggestion) => (
+            <label key={suggestion} className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={tags.some(tag => tag.text === suggestion)}
+                onChange={(e) => handleCheckboxChange(suggestion, e.target.checked)}
+                className="rounded border-gray-300 text-secondary-600 focus:ring-secondary-500"
+                disabled={isLoading}
+              />
+              <span className="text-sm text-gray-700">{suggestion}</span>
+            </label>
+          ))}
+        </div>
+
+        {/* Custom input */}
+        <div className="relative">
+          <Input
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={isLoading}
+          />
+          {showSuggestions && (
+            <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+              {filteredSuggestions.map((suggestion, index) => (
+                <div
+                  key={index}
+                  className="px-3 py-2 cursor-pointer hover:bg-gray-100"
+                  onClick={() => addTag(suggestion)}
+                >
+                  {suggestion}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Tags display */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag, index) => (
+              <span
+                key={index}
+                className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${
+                  tag.className === 'custom' || tag.className === 'specialty-custom' || tag.className === 'service-custom'
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-blue-100 text-blue-800'
+                }`}
+              >
+                {tag.text}
+                <button
+                  type="button"
+                  onClick={() => onDeleteTag(index)}
+                  className="ml-2 text-gray-500 hover:text-gray-700"
+                  disabled={isLoading}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Tag handlers
+  const handleAddSpecialtyTag = (tag: Tag) => {
+    setSpecialtyTags(prev => [...prev, { ...tag, className: `specialty-${tag.className}` }]);
+  };
+
+  const handleDeleteSpecialtyTag = (index: number) => {
+    setSpecialtyTags(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddServiceTag = (tag: Tag) => {
+    setServiceTags(prev => [...prev, { ...tag, className: `service-${tag.className}` }]);
+  };
+
+  const handleDeleteServiceTag = (index: number) => {
+    setServiceTags(prev => prev.filter((_, i) => i !== index));
   };
 
   if (success) {
@@ -199,18 +407,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
   }
 
   return (
-    <>
-      <ClinicMap
-        open={isMapOpen}
-        onClose={() => setIsMapOpen(false)}
-        selectedLocation={clinicLocation}
-        onLocationSelect={(location) => {
-          setClinicLocation(location);
-          setIsMapOpen(false);
-        }}
-      />
-
-      <div className="min-h-screen bg-gradient-to-br from-blue-100 via-blue-200 to-blue-300 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-blue-200 to-blue-300 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
             <div className="mx-auto h-16 w-16 bg-secondary-100 rounded-full flex items-center justify-center mb-4">
@@ -376,31 +573,6 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                         disabled={isLoading}
                       />
                     </div>
-
-                    {/* Location selector */}
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Clinic Location
-                      </label>
-                      <div className="flex items-center space-x-4">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsMapOpen(true)}
-                          disabled={isLoading}
-                        >
-                          Select Clinic Location
-                        </Button>
-                        {clinicLocation && (
-                          <div className="text-sm text-gray-700">
-                            Selected: {clinicLocation.lat.toFixed(6)}, {clinicLocation.lng.toFixed(6)}
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        This location will help patients find your clinic on the map.
-                      </p>
-                    </div>
                   </div>
                 )}
 
@@ -411,68 +583,15 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                       <label className="block text-sm font-medium text-gray-700 mb-3">
                         Medical Specialties
                       </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {[
-                          'Cardiology',
-                          'Dermatology',
-                          'Neurology',
-                          'Orthopedics',
-                          'Pediatrics',
-                          'Psychiatry',
-                          'Internal Medicine',
-                          'Family Medicine',
-                          'Emergency Medicine',
-                          'Surgery',
-                          'Obstetrics & Gynecology',
-                          'Ophthalmology',
-                          'ENT (Ear, Nose, Throat)',
-                          'Radiology',
-                          'Anesthesiology',
-                          'Pathology',
-                          'Oncology',
-                          'Endocrinology',
-                          'Gastroenterology',
-                          'Pulmonology',
-                          'Nephrology',
-                          'Rheumatology',
-                          'Infectious Disease',
-                          'Physical Medicine',
-                        ].map((specialty) => (
-                          <label key={specialty} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={formData.specialties.includes(specialty)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  handleInputChange('specialties', [...formData.specialties, specialty]);
-                                } else {
-                                  handleInputChange(
-                                    'specialties',
-                                    formData.specialties.filter((s: string) => s !== specialty)
-                                  );
-                                }
-                              }}
-                              className="rounded border-gray-300 text-secondary-600 focus:ring-secondary-500"
-                            />
-                            <span className="text-sm text-gray-700">{specialty}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <Input
-                        label="Other Specialties (comma-separated)"
-                        value={formData.custom_specialties.join(', ')}
-                        onChange={(e) =>
-                          handleInputChange(
-                            'custom_specialties',
-                            e.target.value
-                              .split(',')
-                              .map((s) => s.trim())
-                              .filter((s) => s)
-                          )
-                        }
-                        placeholder="e.g., Sports Medicine, Geriatrics"
-                        disabled={isLoading}
-                        className="mt-4"
+                      <p className="text-sm text-gray-600 mb-4">
+                        Select from the list below or add custom specialties. Selected items will appear as tags.
+                      </p>
+                      <TagInput
+                        tags={specialtyTags}
+                        suggestions={MEDICAL_SPECIALTIES}
+                        onAddTag={handleAddSpecialtyTag}
+                        onDeleteTag={handleDeleteSpecialtyTag}
+                        placeholder="Add custom specialty (e.g., Sports Medicine, Geriatrics)"
                       />
                     </div>
                   </div>
@@ -485,68 +604,15 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                       <label className="block text-sm font-medium text-gray-700 mb-3">
                         Medical Services Offered
                       </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {[
-                          'General Consultation',
-                          'Vaccination',
-                          'Physical Therapy',
-                          'Laboratory Tests',
-                          'Imaging (X-Ray, MRI, CT)',
-                          'Surgery',
-                          'Emergency Care',
-                          'Preventive Care',
-                          'Telemedicine',
-                          'Home Care',
-                          'Dental Care',
-                          'Mental Health Services',
-                          "Women's Health",
-                          "Men's Health",
-                          'Pediatric Care',
-                          'Geriatric Care',
-                          'Chronic Disease Management',
-                          'Pain Management',
-                          'Rehabilitation',
-                          'Nutrition Counseling',
-                          'Smoking Cessation',
-                          'Weight Management',
-                          'Travel Medicine',
-                          'Occupational Health',
-                        ].map((service) => (
-                          <label key={service} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={formData.services.includes(service)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  handleInputChange('services', [...formData.services, service]);
-                                } else {
-                                  handleInputChange(
-                                    'services',
-                                    formData.services.filter((s: string) => s !== service)
-                                  );
-                                }
-                              }}
-                              className="rounded border-gray-300 text-secondary-600 focus:ring-secondary-500"
-                            />
-                            <span className="text-sm text-gray-700">{service}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <Input
-                        label="Other Services (comma-separated)"
-                        value={formData.custom_services.join(', ')}
-                        onChange={(e) =>
-                          handleInputChange(
-                            'custom_services',
-                            e.target.value
-                              .split(',')
-                              .map((s) => s.trim())
-                              .filter((s) => s)
-                          )
-                        }
-                        placeholder="e.g., Acupuncture, Massage Therapy"
-                        disabled={isLoading}
-                        className="mt-4"
+                      <p className="text-sm text-gray-600 mb-4">
+                        Select from the list below or add custom services. Selected items will appear as tags.
+                      </p>
+                      <TagInput
+                        tags={serviceTags}
+                        suggestions={MEDICAL_SERVICES}
+                        onAddTag={handleAddServiceTag}
+                        onDeleteTag={handleDeleteServiceTag}
+                        placeholder="Add custom service (e.g., Acupuncture, Massage Therapy)"
                       />
                     </div>
                   </div>
@@ -678,12 +744,6 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                           <strong>Address:</strong> {formData.address || 'Not provided'}
                         </p>
                         <p>
-                          <strong>Location:</strong>{' '}
-                          {clinicLocation
-                            ? `${clinicLocation.lat.toFixed(6)}, ${clinicLocation.lng.toFixed(6)}`
-                            : 'Not selected'}
-                        </p>
-                        <p>
                           <strong>Specialties:</strong>{' '}
                           {[...formData.specialties, ...formData.custom_specialties].join(', ') || 'None'}
                         </p>
@@ -763,6 +823,6 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
           </Card>
         </div>
       </div>
-    </>
-  );
+    );
+  };
 };
