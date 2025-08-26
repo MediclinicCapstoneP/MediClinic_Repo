@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Building, Eye, EyeOff, AlertCircle, CheckCircle, Upload, X } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
@@ -50,6 +49,10 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
   const [specialtyTags, setSpecialtyTags] = useState<Tag[]>([]);
   const [serviceTags, setServiceTags] = useState<Tag[]>([]);
 
+  // Refs to prevent circular updates
+  const isUpdatingFromTags = useRef(false);
+  const isUpdatingFromForm = useRef(false);
+
   // Form data with localStorage persistence
   const [formData, setFormData] = useState(() => {
     const saved = localStorage.getItem('clinicSignUpData');
@@ -91,7 +94,14 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
 
   // Persist form data and sync with tags
   useEffect(() => {
+    if (isUpdatingFromTags.current) {
+      isUpdatingFromTags.current = false;
+      return;
+    }
+    
     localStorage.setItem('clinicSignUpData', JSON.stringify(formData));
+    
+    isUpdatingFromForm.current = true;
     
     const specialtyTagsFromForm = [
       ...formData.specialties.map((spec: string) => ({ id: spec, text: spec, className: 'specialty-standard' })),
@@ -108,6 +118,13 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
 
   // Update form data when tags change
   useEffect(() => {
+    if (isUpdatingFromForm.current) {
+      isUpdatingFromForm.current = false;
+      return;
+    }
+    
+    isUpdatingFromTags.current = true;
+    
     const standardSpecialties = specialtyTags
       .filter(tag => tag.className === 'specialty-standard' || MEDICAL_SPECIALTIES.includes(tag.text))
       .map(tag => tag.text);
@@ -115,7 +132,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
       .filter(tag => tag.className === 'specialty-custom' || !MEDICAL_SPECIALTIES.includes(tag.text))
       .map(tag => tag.text);
     
-    setFormData(prev => ({
+    setFormData((prev: any) => ({
       ...prev,
       specialties: standardSpecialties,
       custom_specialties: customSpecialties
@@ -123,6 +140,12 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
   }, [specialtyTags]);
 
   useEffect(() => {
+    if (isUpdatingFromForm.current) {
+      return;
+    }
+    
+    isUpdatingFromTags.current = true;
+    
     const standardServices = serviceTags
       .filter(tag => tag.className === 'service-standard' || MEDICAL_SERVICES.includes(tag.text))
       .map(tag => tag.text);
@@ -130,7 +153,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
       .filter(tag => tag.className === 'service-custom' || !MEDICAL_SERVICES.includes(tag.text))
       .map(tag => tag.text);
     
-    setFormData(prev => ({
+    setFormData((prev: any) => ({
       ...prev,
       services: standardServices,
       custom_services: customServices
@@ -825,4 +848,3 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
       </div>
     );
   };
-};
