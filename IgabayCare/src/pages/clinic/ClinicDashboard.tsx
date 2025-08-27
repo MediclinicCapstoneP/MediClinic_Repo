@@ -9,6 +9,7 @@ import { ClinicSettings } from './ClinicSettings';
 import { Appointment } from './Appointment';
 import { ManageClinic } from './ManageClinic';
 import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthService';
+import { clinicService } from '../../features/auth/utils/clinicService';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '../../components/ui/Skeleton';
 
@@ -17,18 +18,75 @@ import { SkeletonDashboard } from '../../components/ui/Skeleton';
 export const ClinicDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [user, setUser] = useState<any>(null);
+  const [clinicProfile, setClinicProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuthAndFetchProfile = async () => {
       try {
+        // First, check authentication
         const currentUser = await roleBasedAuthService.getCurrentUser();
         if (!currentUser || currentUser.role !== 'clinic') {
           navigate('/clinic-signin');
           return;
         }
+        
+        console.log('Authenticated clinic user:', currentUser.user.email);
         setUser(currentUser);
+        
+        // Then, fetch the clinic profile
+        try {
+          const clinicResult = await clinicService.getClinicByUserId(currentUser.user.id);
+          if (clinicResult.success && clinicResult.clinic) {
+            console.log('Clinic profile loaded:', clinicResult.clinic.clinic_name);
+            setClinicProfile(clinicResult.clinic);
+            
+            // Combine auth user with clinic profile for UI components
+            const enhancedUser = {
+              ...currentUser,
+              clinic_id: clinicResult.clinic.id,
+              clinic_name: clinicResult.clinic.clinic_name,
+              email: clinicResult.clinic.email,
+              phone: clinicResult.clinic.phone,
+              address: clinicResult.clinic.address,
+              city: clinicResult.clinic.city,
+              state: clinicResult.clinic.state,
+              status: clinicResult.clinic.status,
+              user_metadata: {
+                ...currentUser.user.user_metadata,
+                clinic_name: clinicResult.clinic.clinic_name
+              }
+            };
+            setUser(enhancedUser);
+          } else {
+            console.warn('No clinic profile found, using auth user data only');
+            // If no clinic profile, try to extract clinic name from metadata
+            const clinicName = currentUser.user.user_metadata?.clinic_name || 
+                             currentUser.user.user_metadata?.first_name || 
+                             'My Clinic';
+            setUser({
+              ...currentUser,
+              clinic_name: clinicName,
+              user_metadata: {
+                ...currentUser.user.user_metadata,
+                clinic_name: clinicName
+              }
+            });
+          }
+        } catch (profileError) {
+          console.error('Error fetching clinic profile:', profileError);
+          // Fallback to basic user data
+          const clinicName = currentUser.user.user_metadata?.clinic_name || 'My Clinic';
+          setUser({
+            ...currentUser,
+            clinic_name: clinicName,
+            user_metadata: {
+              ...currentUser.user.user_metadata,
+              clinic_name: clinicName
+            }
+          });
+        }
       } catch (error) {
         console.error('Auth check error:', error);
         navigate('/clinic-signin');
@@ -37,7 +95,7 @@ export const ClinicDashboard: React.FC = () => {
       }
     };
 
-    checkAuth();
+    checkAuthAndFetchProfile();
   }, [navigate]);
 
   const navigationItems = [
@@ -77,7 +135,7 @@ export const ClinicDashboard: React.FC = () => {
       case 'dashboard':
         return <ClinicHome onNavigate={setActiveTab} />;
       case 'appointments':
-        return <Appointment clinicId={user?.clinic_id || ''} />;
+        return <Appointment clinicId={clinicProfile?.id || user?.clinic_id || ''} />;
       case 'doctors':
         return <ClinicDoctors />;
       case 'patients':
@@ -92,7 +150,14 @@ export const ClinicDashboard: React.FC = () => {
   };
 
   if (loading) {
-    return <SkeletonDashboard />;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading clinic dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

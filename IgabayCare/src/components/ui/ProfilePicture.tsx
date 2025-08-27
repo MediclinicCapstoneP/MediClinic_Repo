@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { storageService } from '../../features/auth/utils/storageService';
 import { upload } from '../../features/auth/utils/storage';
 import { patientService } from '../../features/auth/utils/patientService';
+import { clinicService } from '../../features/auth/utils/clinicService';
 
 interface ProfilePictureProps {
   currentImageUrl?: string;
@@ -67,8 +68,13 @@ const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
     if (!publicUrl) throw new Error("Failed to upload profile picture");
 
-    // 🔥 Step 3: Update patient record
-    await patientService.updateProfilePicture(userId, publicUrl);
+    // 🔥 Step 3: Update user record with appropriate service
+    if (userType === 'clinic') {
+      await clinicService.updateClinicProfilePicture(userId, publicUrl);
+    } else {
+      // For patients and doctors, use patientService
+      await patientService.updateProfilePicture(userId, publicUrl);
+    }
 
     // 🔥 Step 4: Use the uploaded image as the new current image
     onImageUpdate?.(publicUrl, uniqueFilePath);

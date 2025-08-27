@@ -76,7 +76,7 @@ export const PatientProfileComponent: React.FC = () => {
     };
 
     fetchPatientData();
-  }, []);
+  }, []); 
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -129,8 +129,7 @@ export const PatientProfileComponent: React.FC = () => {
   const handleProfilePictureDelete = () => {
     setPatientData(prev => ({
       ...prev,
-      profile_picture_url: '',
-      profile_picture_path: '',
+      profile_pic_url: url,
     }));
   };
 
@@ -263,7 +262,7 @@ export const PatientProfileComponent: React.FC = () => {
                 userType="patient"
                 size="xl"
                 onImageUpdate={handleProfilePictureUpdate}
-                onImageDelete={handleProfilePictureDelete}
+                onImageDelete={handleProfilePictureDelete}  
                 disabled={!isEditing}
                 className="mx-auto"
               />
