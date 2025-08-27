@@ -125,6 +125,23 @@ export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
     }
   };
 
+  // Helper function to get clinic display name
+  const getClinicDisplayName = () => {
+    // Try different sources for clinic name in order of preference
+    const clinicName = user?.clinic_name || 
+                      user?.user_metadata?.clinic_name || 
+                      user?.user?.user_metadata?.clinic_name ||
+                      user?.email?.split('@')[0] || 
+                      'Clinic';
+    
+    // Capitalize first letter if it's an email-based name
+    if (clinicName && clinicName !== 'Clinic') {
+      return clinicName.charAt(0).toUpperCase() + clinicName.slice(1);
+    }
+    
+    return clinicName;
+  };
+
   return (
     <>
       <header className=" bg-blue-100 shadow-sm border-b border-gray-200 px-4 lg:px-6 py-4 sticky top-0 z-30">
@@ -183,7 +200,7 @@ export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
                 <Building className="h-4 w-4" />
               </div>
               <span className="text-sm font-medium text-gray-700 hidden sm:block">
-                {user?.clinic_name || user?.user_metadata?.clinic_name || 'Clinic'}
+                {getClinicDisplayName()}
               </span>
             </div>
 
@@ -193,7 +210,6 @@ export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
               size="sm"
               onClick={() => setShowLogoutConfirm(true)}
               className="flex items-center gap-2 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-              title="Sign Out"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign Out</span>
