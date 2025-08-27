@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { supabase } from '../../../supabaseClient';
+import { roleBasedAuthService } from '../utils/roleBasedAuthService';
 
 const AuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -23,13 +24,43 @@ const AuthCallback: React.FC = () => {
         }
 
         if (data.session) {
-          // Email verified successfully
-          setStatus('success');
-          setMessage('Email verified successfully! You can now access your dashboard.');
+          console.log('Email verification successful, processing user profile...');
           
-          // Check user role and redirect accordingly
+          // Check user role and create profile if needed
           const userRole = data.session.user.user_metadata?.role;
-          const redirectPath = userRole === 'clinic' ? '/clinic/dashboard' : '/patient/dashboard';
+          
+          if (userRole === 'clinic') {
+            // For clinic users, try to create profile from stored registration data
+            setMessage('Email verified! Setting up your clinic profile...');
+            
+            try {
+              const profileResult = await roleBasedAuthService.clinic.createClinicProfileFromMetadata(data.session.user);
+              
+              if (profileResult.success) {
+                console.log('Clinic profile created successfully from stored data');
+                setStatus('success');
+                setMessage('Email verified and clinic profile created successfully! You can now access your dashboard.');
+              } else {
+                console.error('Failed to create clinic profile:', profileResult.error);
+                // Still consider verification successful, user can complete profile later
+                setStatus('success');
+                setMessage('Email verified successfully! Please complete your clinic profile to get started.');
+              }
+            } catch (profileError) {
+              console.error('Exception during profile creation:', profileError);
+              // Still consider verification successful
+              setStatus('success');
+              setMessage('Email verified successfully! Please complete your clinic profile to get started.');
+            }
+          } else {
+            // For other user types (patient, doctor)
+            setStatus('success');
+            setMessage('Email verified successfully! You can now access your dashboard.');
+          }
+          
+          const redirectPath = userRole === 'clinic' ? '/clinic/dashboard' : 
+                              userRole === 'doctor' ? '/doctor/dashboard' : 
+                              '/patient/dashboard';
           
           // Redirect to appropriate dashboard after 3 seconds
           setTimeout(() => {
@@ -119,7 +150,9 @@ const AuthCallback: React.FC = () => {
             onClick={async () => {
               const { data: sessionData } = await supabase.auth.getSession();
               const userRole = sessionData.session?.user.user_metadata?.role;
-              const redirectPath = userRole === 'clinic' ? '/clinic/dashboard' : '/patient/dashboard';
+              const redirectPath = userRole === 'clinic' ? '/clinic/dashboard' : 
+                                 userRole === 'doctor' ? '/doctor/dashboard' : 
+                                 '/patient/dashboard';
               navigate(redirectPath);
             }}
             className="w-full"

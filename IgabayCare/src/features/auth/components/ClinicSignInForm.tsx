@@ -111,24 +111,13 @@ export const ClinicSignInForm: React.FC = () => {
                 Don't have a clinic account?{' '}
                 <Link
                   to="/clinic-signup"
-                  className="font-medium text-secondary-600 hover:text-secondary-500 transition-colors"
+                  className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
                 >
                   Register your clinic
                 </Link>
               </p>
             </div>
 
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-600">
-                Are you a patient?{' '}
-                <Link
-                  to="/signin"
-                  className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
-                >
-                  Sign in here
-                </Link>
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>

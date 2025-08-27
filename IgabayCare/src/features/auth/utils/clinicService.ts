@@ -27,6 +27,7 @@ export interface ClinicProfile {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   updated_at: string;
+  profile_pic_url?: string;
 }
 
 export interface CreateClinicData {
@@ -51,6 +52,7 @@ export interface CreateClinicData {
   number_of_doctors?: number;
   number_of_staff?: number;
   description?: string;
+  profile_pic_url?: string;
 }
 
 export const clinicService = {
@@ -83,7 +85,7 @@ export const clinicService = {
       console.log('Clinic created successfully:', clinic);
 
       // Add specialties to the clinic_specialties table
-      if (clinic && (specialties?.length > 0 || custom_specialties?.length > 0)) {
+      if (clinic && ((specialties && specialties.length > 0) || (custom_specialties && custom_specialties.length > 0))) {
         const specialtyResult = await clinicSpecialtyService.replaceClinicSpecialties(
           clinic.id,
           specialties || [],
@@ -174,6 +176,34 @@ export const clinicService = {
     }
   },
 
+  // Update clinic profile picture
+  async updateClinicProfilePicture(clinicId: string, profilePicUrl: string): Promise<{ success: boolean; error?: string; clinic?: ClinicProfile }> {
+    try {
+      console.log('🖼️ Updating clinic profile picture:', { clinicId, profilePicUrl });
+      
+      const { data: clinic, error } = await supabase
+        .from('clinics')
+        .update({ 
+          profile_pic_url: profilePicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', clinicId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error updating clinic profile picture:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Clinic profile picture updated successfully:', clinic);
+      return { success: true, clinic };
+    } catch (error) {
+      console.error('💥 Unexpected error updating clinic profile picture:', error);
+      return { success: false, error: 'Failed to update clinic profile picture' };
+    }
+  },
+
   // Update clinic profile
   async updateClinic(clinicId: string, updates: Partial<ClinicProfile>): Promise<{ success: boolean; error?: string; clinic?: ClinicProfile }> {
     try {
@@ -236,11 +266,28 @@ export const clinicService = {
     }
   },
 
-  // Get public clinics (for patients to view)
+  // Get public clinics (for patients to view)  
   async getPublicClinics(): Promise<{ success: boolean; error?: string; clinics?: ClinicProfile[] }> {
     try {
-      console.log('Fetching public clinics...');
+      // First, let's check if we can access the clinics table at all
+      const { data: countData, error: countError, count } = await supabase
+        .from('clinics')
+        .select('*', { count: 'exact', head: true });
       
+      if (countError) {
+        console.error('❌ Cannot access clinics table:', countError);
+        return { 
+          success: false, 
+          error: `Table access blocked by RLS policies. Error: ${countError.message}. Please run the database fix script.` 
+        };
+      }
+      
+      // If no clinics exist at all, provide specific guidance
+      if (count === 0) {
+        console.log('🚨 No clinics found - Run: database/restore_ohara_clinic.sql');
+      }
+      
+      // Now try to fetch approved clinics
       const { data: clinics, error } = await supabase
         .from('clinics')
         .select('*')
@@ -248,14 +295,22 @@ export const clinicService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching public clinics:', error);
-        return { success: false, error: error.message };
+        console.error('❌ Error fetching approved clinics:', error);
+        
+        // Provide specific error messages for common issues
+        if (error.code === '42P01') {
+          return { success: false, error: 'Clinics table does not exist. Please check database schema.' };
+        } else if (error.code === '42501') {
+          return { success: false, error: 'Access denied. Please check RLS policies for public clinic access.' };
+        } else if (error.code === 'PGRST116') {
+          return { success: false, error: 'No data found. The clinics table may be empty or RLS policies may be blocking access.' };
+        } else {
+          return { success: false, error: `Database query failed: ${error.message || 'Unknown database error'}` };
+        }
       }
 
-      console.log('Raw clinics data from Supabase:', clinics);
-
       if (!clinics || clinics.length === 0) {
-        console.log('No approved clinics found in database');
+        console.log('⚠️ No approved clinics found');
         return { success: true, clinics: [] };
       }
 
@@ -263,9 +318,10 @@ export const clinicService = {
       const clinicsWithSpecialties = await Promise.all(
         clinics.map(async (clinic) => {
           try {
-            return await this.loadClinicSpecialties(clinic);
+            const clinicWithSpecialties = await this.loadClinicSpecialties(clinic);
+            return clinicWithSpecialties;
           } catch (error) {
-            console.error(`Error loading specialties for clinic ${clinic.id}:`, error);
+            console.error(`❌ Error loading specialties for clinic ${clinic.id}:`, error);
             return {
               ...clinic,
               specialties: [],
@@ -274,12 +330,15 @@ export const clinicService = {
           }
         })
       );
-
-      console.log('Clinics with specialties loaded:', clinicsWithSpecialties);
+      
       return { success: true, clinics: clinicsWithSpecialties };
     } catch (error) {
-      console.error('Unexpected error fetching public clinics:', error);
-      return { success: false, error: 'Failed to fetch public clinics' };
+      console.error('💥 Unexpected error fetching public clinics:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return { 
+        success: false, 
+        error: `Failed to fetch public clinics: ${errorMessage}` 
+      };
     }
   },
 
@@ -288,9 +347,15 @@ export const clinicService = {
     try {
       console.log('Upserting clinic with data:', data);
       
+      // Ensure status is set to approved for new clinics
+      const clinicData = {
+        ...data,
+        status: 'approved' // Default to approved status
+      };
+      
       const { data: clinic, error } = await supabase
         .from('clinics')
-        .upsert([data], { 
+        .upsert([clinicData], { 
           onConflict: 'user_id',
           ignoreDuplicates: false 
         })
