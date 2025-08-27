@@ -1,5 +1,6 @@
--- QUICK FIX: Add missing patient_notes column to appointments table
--- Run this in your Supabase SQL Editor to fix the immediate error
+-- QUICK FIX: Add missing columns to appointments table
+-- Run this in your Supabase SQL Editor to fix column errors
+-- This script adds: patient_notes, duration_minutes, appointment_type, priority
 
 -- Check if appointments table exists
 SELECT 'Checking appointments table...' as status;
@@ -70,6 +71,8 @@ BEGIN
     ) THEN
         ALTER TABLE public.appointments ADD COLUMN priority TEXT DEFAULT 'normal';
         RAISE NOTICE '✅ Added priority column to appointments table';
+    ELSE
+        RAISE NOTICE 'ℹ️ priority column already exists';
     END IF;
 END $$;
 

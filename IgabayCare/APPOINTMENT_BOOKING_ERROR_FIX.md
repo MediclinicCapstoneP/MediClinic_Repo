@@ -1,15 +1,17 @@
 # Appointment Booking Error Fix Guide
 
-## 🚨 **Error Encountered:**
+## 🚨 **Errors Encountered:**
 ```
 Error: Could not find the 'duration_minutes' column of 'appointments' in the schema cache
 Error: Could not find the 'patient_notes' column of 'appointments' in the schema cache
+Error: Could not find the 'priority' column of 'appointments' in the schema cache
 ```
 
 ## 🔧 **Root Cause:**
 The appointments table in your Supabase database is missing essential columns:
-- `duration_minutes` column
-- `patient_notes` column  
+- `duration_minutes` column ✅ (Fixed)
+- `patient_notes` column ✅ (Fixed)
+- `priority` column ✅ (Fixed)
 - Possibly other required columns
 
 Or the entire appointments table doesn't exist yet.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, MapPin, Calendar, History, Heart, TrendingUp, Clock, Star, Users, Activity, Award, Shield, Phone, Mail, ExternalLink, X } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -162,6 +162,65 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
     return 'General Medicine';
   };
 
+  // Convert service name to valid AppointmentType format
+  const convertToAppointmentType = useCallback((serviceName: string): AppointmentType => {
+    const normalized = serviceName.toLowerCase().replace(/\s+/g, '_');
+    
+    // Map common service names to valid AppointmentType values
+    const mappings: Record<string, AppointmentType> = {
+      'consultation': 'consultation',
+      'checkup': 'routine_checkup',
+      'routine_checkup': 'routine_checkup', 
+      'routine': 'routine_checkup',
+      'follow_up': 'follow_up',
+      'followup': 'follow_up',
+      'emergency': 'emergency',
+      'specialist': 'specialist_visit',
+      'specialist_visit': 'specialist_visit',
+      'vaccination': 'vaccination',
+      'vaccine': 'vaccination',
+      'procedure': 'procedure',
+      'surgery': 'surgery',
+      'lab_test': 'lab_test',
+      'laboratory': 'lab_test',
+      'imaging': 'imaging',
+      'xray': 'imaging',
+      'x-ray': 'imaging',
+      'physical_therapy': 'physical_therapy',
+      'therapy': 'physical_therapy',
+      'mental_health': 'mental_health',
+      'dental': 'dental',
+      'vision': 'vision',
+      'other': 'other'
+    };
+    
+    return mappings[normalized] || 'other';
+  }, []);
+
+  const getServiceOptions = useCallback((clinic: ClinicProfile) => {
+    const availableServices = [
+      ...(clinic.services || []),
+      ...(clinic.custom_services || [])
+    ];
+    
+    const defaultServices = [
+      { display: 'Consultation', value: 'consultation' },
+      { display: 'Routine Checkup', value: 'routine_checkup' },
+      { display: 'Follow-up', value: 'follow_up' },
+      { display: 'Emergency', value: 'emergency' },
+      { display: 'Specialist Visit', value: 'specialist_visit' },
+      { display: 'Vaccination', value: 'vaccination' },
+      { display: 'Other', value: 'other' }
+    ];
+    
+    return availableServices.length > 0 
+      ? availableServices.map(service => ({
+          display: service,
+          value: convertToAppointmentType(service)
+        }))
+      : defaultServices;
+  }, [convertToAppointmentType]);
+
   const filteredClinics = clinics.filter(clinic => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
@@ -174,6 +233,22 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
       (clinic.custom_specialties && clinic.custom_specialties.some(s => s.toLowerCase().includes(searchLower)))
     );
   });
+
+  // Reset appointment type when clinic changes or services change
+  useEffect(() => {
+    if (selectedClinic && step === 'book') {
+      const serviceOptions = getServiceOptions(selectedClinic);
+      
+      // Reset appointment type if current selection is not available for this clinic
+      if (serviceOptions.length > 0) {
+        const currentServiceExists = serviceOptions.some(option => option.value === appointmentType);
+        if (!currentServiceExists) {
+          const firstValidType = serviceOptions[0].value as AppointmentType;
+          setAppointmentType(firstValidType);
+        }
+      }
+    }
+  }, [selectedClinic?.id, step, appointmentType, convertToAppointmentType, getServiceOptions]);
 
   // Handle appointment booking
   const handleBookAppointment = async () => {
@@ -197,7 +272,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
         appointment_date: date,
         appointment_time: time + ':00', // Add seconds
         appointment_type: appointmentType,
-        priority: 'normal',
+        // priority: 'normal', // Removed due to missing column in database
       };
 
       console.log('Creating appointment with data:', appointmentData);
@@ -613,69 +688,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
       ...(clinic.custom_services || [])
     ];
     
-    // Convert service name to valid AppointmentType format
-    const convertToAppointmentType = (serviceName: string): AppointmentType => {
-      const normalized = serviceName.toLowerCase().replace(/\s+/g, '_');
-      
-      // Map common service names to valid AppointmentType values
-      const mappings: Record<string, AppointmentType> = {
-        'consultation': 'consultation',
-        'checkup': 'routine_checkup',
-        'routine_checkup': 'routine_checkup', 
-        'routine': 'routine_checkup',
-        'follow_up': 'follow_up',
-        'followup': 'follow_up',
-        'emergency': 'emergency',
-        'specialist': 'specialist_visit',
-        'specialist_visit': 'specialist_visit',
-        'vaccination': 'vaccination',
-        'vaccine': 'vaccination',
-        'procedure': 'procedure',
-        'surgery': 'surgery',
-        'lab_test': 'lab_test',
-        'laboratory': 'lab_test',
-        'imaging': 'imaging',
-        'xray': 'imaging',
-        'x-ray': 'imaging',
-        'physical_therapy': 'physical_therapy',
-        'therapy': 'physical_therapy',
-        'mental_health': 'mental_health',
-        'dental': 'dental',
-        'vision': 'vision',
-        'other': 'other'
-      };
-      
-      return mappings[normalized] || 'other';
-    };
-    
-    // If no services are defined, fall back to default appointment types with display names
-    const defaultServices = [
-      { display: 'Consultation', value: 'consultation' },
-      { display: 'Routine Checkup', value: 'routine_checkup' },
-      { display: 'Follow-up', value: 'follow_up' },
-      { display: 'Emergency', value: 'emergency' },
-      { display: 'Specialist Visit', value: 'specialist_visit' },
-      { display: 'Vaccination', value: 'vaccination' },
-      { display: 'Other', value: 'other' }
-    ];
-    
-    const serviceOptions = availableServices.length > 0 
-      ? availableServices.map(service => ({
-          display: service,
-          value: convertToAppointmentType(service)
-        }))
-      : defaultServices;
-    
-    // Reset appointment type if current selection is not available for this clinic
-    React.useEffect(() => {
-      if (serviceOptions.length > 0) {
-        const currentServiceExists = serviceOptions.some(option => option.value === appointmentType);
-        if (!currentServiceExists) {
-          const firstValidType = serviceOptions[0].value as AppointmentType;
-          setAppointmentType(firstValidType);
-        }
-      }
-    }, [clinic.id]);
+    const serviceOptions = getServiceOptions(clinic);
 
     return (
       <div className="max-w-md mx-auto">
