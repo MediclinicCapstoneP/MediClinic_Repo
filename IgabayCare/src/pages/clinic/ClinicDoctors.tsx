@@ -46,7 +46,244 @@ interface DoctorFormProps {
   onCancel: () => void;
   onSubmit: (form: FormState) => Promise<void>;
   submitting: boolean;
+  clinicData: any;
 }
+
+// Availability selector component
+const AvailabilitySelector: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  clinicData: any;
+}> = ({ value, onChange, clinicData }) => {
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [customHours, setCustomHours] = useState<{
+    start: string;
+    end: string;
+  }>({ start: '', end: '' });
+  const [useCustomHours, setUseCustomHours] = useState(false);
+
+  // Parse existing availability value when component mounts
+  useEffect(() => {
+    if (value) {
+      // Try to parse existing value
+      const parts = value.split(', ');
+      if (parts.length >= 2) {
+        const daysPart = parts[0];
+        const timePart = parts[1];
+        
+        // Extract days
+        if (daysPart.includes('-')) {
+          const [start, end] = daysPart.split('-');
+          const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const startIdx = dayMap.indexOf(start);
+          const endIdx = dayMap.indexOf(end);
+          if (startIdx !== -1 && endIdx !== -1) {
+            const days = [];
+            for (let i = startIdx; i <= endIdx; i++) {
+              days.push(dayMap[i]);
+            }
+            setSelectedDays(days);
+          }
+        }
+        
+        // Extract custom hours if present
+        if (timePart && timePart !== 'Clinic Hours') {
+          const timeMatch = timePart.match(/(\d{1,2}:\d{2}[AP]M)-(\d{1,2}:\d{2}[AP]M)/);
+          if (timeMatch) {
+            setCustomHours({ start: timeMatch[1], end: timeMatch[2] });
+            setUseCustomHours(true);
+          }
+        }
+      }
+    }
+  }, [value]);
+
+  const daysOfWeek = [
+    { key: 'monday', label: 'Mon', short: 'Mon' },
+    { key: 'tuesday', label: 'Tue', short: 'Tue' },
+    { key: 'wednesday', label: 'Wed', short: 'Wed' },
+    { key: 'thursday', label: 'Thu', short: 'Thu' },
+    { key: 'friday', label: 'Fri', short: 'Fri' },
+    { key: 'saturday', label: 'Sat', short: 'Sat' },
+    { key: 'sunday', label: 'Sun', short: 'Sun' }
+  ];
+
+  const formatTime = (time24: string) => {
+    if (!time24) return '';
+    const [hours, minutes] = time24.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes}${ampm}`;
+  };
+
+  const getClinicHours = () => {
+    if (!clinicData?.operating_hours) {
+      return 'No clinic hours available';
+    }
+    
+    const firstDay = clinicData.operating_hours.monday;
+    if (firstDay?.open && firstDay?.close) {
+      return `${formatTime(firstDay.open)}-${formatTime(firstDay.close)}`;
+    }
+    return 'Clinic Hours';
+  };
+
+  const updateAvailability = () => {
+    if (selectedDays.length === 0) {
+      onChange('');
+      return;
+    }
+
+    let daysStr = '';
+    if (selectedDays.length === 5 && 
+        selectedDays.includes('Mon') && selectedDays.includes('Tue') && 
+        selectedDays.includes('Wed') && selectedDays.includes('Thu') && 
+        selectedDays.includes('Fri')) {
+      daysStr = 'Mon-Fri';
+    } else if (selectedDays.length === 7) {
+      daysStr = 'Daily';
+    } else if (selectedDays.length === 6 && !selectedDays.includes('Sun')) {
+      daysStr = 'Mon-Sat';
+    } else {
+      daysStr = selectedDays.join(', ');
+    }
+
+    const timeStr = useCustomHours && customHours.start && customHours.end
+      ? `${customHours.start}-${customHours.end}`
+      : getClinicHours();
+
+    onChange(`${daysStr}, ${timeStr}`);
+  };
+
+  useEffect(() => {
+    updateAvailability();
+  }, [selectedDays, useCustomHours, customHours]);
+
+  const toggleDay = (dayShort: string) => {
+    setSelectedDays(prev => 
+      prev.includes(dayShort)
+        ? prev.filter(d => d !== dayShort)
+        : [...prev, dayShort]
+    );
+  };
+
+  const selectWeekdays = () => {
+    setSelectedDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+  };
+
+  const selectAllDays = () => {
+    setSelectedDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+  };
+
+  const clearSelection = () => {
+    setSelectedDays([]);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Day Selection */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700">Available Days</span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={selectWeekdays}
+              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            >
+              Weekdays
+            </button>
+            <button
+              type="button"
+              onClick={selectAllDays}
+              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+            >
+              All Days
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {daysOfWeek.map((day) => (
+            <button
+              key={day.key}
+              type="button"
+              onClick={() => toggleDay(day.short)}
+              className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                selectedDays.includes(day.short)
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {day.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Time Selection */}
+      {selectedDays.length > 0 && (
+        <div>
+          <span className="text-sm font-medium text-gray-700 mb-2 block">Available Hours</span>
+          <div className="space-y-3">
+            <label className="flex items-center space-x-2">
+              <input
+                type="radio"
+                checked={!useCustomHours}
+                onChange={() => setUseCustomHours(false)}
+                className="text-blue-600"
+              />
+              <span className="text-sm text-gray-700">
+                Use clinic hours ({getClinicHours()})
+              </span>
+            </label>
+            <label className="flex items-center space-x-2">
+              <input
+                type="radio"
+                checked={useCustomHours}
+                onChange={() => setUseCustomHours(true)}
+                className="text-blue-600"
+              />
+              <span className="text-sm text-gray-700">Custom hours</span>
+            </label>
+            {useCustomHours && (
+              <div className="ml-6 flex items-center space-x-2">
+                <input
+                  type="time"
+                  value={customHours.start}
+                  onChange={(e) => setCustomHours(prev => ({ ...prev, start: e.target.value }))}
+                  className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-500">to</span>
+                <input
+                  type="time"
+                  value={customHours.end}
+                  onChange={(e) => setCustomHours(prev => ({ ...prev, end: e.target.value }))}
+                  className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Preview */}
+      {value && (
+        <div className="p-3 bg-gray-50 rounded-lg">
+          <span className="text-sm font-medium text-gray-700">Preview: </span>
+          <span className="text-sm text-gray-900">{value}</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const DoctorForm: React.FC<DoctorFormProps> = ({
   mode,
@@ -55,7 +292,8 @@ const DoctorForm: React.FC<DoctorFormProps> = ({
   clinicSpecializationsHint,
   onCancel,
   onSubmit,
-  submitting
+  submitting,
+  clinicData
 }) => {
   const [formData, setFormData] = useState<FormState>({
     ...defaultFormState,
@@ -225,14 +463,10 @@ const DoctorForm: React.FC<DoctorFormProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Availability
         </label>
-        <textarea
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          rows={3}
-          placeholder="e.g., Mon-Fri, 9AM-5PM"
+        <AvailabilitySelector
           value={formData.availability}
-          onChange={(e) =>
-            setFormData({ ...formData, availability: e.target.value })
-          }
+          onChange={(value) => setFormData({ ...formData, availability: value })}
+          clinicData={clinicData}
         />
       </div>
 
@@ -402,7 +636,7 @@ export const ClinicDoctors: React.FC = () => {
     setSubmitting(true);
     try {
       const doctorData: CreateDoctorData = {
-        user_id: currentUser.user.id,
+        user_id: '', // Will be set after auth user creation
         clinic_id: clinicId,
         full_name: form.full_name,
         specialization: form.specialization,
@@ -708,6 +942,7 @@ export const ClinicDoctors: React.FC = () => {
           onCancel={() => setShowAddModal(false)}
           onSubmit={handleAddDoctor}
           submitting={submitting}
+          clinicData={clinicData}
         />
       </Modal>
 
@@ -747,6 +982,7 @@ export const ClinicDoctors: React.FC = () => {
           }}
           onSubmit={handleEditDoctor}
           submitting={submitting}
+          clinicData={clinicData}
         />
       </Modal>
     </div>
