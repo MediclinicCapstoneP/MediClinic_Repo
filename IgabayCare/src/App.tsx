@@ -15,6 +15,7 @@ import DoctorSignInPage from './features/auth/pages/DoctorSignInPage';
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 import { MedicalThemeProvider } from './core/providers/MedicalThemeProvider';
 import DebugPage from './pages/DebugPage';
+import AppointmentDisplayTestPage from './pages/AppointmentDisplayTestPage';
 
 // Import environment checker in development
 if (import.meta.env.DEV) {
@@ -43,6 +44,8 @@ const App: React.FC = () => {
             <Route path="/doctors-dashboard" element={<DoctorDashboard />} />
             {/* Debug route - remove in production */}
             {import.meta.env.DEV && <Route path="/debug" element={<DebugPage />} />}
+            {/* Appointment display test route - remove in production */}
+            {import.meta.env.DEV && <Route path="/appointment-display-test" element={<AppointmentDisplayTestPage />} />}
           </Routes>
           
           {/* Global Floating ChatBot */}

@@ -1,101 +1,104 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, MoreHorizontal, CheckCircle, XCircle, UserPlus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, User, Phone, MoreHorizontal, CheckCircle, XCircle, UserPlus, DollarSign } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
-import { AssignDoctor } from './AssignDoctor';
+import { AppointmentService } from '../../features/auth/utils/appointmentService';
+import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthService';
+import { clinicService } from '../../features/auth/utils/clinicService';
 
 export const ClinicAppointments: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showAssignDoctorModal, setShowAssignDoctorModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
-  const [clinicId, setClinicId] = useState('clinic-123'); // TODO: Get from auth context
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [clinicId, setClinicId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
-  const mockAppointments = [
-    {
-      id: 1,
-      time: '09:00',
-      patient: {
-        name: 'John Smith',
-        phone: '+1 234-567-8900',
-        email: 'john.smith@email.com',
-        age: 35,
-        reason: 'Annual checkup'
-      },
-      doctor: 'Dr. Sarah Johnson',
-      type: 'Consultation',
-      status: 'confirmed',
-      duration: 30,
-      fee: 150,
-      notes: 'Patient reports feeling healthy, wants routine checkup'
-    },
-    {
-      id: 2,
-      time: '09:30',
-      patient: {
-        name: 'Emily Davis',
-        phone: '+1 234-567-8901',
-        email: 'emily.davis@email.com',
-        age: 28,
-        reason: 'Follow-up consultation'
-      },
-      doctor: 'Dr. Sarah Johnson',
-      type: 'Follow-up',
-      status: 'in-progress',
-      duration: 20,
-      fee: 100,
-      notes: 'Following up on previous visit results'
-    },
-    {
-      id: 3,
-      time: '10:00',
-      patient: {
-        name: 'Michael Chen',
-        phone: '+1 234-567-8902',
-        email: 'michael.chen@email.com',
-        age: 42,
-        reason: 'Chest pain evaluation'
-      },
-      doctor: 'Dr. Michael Wilson',
-      type: 'Urgent Care',
-      status: 'waiting',
-      duration: 45,
-      fee: 200,
-      notes: 'Patient experiencing intermittent chest pain'
-    },
-    {
-      id: 4,
-      time: '10:30',
-      patient: {
-        name: 'Sarah Brown',
-        phone: '+1 234-567-8903',
-        email: 'sarah.brown@email.com',
-        age: 31,
-        reason: 'Routine physical'
-      },
-      doctor: 'Dr. Michael Wilson',
-      type: 'Physical Exam',
-      status: 'confirmed',
-      duration: 30,
-      fee: 150,
-      notes: 'Annual physical examination'
+  // Initialize data and fetch appointments
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        const user = await roleBasedAuthService.getCurrentUser();
+        if (user && user.role === 'clinic' && user.user && user.user.id) {
+          setCurrentUser(user);
+
+          const clinicResult = await clinicService.getClinicByUserId(user.user.id);
+          if (clinicResult.success && clinicResult.clinic) {
+            setClinicId(clinicResult.clinic.id);
+            await fetchAppointments(clinicResult.clinic.id, selectedDate);
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing clinic appointments:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeData();
+  }, []);
+
+  // Fetch appointments when date changes
+  useEffect(() => {
+    if (clinicId) {
+      fetchAppointments(clinicId, selectedDate);
     }
-  ];
+  }, [selectedDate, clinicId]);
+
+  const fetchAppointments = async (clinicId: string, date: string) => {
+    try {
+      setLoading(true);
+      const appointments = await AppointmentService.getAppointments({
+        clinic_id: clinicId,
+        appointment_date: date
+      });
+      setAppointments(appointments || []);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      setAppointments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleViewDetails = (appointment: any) => {
     setSelectedAppointment(appointment);
     setShowDetailsModal(true);
   };
 
-  const handleMarkComplete = (appointmentId: number) => {
-    // TODO: Update appointment status in Supabase
-    console.log('Marking appointment as complete:', appointmentId);
+  const handleMarkComplete = async (appointmentId: string) => {
+    try {
+      const result = await AppointmentService.updateAppointment(appointmentId, { status: 'completed' });
+      if (result) {
+        // Refresh appointments
+        if (clinicId) {
+          await fetchAppointments(clinicId, selectedDate);
+        }
+      } else {
+        console.error('Failed to update appointment status');
+      }
+    } catch (error) {
+      console.error('Error updating appointment status:', error);
+    }
   };
 
-  const handleCancelAppointment = (appointmentId: number) => {
-    // TODO: Cancel appointment in Supabase
-    console.log('Cancelling appointment:', appointmentId);
+  const handleCancelAppointment = async (appointmentId: string) => {
+    try {
+      const result = await AppointmentService.updateAppointment(appointmentId, { status: 'cancelled' });
+      if (result) {
+        // Refresh appointments
+        if (clinicId) {
+          await fetchAppointments(clinicId, selectedDate);
+        }
+      } else {
+        console.error('Failed to cancel appointment');
+      }
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+    }
   };
 
   const handleAssignDoctor = (appointment: any) => {
@@ -103,9 +106,44 @@ export const ClinicAppointments: React.FC = () => {
     setShowAssignDoctorModal(true);
   };
 
-  const handleAssignSuccess = () => {
-    // TODO: Refresh appointments list
-    console.log('Doctor assigned successfully');
+  const formatTime = (timeString: string) => {
+    if (!timeString) return '';
+    // Handle both "HH:mm:ss" and "HH:mm" formats
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes}${ampm}`;
+  };
+
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (!amount && amount !== 0) return 'TBD';
+    return `$${amount.toFixed(2)}`;
+  };
+
+  const getPatientName = (appointment: any) => {
+    // Try different possible patient name fields
+    if (appointment.patient_name) return appointment.patient_name;
+    if (appointment.patient?.name) return appointment.patient.name;
+    if (appointment.patient?.first_name && appointment.patient?.last_name) {
+      return `${appointment.patient.first_name} ${appointment.patient.last_name}`;
+    }
+    return 'Unknown Patient';
+  };
+
+  const getDoctorName = (appointment: any) => {
+    if (appointment.doctor_name) return appointment.doctor_name;
+    if (appointment.doctor?.full_name) return appointment.doctor.full_name;
+    if (appointment.doctor?.name) return appointment.doctor.name;
+    return 'Unassigned';
+  };
+
+  const handleAssignSuccess = async () => {
+    // Refresh appointments list after doctor assignment
+    if (clinicId) {
+      await fetchAppointments(clinicId, selectedDate);
+    }
+    setShowAssignDoctorModal(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -147,100 +185,137 @@ export const ClinicAppointments: React.FC = () => {
                 />
               </div>
               <div className="text-sm text-gray-600">
-                {mockAppointments.length} appointments scheduled
+                {appointments.length} appointments scheduled
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Appointments List */}
+      {/* Appointments List - Simplified Display */}
       <div className="space-y-4">
-        {mockAppointments.map((appointment) => (
-          <Card key={appointment.id} hover>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-gray-900">{appointment.time}</div>
-                    <div className="text-xs text-gray-500">{appointment.duration} min</div>
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {appointment.patient.name}
-                      </h3>
+        {appointments.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-gray-500">
+              No appointments scheduled for {selectedDate}
+            </CardContent>
+          </Card>
+        ) : (
+          appointments.map((appointment) => (
+            <Card key={appointment.id} hover>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-6">
+                    {/* Time */}
+                    <div className="text-center min-w-[80px]">
+                      <div className="text-lg font-bold text-gray-900">
+                        {formatTime(appointment.appointment_time)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {appointment.duration_minutes || 30} min
+                      </div>
+                    </div>
+                    
+                    {/* Patient Name */}
+                    <div className="min-w-[200px]">
+                      <div className="flex items-center space-x-2">
+                        <User size={16} className="text-gray-400" />
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {getPatientName(appointment)}
+                        </h3>
+                      </div>
+                    </div>
+                    
+                    {/* Date (only show if different from selected date) */}
+                    <div className="min-w-[120px]">
+                      <div className="flex items-center space-x-2">
+                        <Calendar size={16} className="text-gray-400" />
+                        <span className="text-sm text-gray-700">
+                          {new Date(appointment.appointment_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Type */}
+                    <div className="min-w-[120px]">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">{appointment.appointment_type}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Doctor */}
+                    <div className="min-w-[150px]">
+                      <div className="text-sm text-gray-700">
+                        <span className="font-medium">{getDoctorName(appointment)}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Status */}
+                    <div className="min-w-[100px]">
                       <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(appointment.status)}`}>
                         {appointment.status}
                       </span>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                      <div className="flex items-center space-x-2">
-                        <User size={16} />
-                        <span>Age: {appointment.patient.age} • {appointment.doctor}</span>
+                    {/* Payment Amount / Booking Fee */}
+                    <div className="min-w-[120px] text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <DollarSign size={16} className="text-green-600" />
+                        <div className="text-center">
+                          <div className="text-sm font-semibold text-green-600">
+                            {formatCurrency(appointment.payment_amount)}
+                          </div>
+                          <div className="text-xs text-gray-500">Booking Fee</div>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Phone size={16} />
-                        <span>{appointment.patient.phone}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-700">
-                        <strong>Reason:</strong> {appointment.patient.reason}
-                      </p>
-                      <p className="text-sm text-gray-700">
-                        <strong>Type:</strong> {appointment.type} • <strong>Fee:</strong> ${appointment.fee}
-                      </p>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewDetails(appointment)}
-                  >
-                    View Details
-                  </Button>
+                  {/* Action Buttons */}
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewDetails(appointment)}
+                    >
+                      Details
+                    </Button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleAssignDoctor(appointment)}
-                  >
-                    <UserPlus size={16} className="mr-1" />
-                    {appointment.doctor ? 'Change Doctor' : 'Assign Doctor'}
-                  </Button>
-                  
-                  {appointment.status === 'waiting' || appointment.status === 'in-progress' ? (
                     <Button
+                      variant="outline"
                       size="sm"
-                      onClick={() => handleMarkComplete(appointment.id)}
+                      onClick={() => handleAssignDoctor(appointment)}
                     >
-                      <CheckCircle size={16} className="mr-1" />
-                      Complete
+                      <UserPlus size={16} className="mr-1" />
+                      {getDoctorName(appointment) !== 'Unassigned' ? 'Change' : 'Assign'}
                     </Button>
-                  ) : null}
-                  
-                  {appointment.status === 'confirmed' || appointment.status === 'waiting' ? (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleCancelAppointment(appointment.id)}
-                    >
-                      <XCircle size={16} className="mr-1" />
-                      Cancel
-                    </Button>
-                  ) : null}
+                    
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleMarkComplete(appointment.id)}
+                      >
+                        <CheckCircle size={16} className="mr-1" />
+                        Complete
+                      </Button>
+                    )}
+                    
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleCancelAppointment(appointment.id)}
+                      >
+                        <XCircle size={16} className="mr-1" />
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* Appointment Details Modal */}
@@ -252,63 +327,27 @@ export const ClinicAppointments: React.FC = () => {
       >
         {selectedAppointment && (
           <div className="space-y-6">
-            {/* Patient Information */}
+            {/* Basic Information */}
             <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Patient Information</h4>
+              <h4 className="font-semibold text-gray-900 mb-3">Appointment Summary</h4>
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
-                  <p className="text-sm text-gray-600">Name</p>
-                  <p className="font-medium">{selectedAppointment.patient.name}</p>
+                  <p className="text-sm text-gray-600">Patient</p>
+                  <p className="font-medium">{getPatientName(selectedAppointment)}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600">Age</p>
-                  <p className="font-medium">{selectedAppointment.patient.age} years</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Phone</p>
-                  <p className="font-medium">{selectedAppointment.patient.phone}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Email</p>
-                  <p className="font-medium">{selectedAppointment.patient.email}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Appointment Details */}
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Appointment Details</h4>
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
                   <p className="text-sm text-gray-600">Date & Time</p>
-                  <p className="font-medium">{selectedDate} at {selectedAppointment.time}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Duration</p>
-                  <p className="font-medium">{selectedAppointment.duration} minutes</p>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">Doctor</p>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => {
-                        setShowAssignDoctorModal(true);
-                        setShowDetailsModal(false);
-                      }}
-                    >
-                      <UserPlus size={14} className="mr-1" />
-                      {selectedAppointment.doctor ? 'Change' : 'Assign'}
-                    </Button>
-                  </div>
                   <p className="font-medium">
-                    {selectedAppointment.doctor || 'No doctor assigned'}
+                    {new Date(selectedAppointment.appointment_date).toLocaleDateString()} at {formatTime(selectedAppointment.appointment_time)}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Type</p>
-                  <p className="font-medium">{selectedAppointment.type}</p>
+                  <p className="font-medium">{selectedAppointment.appointment_type}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Doctor</p>
+                  <p className="font-medium">{getDoctorName(selectedAppointment)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Status</p>
@@ -317,55 +356,53 @@ export const ClinicAppointments: React.FC = () => {
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Fee</p>
-                  <p className="font-medium">${selectedAppointment.fee}</p>
+                  <p className="text-sm text-gray-600">Booking Fee</p>
+                  <p className="font-medium text-green-600">{formatCurrency(selectedAppointment.payment_amount)}</p>
                 </div>
               </div>
             </div>
 
-            {/* Reason & Notes */}
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Reason for Visit</h4>
-              <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">
-                {selectedAppointment.patient.reason}
-              </p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Additional Notes</h4>
-              <textarea
-                defaultValue={selectedAppointment.notes}
-                className="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-                placeholder="Add notes about this appointment..."
-              />
-            </div>
+            {/* Notes */}
+            {selectedAppointment.notes && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Notes</h4>
+                <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">
+                  {selectedAppointment.notes}
+                </p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
               <Button variant="outline" onClick={() => setShowDetailsModal(false)}>
                 Close
               </Button>
-              <Button>
-                Save Notes
+              <Button
+                onClick={() => {
+                  setShowAssignDoctorModal(true);
+                  setShowDetailsModal(false);
+                }}
+              >
+                <UserPlus size={16} className="mr-1" />
+                {getDoctorName(selectedAppointment) !== 'Unassigned' ? 'Change Doctor' : 'Assign Doctor'}
               </Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Assign Doctor Modal */}
-      {selectedAppointment && (
+      {/* Note: AssignDoctor component needs to be implemented */}
+      {/* {selectedAppointment && clinicId && (
         <AssignDoctor
           isOpen={showAssignDoctorModal}
           onClose={() => setShowAssignDoctorModal(false)}
-          appointmentId={selectedAppointment.id.toString()}
+          appointmentId={selectedAppointment.id}
           clinicId={clinicId}
           onAssignSuccess={handleAssignSuccess}
-          currentDoctorId={selectedAppointment.doctorId}
-          currentDoctorName={selectedAppointment.doctor}
+          currentDoctorId={selectedAppointment.doctor_id}
+          currentDoctorName={getDoctorName(selectedAppointment)}
         />
-      )}
+      )} */}
     </div>
   );
 };

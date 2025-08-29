@@ -217,12 +217,52 @@ export class AppointmentService {
    */
   static async updateAppointment(id: string, data: UpdateAppointmentData): Promise<Appointment | null> {
     try {
-      const { data: appointment, error } = await supabase
+      // Create a copy of the data to avoid mutating the original
+      const updateData = { ...data };
+      
+      // Try the update with all fields first
+      let { data: appointment, error } = await supabase
         .from(this.TABLE_NAME)
-        .update(data)
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
+
+      // If we get a column not found error, try without problematic fields
+      if (error && error.code === 'PGRST204') {
+        console.warn('Column not found error, attempting update without problematic fields:', error.message);
+        
+        // Remove fields that might not exist in the database
+        const safeModeData = { ...updateData };
+        
+        // List of fields that might be missing in older database schemas
+        const potentiallyMissingFields = [
+          'doctor_specialty', 'priority', 'duration_minutes', 'patient_notes',
+          'confirmation_sent', 'confirmation_sent_at', 'reminder_sent', 'reminder_sent_at',
+          'cancelled_at', 'cancelled_by', 'cancellation_reason'
+        ];
+        
+        potentiallyMissingFields.forEach(field => {
+          if (field in safeModeData) {
+            delete safeModeData[field as keyof UpdateAppointmentData];
+          }
+        });
+        
+        // Try the update again with safe mode data
+        const safeUpdate = await supabase
+          .from(this.TABLE_NAME)
+          .update(safeModeData)
+          .eq('id', id)
+          .select()
+          .single();
+          
+        appointment = safeUpdate.data;
+        error = safeUpdate.error;
+        
+        if (!error) {
+          console.warn('Update succeeded in safe mode. Consider running database schema updates.');
+        }
+      }
 
       if (error) {
         console.error('Error updating appointment:', error);

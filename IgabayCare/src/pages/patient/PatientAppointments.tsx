@@ -20,7 +20,9 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
-  Loader2
+  Loader2,
+  Bell,
+  Star
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -37,7 +39,11 @@ import {
   APPOINTMENT_PRIORITIES
 } from '../../types/appointments';
 import { authService } from '../../features/auth/utils/authService';
-import { mockAppointments } from '../../utils/mockAppointments';
+import { patientService } from '../../features/auth/utils/patientService';
+import { NotificationService, Notification } from '../../services/notificationService';
+import { ReviewService, Review } from '../../services/reviewService';
+import { AppointmentCompletionNotification } from '../../components/notifications/AppointmentCompletionNotification';
+import { RatingModal } from '../../components/modals/RatingModal';
 
 interface PatientAppointmentsProps {
   onNavigate?: (tab: string) => void;
@@ -48,6 +54,7 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
   const [loading, setLoading] = useState(true);
   const [filteredAppointments, setFilteredAppointments] = useState<AppointmentWithDetails[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentPatient, setCurrentPatient] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<AppointmentType | 'all'>('all');
@@ -55,13 +62,21 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithDetails | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+  
+  // Notification and rating state
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingAppointmentId, setRatingAppointmentId] = useState<string>('');
+  const [existingReview, setExistingReview] = useState<Review | null>(null);
 
   useEffect(() => {
     const fetchUserAndAppointments = async () => {
       try {
         setLoading(true);
         
-        // Get current user
+        // Get current authenticated user
         const user = await authService.getCurrentUser();
         if (!user) {
           console.error('No authenticated user found');
@@ -69,28 +84,50 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
         }
         setCurrentUser(user);
 
-        // Fetch appointments for the current user
+        // Get patient profile to get the correct patient_id
+        const patientResult = await patientService.getPatientByUserId(user.id);
+        if (!patientResult.success || !patientResult.patient) {
+          console.error('Patient profile not found:', patientResult.error);
+          setDebugInfo(`Patient profile not found for user ${user.id}. Error: ${patientResult.error || 'Unknown error'}`);
+          // Set empty state instead of mock data
+          setAppointments([]);
+          setFilteredAppointments([]);
+          return;
+        }
+
+        const patientId = patientResult.patient.id;
+        const patientName = `${patientResult.patient.first_name} ${patientResult.patient.last_name}`;
+        setCurrentPatient(patientResult.patient);
+        console.log('Found patient:', patientName, 'with ID:', patientId, 'for user:', user.id);
+        setDebugInfo(`Found patient: ${patientName} (ID: ${patientId})`);
+
+        // Fetch appointments using the correct patient_id
         const userAppointments = await AppointmentService.getAppointmentsWithDetails({
-          patient_id: user.id
+          patient_id: patientId
         });
 
-        console.log('Fetched appointments:', userAppointments);
+        console.log(`Fetched ${userAppointments.length} appointments for patient:`, userAppointments);
         
-        // If no appointments found, use mock data for demonstration
+        // Check if we have real appointments
         if (userAppointments.length === 0) {
-          console.log('No appointments found, using mock data for demonstration');
-          setAppointments(mockAppointments);
-          setFilteredAppointments(mockAppointments);
+          console.log('No real appointments found for patient. This is normal for new accounts.');
+          // Show empty state instead of mock data for better UX
+          setAppointments([]);
+          setFilteredAppointments([]);
         } else {
+          console.log(`Found ${userAppointments.length} real appointments for patient`);
           setAppointments(userAppointments);
           setFilteredAppointments(userAppointments);
         }
+        
+        // Fetch notifications for the user
+        await fetchNotifications(user.id);
       } catch (error) {
         console.error('Error fetching appointments:', error);
-        // Fallback to mock data on error
-        console.log('Using mock data due to error');
-        setAppointments(mockAppointments);
-        setFilteredAppointments(mockAppointments);
+        // Show empty state on error instead of mock data
+        console.log('Error occurred, showing empty state');
+        setAppointments([]);
+        setFilteredAppointments([]);
       } finally {
         setLoading(false);
       }
@@ -98,6 +135,24 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
 
     fetchUserAndAppointments();
   }, []);
+
+  const fetchNotifications = async (userId: string) => {
+    try {
+      const { notifications: userNotifications } = await NotificationService.getNotifications(userId, {
+        unreadOnly: true,
+        type: 'appointment_completed'
+      });
+      
+      if (userNotifications) {
+        setNotifications(userNotifications);
+      }
+      
+      const { count } = await NotificationService.getUnreadCount(userId);
+      setUnreadCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
 
   useEffect(() => {
     // Filter appointments based on search and filters
@@ -258,6 +313,63 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
     }
   };
 
+  // Handle notification actions
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      await NotificationService.markAsRead(notificationId);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const handleDismissNotification = async (notificationId: string) => {
+    try {
+      await NotificationService.deleteNotification(notificationId);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error dismissing notification:', error);
+    }
+  };
+
+  const handleRateAppointment = async (appointmentId: string) => {
+    if (!currentPatient) return;
+    
+    // Check if patient can review this appointment
+    const { canReview, reason, error } = await ReviewService.canReviewAppointment(
+      appointmentId,
+      currentPatient.id
+    );
+    
+    if (error) {
+      console.error('Error checking review eligibility:', error);
+      alert('Failed to check review eligibility. Please try again.');
+      return;
+    }
+    
+    if (!canReview) {
+      alert(reason || 'You cannot review this appointment.');
+      return;
+    }
+    
+    // Check if review already exists
+    const { review } = await ReviewService.getReviewByAppointment(appointmentId, currentPatient.id);
+    setExistingReview(review || null);
+    
+    setRatingAppointmentId(appointmentId);
+    setShowRatingModal(true);
+  };
+
+  const handleReviewSubmitted = async (review: Review) => {
+    console.log('Review submitted:', review);
+    // Refresh notifications after review submission
+    if (currentUser) {
+      await fetchNotifications(currentUser.id);
+    }
+  };
+
   const getUpcomingAppointments = () => {
     const today = new Date().toISOString().split('T')[0];
     return filteredAppointments.filter(apt => 
@@ -270,10 +382,15 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
   const getPastAppointments = () => {
     const today = new Date().toISOString().split('T')[0];
     return filteredAppointments.filter(apt => 
-      apt.appointment_date < today || 
+      (apt.appointment_date < today || 
       apt.status === 'cancelled' || 
-      apt.status === 'completed'
+      apt.status === 'completed') &&
+      apt.status !== 'cancelled' // Don't show cancelled in past appointments
     );
+  };
+
+  const getCompletedAppointments = () => {
+    return filteredAppointments.filter(apt => apt.status === 'completed');
   };
 
   if (loading) {
@@ -296,11 +413,47 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
           <p className="text-gray-600 mt-1">
             Manage your upcoming and past appointments
           </p>
+          {/* Debug info - only show in development */}
+          {process.env.NODE_ENV === 'development' && debugInfo && (
+            <div className="mt-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+              Debug: {debugInfo}
+            </div>
+          )}
+          {currentPatient && (
+            <div className="mt-1 text-sm text-green-600">
+              ✅ Logged in as: {currentPatient.first_name} {currentPatient.last_name}
+            </div>
+          )}
         </div>
        
       </div>
 
-      
+      {/* Notifications Section */}
+      {notifications.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Bell className="h-5 w-5 mr-2 text-blue-600" />
+              New Notifications
+            </h2>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              {unreadCount} unread
+            </span>
+          </div>
+          
+          <div className="space-y-3">
+            {notifications.map(notification => (
+              <AppointmentCompletionNotification
+                key={notification.id}
+                notification={notification}
+                onMarkAsRead={handleMarkAsRead}
+                onDismiss={handleDismissNotification}
+                onRateAppointment={handleRateAppointment}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -375,6 +528,95 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
           </CardContent>
         </Card>
       </div>
+
+      {/* Completed Appointments with Rating Option */}
+      {getCompletedAppointments().length > 0 && (
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <Star className="h-5 w-5 text-yellow-500 mr-2" />
+            Completed Appointments
+          </h2>
+          <div className="space-y-4">
+            {getCompletedAppointments().map((appointment) => (
+              <Card key={appointment.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const approvalStatus = getApprovalStatus(appointment);
+                          return (
+                            <div className="flex items-center gap-2">
+                              {approvalStatus.icon}
+                              <span className={`px-3 py-1 text-xs font-medium rounded-full border ${approvalStatus.color}`}>
+                                {approvalStatus.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-600">
+                            {formatDate(appointment.appointment_date)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-600">
+                            {formatTime(appointment.appointment_time)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-900">
+                            {appointment.clinic?.clinic_name || 'Clinic Name'}
+                          </span>
+                        </div>
+
+                        {appointment.doctor_name && (
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm text-gray-600">
+                              Dr. {appointment.doctor_name}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedAppointment(appointment);
+                          setShowDetails(true);
+                        }}
+                      >
+                        View Details
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRateAppointment(appointment.id)}
+                        className="flex items-center"
+                      >
+                        <Star className="h-4 w-4 mr-1 text-yellow-500" />
+                        Rate
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Upcoming Appointments */}
       {getUpcomingAppointments().length > 0 && (
@@ -567,20 +809,43 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
         <Card>
           <CardContent className="p-8 text-center">
             <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No appointments found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' || dateFilter
+                ? 'No appointments match your filters'
+                : 'No appointments yet'
+              }
+            </h3>
             <p className="text-gray-600 mb-4">
               {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' || dateFilter
-                ? 'Try adjusting your filters or search terms.'
-                : 'You don\'t have any appointments yet.'
+                ? 'Try adjusting your filters or search terms to find appointments.'
+                : 'You don\'t have any appointments yet. Book your first appointment with a nearby clinic.'
               }
             </p>
-            <Button 
-              onClick={() => onNavigate?.('nearby')}
-              className="bg-theme hover:bg-theme-dark text-white"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Book Your First Appointment
-            </Button>
+            <div className="space-y-2">
+              <Button 
+                onClick={() => onNavigate?.('nearby')}
+                className="bg-theme hover:bg-theme-dark text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Find Nearby Clinics
+              </Button>
+              {(searchTerm || statusFilter !== 'all' || typeFilter !== 'all' || dateFilter) && (
+                <div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setStatusFilter('all');
+                      setTypeFilter('all');
+                      setDateFilter('');
+                    }}
+                    className="ml-2"
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -632,6 +897,26 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
                               <strong>Your appointment is confirmed!</strong><br />
                               Please arrive 15 minutes early and bring a valid ID and any necessary documents.
                             </p>
+                          </div>
+                        )}
+                        {approvalStatus.status === 'completed' && (
+                          <div className="bg-gray-50 border border-gray-200 rounded p-3 mt-2">
+                            <p className="text-sm text-gray-800">
+                              <strong>Appointment completed!</strong><br />
+                              Thank you for visiting. You can rate your experience to help others.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowDetails(false);
+                                handleRateAppointment(selectedAppointment.id);
+                              }}
+                              className="mt-2 flex items-center"
+                            >
+                              <Star className="h-4 w-4 mr-1 text-yellow-500" />
+                              Rate Your Visit
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -717,6 +1002,16 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
                       Cancel Appointment
                     </Button>
                   ) : null}
+                  {selectedAppointment.status === 'completed' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleRateAppointment(selectedAppointment.id)}
+                      className="flex items-center"
+                    >
+                      <Star className="h-4 w-4 mr-1 text-yellow-500" />
+                      Rate Your Visit
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() => setShowDetails(false)}
@@ -729,6 +1024,21 @@ export const PatientAppointments: React.FC<PatientAppointmentsProps> = ({ onNavi
           </div>
         </div>
       )}
+
+      {/* Rating Modal */}
+      {showRatingModal && currentPatient && (
+        <RatingModal
+          isOpen={showRatingModal}
+          onClose={() => {
+            setShowRatingModal(false);
+            setRatingAppointmentId('');
+            setExistingReview(null);
+          }}
+          appointmentId={ratingAppointmentId}
+          patientId={currentPatient.id}
+          onReviewSubmitted={handleReviewSubmitted}
+        />
+      )}
     </div>
   );
-}; 
+};
