@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Building, Eye, EyeOff, AlertCircle, CheckCircle, Upload, X } from 'lucide-react';
+import { Building, Eye, EyeOff, AlertCircle, CheckCircle, Upload, X, MapPin, DollarSign, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
+import { MapModal } from '../../../components/ui/MapModal';
 import { roleBasedAuthService } from '../utils/roleBasedAuthService';
 
 // Tag interface for react-tag-input functionality
@@ -43,11 +44,43 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
   const navigate = useNavigate();
 
   // Tag input states for specialties and services
   const [specialtyTags, setSpecialtyTags] = useState<Tag[]>([]);
   const [serviceTags, setServiceTags] = useState<Tag[]>([]);
+
+  // Service pricing handlers
+  const addServicePricing = () => {
+    const newService = {
+      service_name: '',
+      base_price: 0,
+      description: '',
+      duration_minutes: 30
+    };
+    
+    setFormData((prev: any) => ({
+      ...prev,
+      service_pricing: [...(prev.service_pricing || []), newService]
+    }));
+  };
+
+  const updateServicePricing = (index: number, field: string, value: any) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      service_pricing: prev.service_pricing?.map((service: any, i: number) => 
+        i === index ? { ...service, [field]: value } : service
+      ) || []
+    }));
+  };
+
+  const removeServicePricing = (index: number) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      service_pricing: prev.service_pricing?.filter((_: any, i: number) => i !== index) || []
+    }));
+  };
 
   // Refs to prevent circular updates
   const isUpdatingFromTags = useRef(false);
@@ -89,6 +122,9 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
             saturday: { open: '09:00', close: '16:00' },
             sunday: { open: '10:00', close: '14:00' },
           },
+          latitude: null,
+          longitude: null,
+          service_pricing: [],
         };
   });
 
@@ -164,6 +200,17 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
 
+  // Handle location selection from map
+  const handleLocationSelect = (latitude: number, longitude: number, address?: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      latitude,
+      longitude,
+      address: address || prev.address
+    }));
+    setShowMapModal(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -198,9 +245,34 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
         number_of_doctors: formData.number_of_doctors ? parseInt(formData.number_of_doctors) : undefined,
         number_of_staff: formData.number_of_staff ? parseInt(formData.number_of_staff) : undefined,
         description: formData.description || undefined,
+        latitude: formData.latitude || undefined,
+        longitude: formData.longitude || undefined,
       });
 
       if (result.success) {
+        // If clinic registration successful and service pricing data exists, save it
+        if (formData.service_pricing && formData.service_pricing.length > 0 && result.clinic?.id) {
+          try {
+            const { clinicServicePricingService } = await import('../utils/clinicServicePricingService');
+            
+            for (const service of formData.service_pricing) {
+              if (service.service_name && service.base_price > 0) {
+                await clinicServicePricingService.createClinicService(result.clinic.id, {
+                  service_name: service.service_name,
+                  base_price: service.base_price,
+                  description: service.description || '',
+                  duration_minutes: service.duration_minutes || 30,
+                  service_category: 'consultation',
+                  clinic_id: result.clinic.id
+                });
+              }
+            }
+          } catch (serviceError) {
+            console.error('Error saving service pricing:', serviceError);
+            // Don't fail the registration if service pricing fails
+          }
+        }
+        
         setSuccess(true);
         localStorage.removeItem('clinicSignUpData');
         setTimeout(() => {
@@ -210,8 +282,8 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
       } else {
         setError(result.error || 'Registration failed');
       }
-    } catch (err) {
-      console.error('Registration error:', err);
+    } catch (error) {
+      console.error('Registration error:', error);
       setError('An unexpected error occurred');
     } finally {
       setIsLoading(false);
@@ -251,6 +323,9 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
         saturday: { open: '09:00', close: '16:00' },
         sunday: { open: '10:00', close: '14:00' },
       },
+      latitude: null,
+      longitude: null,
+      service_pricing: [],
     });
     setSpecialtyTags([]);
     setServiceTags([]);
@@ -443,7 +518,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
           {/* Progress Bar */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
-              {[1, 2, 3, 4, 5, 6].map((step) => (
+              {[1, 2, 3, 4, 5, 6, 7].map((step) => (
                 <div key={step} className="flex items-center">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -452,7 +527,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                   >
                     {step}
                   </div>
-                  {step < 6 && (
+                  {step < 7 && (
                     <div
                       className={`w-12 h-1 mx-2 ${
                         step < currentStep ? 'bg-secondary-600' : 'bg-gray-200'
@@ -467,6 +542,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
               <span>Contact</span>
               <span>Specialties</span>
               <span>Services</span>
+              <span>Pricing</span>
               <span>Business</span>
               <span>Hours</span>
             </div>
@@ -475,7 +551,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
           <Card className="bg-white shadow-xl border-0">
             <CardHeader className="text-center pb-4">
               <h3 className="text-xl font-semibold text-gray-900">
-                Step {currentStep} of 6:{' '}
+                Step {currentStep} of 7:{' '}
                 {currentStep === 1
                   ? 'Basic Information'
                   : currentStep === 2
@@ -485,6 +561,8 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                   : currentStep === 4
                   ? 'Medical Services'
                   : currentStep === 5
+                  ? 'Service Pricing'
+                  : currentStep === 6
                   ? 'Business Information'
                   : 'Operating Hours'}
               </h3>
@@ -569,12 +647,32 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                       />
                     </div>
 
-                    <Input
-                      label="Address"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      disabled={isLoading}
-                    />
+                    <div className="space-y-2">
+                      <Input
+                        label="Address"
+                        value={formData.address}
+                        onChange={(e) => handleInputChange('address', e.target.value)}
+                        disabled={isLoading}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowMapModal(true)}
+                        className="w-full flex items-center justify-center space-x-2"
+                        disabled={isLoading}
+                      >
+                        <MapPin className="h-4 w-4" />
+                        <span>Select Location on Map</span>
+                      </Button>
+                      {formData.latitude && formData.longitude && (
+                        <div className="text-sm text-gray-600 bg-green-50 p-2 rounded">
+                          <div className="flex items-center space-x-1">
+                            <MapPin className="h-3 w-3 text-green-600" />
+                            <span>Location selected: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <Input
@@ -641,8 +739,110 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                   </div>
                 )}
 
-                {/* Step 5: Business Information */}
+                {/* Step 5: Service Pricing */}
                 {currentStep === 5 && (
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-medium text-gray-900">Service Pricing</h4>
+                          <p className="text-sm text-gray-600">Set prices for your medical services (optional but recommended)</p>
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={addServicePricing}
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Service
+                        </Button>
+                      </div>
+
+                      {formData.service_pricing && formData.service_pricing.length > 0 ? (
+                        <div className="space-y-4">
+                          {formData.service_pricing.map((service: any, index: number) => (
+                            <div key={index} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                              <div className="flex items-center justify-between mb-3">
+                                <h5 className="font-medium text-gray-900">Service {index + 1}</h5>
+                                <Button
+                                  type="button"
+                                  onClick={() => removeServicePricing(index)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <Input
+                                  label="Service Name"
+                                  value={service.service_name}
+                                  onChange={(e) => updateServicePricing(index, 'service_name', e.target.value)}
+                                  placeholder="e.g., General Consultation"
+                                  disabled={isLoading}
+                                />
+                                <Input
+                                  label="Base Price (₱)"
+                                  type="number"
+                                  value={service.base_price}
+                                  onChange={(e) => updateServicePricing(index, 'base_price', parseFloat(e.target.value) || 0)}
+                                  placeholder="500"
+                                  disabled={isLoading}
+                                />
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <Input
+                                  label="Duration (minutes)"
+                                  type="number"
+                                  value={service.duration_minutes}
+                                  onChange={(e) => updateServicePricing(index, 'duration_minutes', parseInt(e.target.value) || 30)}
+                                  placeholder="30"
+                                  disabled={isLoading}
+                                />
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Service Description
+                                </label>
+                                <textarea
+                                  value={service.description}
+                                  onChange={(e) => updateServicePricing(index, 'description', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary-500 disabled:bg-gray-50"
+                                  rows={2}
+                                  placeholder="Brief description of the service..."
+                                  disabled={isLoading}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
+                          <DollarSign className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-600 mb-4">No services added yet</p>
+                          <Button
+                            type="button"
+                            onClick={addServicePricing}
+                            variant="outline"
+                            className="flex items-center mx-auto"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Your First Service
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 6: Business Information */}
+                {currentStep === 6 && (
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Input
@@ -708,8 +908,8 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                   </div>
                 )}
 
-                {/* Step 6: Operating Hours */}
-                {currentStep === 6 && (
+                {/* Step 7: Operating Hours */}
+                {currentStep === 7 && (
                   <div className="space-y-6">
                     <div>
                       <h4 className="text-lg font-medium text-gray-900 mb-4">Operating Hours</h4>
@@ -801,7 +1001,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                   </div>
 
                   <div className="flex space-x-2">
-                    {currentStep < 6 ? (
+                    {currentStep < 7 ? (
                       <Button
                         type="button"
                         variant="gradient"
@@ -830,20 +1030,18 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                   </Link>
                 </p>
               </div>
-
-              <div className="mt-4 text-center">
-                <p className="text-sm text-gray-600">
-                  Are you a patient?{' '}
-                  <Link
-                    to="/signup"
-                    className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
-                  >
-                    Register here
-                  </Link>
-                </p>
-              </div>
             </CardContent>
           </Card>
+
+          {/* Map Modal */}
+          <MapModal
+            isOpen={showMapModal}
+            onClose={() => setShowMapModal(false)}
+            onLocationSelect={handleLocationSelect}
+            initialLatitude={formData.latitude || 14.5995}
+            initialLongitude={formData.longitude || 120.9842}
+            title="Select Your Clinic Location"
+          />
         </div>
       </div>
     );

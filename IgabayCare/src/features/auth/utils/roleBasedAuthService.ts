@@ -39,6 +39,8 @@ export interface ClinicAuthData extends BaseAuthData {
   number_of_doctors?: number;
   number_of_staff?: number;
   description?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 // Doctor authentication data
