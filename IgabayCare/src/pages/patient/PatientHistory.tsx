@@ -11,129 +11,14 @@ import {
   APPOINTMENT_PRIORITIES,
   APPOINTMENT_PRIORITY_COLORS
 } from '../../types/appointments';
-import { AppointmentService } from '../../features/auth/utils/appointmentService';
+// Removed unused import
+import { patientAppointmentService } from '../../features/auth/utils/patientAppointmentService';
 
 interface PatientHistoryProps {
   patientId: string;
 }
 
-const mockClinic = {
-  clinic_name: 'QuickCare Medical Center',
-  city: 'City Center',
-  state: 'State'
-};
-
-const mockHistory: AppointmentWithDetails[] = [
-  {
-    id: 'mock-1',
-    appointment_date: new Date(new Date().setDate(new Date().getDate() - 10)).toISOString().split('T')[0],
-    appointment_time: '10:30:00',
-    appointment_type: 'general', // adjust according to your types map
-    doctor_id: 'doc-1',
-    doctor_name: 'Dr. Sarah Johnson',
-    doctor_specialty: 'General Medicine',
-    status: 'completed' as AppointmentStatus,
-    priority: 'normal',
-    clinic: {
-      id: '1',
-      user_id: '',
-      clinic_name: mockClinic.clinic_name,
-      email: '',
-      phone: '',
-      address: '',
-      city: mockClinic.city,
-      state: mockClinic.state,
-      zip_code: '',
-      specialties: ['General Medicine'],
-      status: 'approved',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    patient: null as any, // not needed here
-    // filler for other fields if your type requires them
-  } as any,
-  {
-    id: 'mock-2',
-    appointment_date: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-    appointment_time: '14:00:00',
-    appointment_type: 'follow_up',
-    doctor_id: 'doc-2',
-    doctor_name: 'Dr. Michael Lee',
-    doctor_specialty: 'Cardiology',
-    status: 'confirmed' as AppointmentStatus,
-    priority: 'high',
-    clinic: {
-      id: '1',
-      user_id: '',
-      clinic_name: mockClinic.clinic_name,
-      email: '',
-      phone: '',
-      address: '',
-      city: mockClinic.city,
-      state: mockClinic.state,
-      zip_code: '',
-      specialties: ['Cardiology'],
-      status: 'approved',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    patient: null as any,
-  } as any,
-  {
-    id: 'mock-3',
-    appointment_date: new Date(new Date().setDate(new Date().getDate() - 60)).toISOString().split('T')[0],
-    appointment_time: '09:15:00',
-    appointment_type: 'specialist',
-    doctor_id: 'doc-3',
-    doctor_name: 'Dr. Alice Reyes',
-    doctor_specialty: 'Dermatology',
-    status: 'cancelled' as AppointmentStatus,
-    priority: 'low',
-    clinic: {
-      id: '1',
-      user_id: '',
-      clinic_name: mockClinic.clinic_name,
-      email: '',
-      phone: '',
-      address: '',
-      city: mockClinic.city,
-      state: mockClinic.state,
-      zip_code: '',
-      specialties: ['Dermatology'],
-      status: 'approved',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    patient: null as any,
-  } as any,
-  {
-    id: 'mock-4',
-    appointment_date: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
-    appointment_time: '11:45:00',
-    appointment_type: 'general',
-    doctor_id: '',
-    doctor_name: '',
-    doctor_specialty: '',
-    status: 'no_show' as AppointmentStatus,
-    priority: 'normal',
-    clinic: {
-      id: '1',
-      user_id: '',
-      clinic_name: mockClinic.clinic_name,
-      email: '',
-      phone: '',
-      address: '',
-      city: mockClinic.city,
-      state: mockClinic.state,
-      zip_code: '',
-      specialties: ['General Medicine'],
-      status: 'approved',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    patient: null as any,
-  } as any
-];
+// Removed mock data - now using real database connections only
 
 export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => {
   const [history, setHistory] = useState<AppointmentWithDetails[]>([]);
@@ -153,10 +38,34 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
       if (filterFrom) filters.appointment_date_from = filterFrom;
       if (filterTo) filters.appointment_date_to = filterTo;
 
-      const data = await AppointmentService.getAppointmentsWithDetails(filters);
-      setHistory(data || []);
+      console.log('🔍 Loading patient appointment history with filters:', filters);
+      const result = await patientAppointmentService.getPatientAppointmentHistory(patientId);
+      
+      if (result.success && result.appointments) {
+        // Apply additional filters if specified
+        let filteredAppointments = result.appointments;
+        
+        if (filterStatus !== 'all') {
+          filteredAppointments = filteredAppointments.filter(apt => apt.status === filterStatus);
+        }
+        
+        if (filterFrom) {
+          filteredAppointments = filteredAppointments.filter(apt => apt.appointment_date >= filterFrom);
+        }
+        
+        if (filterTo) {
+          filteredAppointments = filteredAppointments.filter(apt => apt.appointment_date <= filterTo);
+        }
+        
+        console.log(`✅ Found ${filteredAppointments.length} appointments for patient`);
+        setHistory(filteredAppointments);
+      } else {
+        console.log('📝 No appointments found or error occurred:', result.error);
+        setHistory([]);
+      }
     } catch (err) {
-      console.error('Error loading patient history:', err);
+      console.error('❌ Error loading patient history:', err);
+      // Don't fall back to mock data on error - show empty state instead
       setHistory([]);
     } finally {
       setLoading(false);
@@ -175,7 +84,7 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
     return true;
   });
 
-  const displayHistory = !loading && filtered.length === 0 ? mockHistory : filtered;
+  const displayHistory = filtered;
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-US', {
@@ -313,8 +222,18 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
               <tbody className="bg-white divide-y divide-gray-200">
                 {displayHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                      No history found
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center space-y-3">
+                        <div className="text-gray-400">
+                          <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V6a2 2 0 012-2h4a2 2 0 012 2v1m-6 0h8m-8 0H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+                          </svg>
+                        </div>
+                        <div className="text-gray-500">
+                          <p className="text-lg font-medium">No appointment history found</p>
+                          <p className="text-sm">Your past appointments will appear here once you book and complete them.</p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ) : (
