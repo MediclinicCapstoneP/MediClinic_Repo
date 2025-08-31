@@ -1,5 +1,11 @@
 import { supabase } from '../../../supabaseClient';
-import { clinicSpecialtyService } from './clinicSpecialtyService';
+import type { ClinicProfile, CreateClinicData } from '../../../types/auth';
+import type { ClinicService } from '../../../types/clinicServices';
+
+// Interface for clinics with services and pricing
+interface ClinicWithServices extends ClinicProfile {
+  services_with_pricing?: ClinicService[];
+}
 
 export interface ClinicProfile {
   id: string;
@@ -28,6 +34,8 @@ export interface ClinicProfile {
   created_at: string;
   updated_at: string;
   profile_pic_url?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface CreateClinicData {
@@ -246,103 +254,108 @@ export const clinicService = {
     }
   },
 
-  // Get all clinics (for admin purposes)
-  async getAllClinics(): Promise<{ success: boolean; error?: string; clinics?: ClinicProfile[] }> {
-    try {
-      const { data: clinics, error } = await supabase
-        .from('clinics')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching clinics:', error);
-        return { success: false, error: error.message };
-      }
-
-      return { success: true, clinics };
-    } catch (error) {
-      console.error('Unexpected error fetching clinics:', error);
-      return { success: false, error: 'Failed to fetch clinics' };
-    }
-  },
-
-  // Get public clinics (for patients to view)  
+  // Get all public clinics (for patients to browse)
   async getPublicClinics(): Promise<{ success: boolean; error?: string; clinics?: ClinicProfile[] }> {
     try {
-      // First, let's check if we can access the clinics table at all
-      const { data: countData, error: countError, count } = await supabase
-        .from('clinics')
-        .select('*', { count: 'exact', head: true });
+      console.log(' Fetching all public clinics...');
       
-      if (countError) {
-        console.error('❌ Cannot access clinics table:', countError);
-        return { 
-          success: false, 
-          error: `Table access blocked by RLS policies. Error: ${countError.message}. Please run the database fix script.` 
-        };
-      }
-      
-      // If no clinics exist at all, provide specific guidance
-      if (count === 0) {
-        console.log('🚨 No clinics found - Run: database/restore_ohara_clinic.sql');
-      }
-      
-      // Now try to fetch approved clinics
       const { data: clinics, error } = await supabase
         .from('clinics')
         .select('*')
         .eq('status', 'approved')
-        .order('created_at', { ascending: false });
+        .order('clinic_name');
 
       if (error) {
-        console.error('❌ Error fetching approved clinics:', error);
-        
-        // Provide specific error messages for common issues
-        if (error.code === '42P01') {
-          return { success: false, error: 'Clinics table does not exist. Please check database schema.' };
-        } else if (error.code === '42501') {
-          return { success: false, error: 'Access denied. Please check RLS policies for public clinic access.' };
-        } else if (error.code === 'PGRST116') {
-          return { success: false, error: 'No data found. The clinics table may be empty or RLS policies may be blocking access.' };
-        } else {
-          return { success: false, error: `Database query failed: ${error.message || 'Unknown database error'}` };
-        }
+        console.error(' Error fetching public clinics:', error);
+        return { success: false, error: error.message };
       }
 
-      if (!clinics || clinics.length === 0) {
-        console.log('⚠️ No approved clinics found');
-        return { success: true, clinics: [] };
-      }
-
+      console.log(` Found ${clinics?.length || 0} approved clinics`);
+      
       // Load specialties for each clinic
       const clinicsWithSpecialties = await Promise.all(
-        clinics.map(async (clinic) => {
-          try {
-            const clinicWithSpecialties = await this.loadClinicSpecialties(clinic);
-            return clinicWithSpecialties;
-          } catch (error) {
-            console.error(`❌ Error loading specialties for clinic ${clinic.id}:`, error);
-            return {
-              ...clinic,
-              specialties: [],
-              custom_specialties: []
-            };
-          }
-        })
+        (clinics || []).map(clinic => this.loadClinicSpecialties(clinic))
       );
-      
+
       return { success: true, clinics: clinicsWithSpecialties };
     } catch (error) {
-      console.error('💥 Unexpected error fetching public clinics:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      return { 
-        success: false, 
-        error: `Failed to fetch public clinics: ${errorMessage}` 
-      };
+      console.error(' Unexpected error fetching public clinics:', error);
+      return { success: false, error: 'Failed to fetch public clinics' };
     }
   },
 
-  // Upsert clinic profile (create or update)
+  // Get clinics with their services and pricing
+  async getClinicsWithServices(): Promise<{ success: boolean; error?: string; clinics?: ClinicWithServices[] }> {
+    try {
+      // First get all approved clinics
+      const { data: clinics, error: clinicsError } = await supabase
+        .from('clinics')
+        .select('*')
+        .eq('status', 'approved');
+
+      if (clinicsError) {
+        console.error('Error fetching clinics:', clinicsError);
+        return { success: false, error: clinicsError.message };
+      }
+
+      if (!clinics || clinics.length === 0) {
+        return { success: true, clinics: [] };
+      }
+
+      // Get clinic IDs for service lookup
+      const clinicIds = clinics.map(clinic => clinic.id);
+
+      // Try to fetch services for all clinics, but handle table not existing
+      let services: any[] = [];
+      try {
+        const { data: servicesData, error: servicesError } = await supabase
+          .from('clinic_services')
+          .select('*')
+          .in('clinic_id', clinicIds)
+          .eq('is_available', true)
+          .order('clinic_id, base_price');
+
+        if (servicesError) {
+          // If table doesn't exist, log warning but continue without services
+          if (servicesError.code === '42P01') {
+            console.warn('clinic_services table does not exist. Please run the SQL script to create it.');
+            services = [];
+          } else {
+            console.error('Error fetching clinic services:', servicesError);
+            return { success: false, error: servicesError.message };
+          }
+        } else {
+          services = servicesData || [];
+        }
+      } catch (servicesFetchError) {
+        console.warn('Could not fetch clinic services, continuing without pricing data:', servicesFetchError);
+        services = [];
+      }
+
+      // Group services by clinic_id
+      const servicesByClinic = services.reduce((acc, service) => {
+        if (!acc[service.clinic_id]) {
+          acc[service.clinic_id] = [];
+        }
+        acc[service.clinic_id].push(service);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Combine clinics with their services
+      const clinicsWithServices: ClinicWithServices[] = clinics.map(clinic => ({
+        ...clinic,
+        services_with_pricing: servicesByClinic[clinic.id] || []
+      }));
+
+      return { success: true, clinics: clinicsWithServices };
+    } catch (error) {
+      console.error('Unexpected error in getClinicsWithServices:', error);
+      return { success: false, error: 'Failed to fetch clinics with services' };
+    }
+  },
+
+
+// ... (rest of the code remains the same)
   async upsertClinic(data: CreateClinicData): Promise<{ success: boolean; error?: string; clinic?: ClinicProfile }> {
     try {
       console.log('Upserting clinic with data:', data);
