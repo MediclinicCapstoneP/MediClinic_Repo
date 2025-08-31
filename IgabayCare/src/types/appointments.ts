@@ -77,6 +77,7 @@ export interface CreateAppointmentData {
   appointment_time: string;
   duration_minutes?: number;
   appointment_type?: AppointmentType;
+  status?: AppointmentStatus;
   priority?: AppointmentPriority;
   room_number?: string;
   floor_number?: string;
@@ -86,6 +87,7 @@ export interface CreateAppointmentData {
   insurance_policy_number?: string;
   copay_amount?: number;
   total_cost?: number;
+  cancellation_reason?: string;
 }
 
 // Appointment update interface (for updating existing appointments)
