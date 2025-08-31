@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, MapPin, Calendar, History, Heart, TrendingUp, Clock, Star, Users, Activity, Award, Shield, Phone, Mail, ExternalLink, X } from 'lucide-react';
+import { MapPin, Calendar, Star, Users, Award, Shield, Phone, Mail, ExternalLink, Navigation } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -8,7 +8,11 @@ import { AppointmentService } from '../../features/auth/utils/appointmentService
 import { patientService } from '../../features/auth/utils/patientService';
 import { authService } from '../../features/auth/utils/authService';
 import { SkeletonCard } from '../../components/ui/Skeleton';
+import { PaymentForm } from '../../components/patient/PaymentForm';
+import { PaymentResponse } from '../../types/payment';
 import type { CreateAppointmentData, AppointmentType } from '../../types/appointments';
+import type { ClinicService } from '../../types/clinicServices';
+import ClinicFilters from '../../components/patient/ClinicFilters';
 
 // Default clinic image for clinics without uploaded images
 const DEFAULT_CLINIC_IMAGE = 'https://images.pexels.com/photos/4173251/pexels-photo-4173251.jpeg?auto=compress&cs=tinysrgb&w=400';
@@ -17,7 +21,7 @@ interface PatientHomeProps {
   onNavigate: (tab: string) => void;
 }
 
-type Step = 'home' | 'clinic-details' | 'book' | 'confirm';
+type Step = 'home' | 'clinic-details' | 'book' | 'confirm' | 'payment';
 
 interface PatientData {
   id: string;
@@ -27,12 +31,36 @@ interface PatientData {
   email: string;
 }
 
+interface FilterOptions {
+  location: {
+    latitude: number | null;
+    longitude: number | null;
+    radius: number;
+    useCurrentLocation: boolean;
+  };
+  services: string[];
+  priceRange: {
+    min: number;
+    max: number;
+  };
+  rating: {
+    minimum: number;
+  };
+  sortBy: 'distance' | 'price_low' | 'price_high' | 'rating' | 'name';
+}
+
+interface ClinicWithDistance extends ClinicProfile {
+  distance?: number;
+  averageRating?: number;
+  estimatedPrice?: number;
+  services_with_pricing?: ClinicService[];
+}
+
 const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
-  const [clinics, setClinics] = useState<ClinicProfile[]>([]);
+  const [clinics, setClinics] = useState<ClinicWithDistance[]>([]);
+  const [filteredClinics, setFilteredClinics] = useState<ClinicWithDistance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [step, setStep] = useState<Step>('home');
+  const [step, setStep] = useState<Step | 'payment'>('home');
   const [selectedClinic, setSelectedClinic] = useState<ClinicProfile | null>(null);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -42,36 +70,49 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [currentPatient, setCurrentPatient] = useState<PatientData | null>(null);
+  const [paymentResponse, setPaymentResponse] = useState<PaymentResponse | null>(null);
+  const [filters, setFilters] = useState<FilterOptions>({
+    location: { latitude: null, longitude: null, radius: 10, useCurrentLocation: false },
+    services: [],
+    priceRange: { min: 0, max: 5000 },
+    rating: { minimum: 0 },
+    sortBy: 'distance'
+  });
+  const [availableServices, setAvailableServices] = useState<string[]>([]);
+  const [filtersApplied, setFiltersApplied] = useState(false);
 
-  const stats = [
-    {
-      title: 'Total Visits',
-      value: '12',
-      change: '+2',
-      changeType: 'positive',
-      icon: Activity,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
-    },
-    {
-      title: 'Upcoming',
-      value: '2',
-      change: 'This week',
-      changeType: 'neutral',
-      icon: Clock,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
-    },
-    {
-      title: 'Clinics Visited',
-      value: '4',
-      change: 'This year',
-      changeType: 'neutral',
-      icon: Users,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }, []);
+
+  // Get minimum price for a clinic based on actual services
+  const getMinimumPrice = useCallback((clinic: ClinicWithDistance): number => {
+    if (clinic.services_with_pricing && clinic.services_with_pricing.length > 0) {
+      const prices = clinic.services_with_pricing.map(service => service.base_price);
+      return Math.min(...prices);
     }
-  ];
+    // Fallback to estimated price if no services available
+    return 500; // Default consultation fee
+  }, []);
+
+  // Get mock rating for a clinic (will be replaced with actual ratings from database)
+  const getMockRating = useCallback((clinic: ClinicProfile): number => {
+    // Generate consistent rating based on clinic ID
+    const hash = clinic.id.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    return Math.max(3.0, Math.min(5.0, 3.5 + (Math.abs(hash) % 150) / 100));
+  }, []);
 
 
 
@@ -111,10 +152,39 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
       try {
         setLoading(true);
         
-        const result = await clinicService.getPublicClinics();
+        // Try to get clinics with services, fallback to regular clinics if table doesn't exist
+        let result;
+        try {
+          result = await clinicService.getClinicsWithServices();
+        } catch (error) {
+          console.warn('Falling back to regular clinic fetch due to missing clinic_services table');
+          result = await clinicService.getPublicClinics();
+        }
         
         if (result.success && result.clinics) {
-          setClinics(result.clinics);
+          // Enhance clinics with additional data
+          const enhancedClinics: ClinicWithDistance[] = result.clinics.map(clinic => ({
+            ...clinic,
+            averageRating: getMockRating(clinic),
+            estimatedPrice: getMinimumPrice(clinic),
+            services_with_pricing: clinic.services_with_pricing || []
+          }));
+          
+          setClinics(enhancedClinics);
+          
+          // Extract all available services for filter (from both old and new service systems)
+          const allServices = new Set<string>();
+          enhancedClinics.forEach(clinic => {
+            // Legacy services from clinic profile
+            clinic.services?.forEach(service => allServices.add(service));
+            clinic.custom_services?.forEach(service => allServices.add(service));
+            clinic.specialties?.forEach(specialty => allServices.add(specialty));
+            clinic.custom_specialties?.forEach(specialty => allServices.add(specialty));
+            
+            // New service-specific pricing
+            clinic.services_with_pricing?.forEach(service => allServices.add(service.service_name));
+          });
+          setAvailableServices(Array.from(allServices).sort());
         } else {
           console.error('❌ Failed to fetch clinics:', result.error);
           setClinics([]);
@@ -128,7 +198,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
     };
 
     fetchClinics();
-  }, []);
+  }, [getMockRating, getMinimumPrice]);
 
   const handleClinicClick = (clinicId: string) => {
     const clinic = clinics.find(c => c.id === clinicId);
@@ -221,18 +291,120 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
       : defaultServices;
   }, [convertToAppointmentType]);
 
-  const filteredClinics = clinics.filter(clinic => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      clinic.clinic_name.toLowerCase().includes(searchLower) ||
-      (clinic.address && clinic.address.toLowerCase().includes(searchLower)) ||
-      (clinic.city && clinic.city.toLowerCase().includes(searchLower)) ||
-      (clinic.description && clinic.description.toLowerCase().includes(searchLower)) ||
-      (clinic.specialties && clinic.specialties.some(s => s.toLowerCase().includes(searchLower))) ||
-      (clinic.custom_specialties && clinic.custom_specialties.some(s => s.toLowerCase().includes(searchLower)))
-    );
-  });
+  // Apply filters and sorting to clinics
+  const applyFilters = useCallback(() => {
+    if (!filtersApplied) {
+      // Show all clinics by default when no filters are applied
+      setFilteredClinics(clinics);
+      return;
+    }
+
+    let filtered = [...clinics];
+
+    // Calculate distances if location is available
+    if (filters.location.useCurrentLocation && filters.location.latitude && filters.location.longitude) {
+      filtered = filtered.map(clinic => ({
+        ...clinic,
+        distance: clinic.latitude && clinic.longitude 
+          ? calculateDistance(
+              filters.location.latitude!,
+              filters.location.longitude!,
+              clinic.latitude,
+              clinic.longitude
+            )
+          : undefined
+      }));
+
+      // Filter by distance radius
+      filtered = filtered.filter(clinic => 
+        !clinic.distance || clinic.distance <= filters.location.radius
+      );
+    }
+
+    // Filter by services
+    if (filters.services.length > 0) {
+      filtered = filtered.filter(clinic => {
+        const clinicServices = [
+          ...(clinic.services || []),
+          ...(clinic.custom_services || []),
+          ...(clinic.specialties || []),
+          ...(clinic.custom_specialties || []),
+          ...(clinic.services_with_pricing?.map(s => s.service_name) || [])
+        ];
+        return filters.services.some(service => 
+          clinicServices.some(clinicService => 
+            clinicService.toLowerCase().includes(service.toLowerCase())
+          )
+        );
+      });
+    }
+
+    // Filter by price range (now based on actual service prices)
+    if (filters.priceRange.min > 0 || filters.priceRange.max < 5000) {
+      filtered = filtered.filter(clinic => {
+        if (clinic.services_with_pricing && clinic.services_with_pricing.length > 0) {
+          // Check if any service falls within the price range
+          return clinic.services_with_pricing.some(service => 
+            service.base_price >= filters.priceRange.min && 
+            service.base_price <= filters.priceRange.max
+          );
+        } else {
+          // Fallback to estimated price
+          const price = clinic.estimatedPrice || 0;
+          return price >= filters.priceRange.min && price <= filters.priceRange.max;
+        }
+      });
+    }
+
+    // Filter by rating
+    if (filters.rating.minimum > 0) {
+      filtered = filtered.filter(clinic => 
+        (clinic.averageRating || 0) >= filters.rating.minimum
+      );
+    }
+
+    // Sort clinics
+    filtered.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'distance':
+          if (!a.distance && !b.distance) return 0;
+          if (!a.distance) return 1;
+          if (!b.distance) return -1;
+          return a.distance - b.distance;
+        
+        case 'price_low':
+          return (a.estimatedPrice || 0) - (b.estimatedPrice || 0);
+        
+        case 'price_high':
+          return (b.estimatedPrice || 0) - (a.estimatedPrice || 0);
+        
+        case 'rating':
+          return (b.averageRating || 0) - (a.averageRating || 0);
+        
+        case 'name':
+          return a.clinic_name.localeCompare(b.clinic_name);
+        
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredClinics(filtered);
+  }, [clinics, filters, calculateDistance, filtersApplied]);
+
+  // Initial load - show all clinics
+  useEffect(() => {
+    if (clinics.length > 0 && !filtersApplied) {
+      setFilteredClinics(clinics);
+    }
+  }, [clinics, filtersApplied]);
+
+  // Apply filters when they change
+  useEffect(() => {
+    if (filtersApplied) {
+      applyFilters();
+    }
+  }, [filters, filtersApplied, applyFilters]);
 
   // Reset appointment type when clinic changes or services change
   useEffect(() => {
@@ -294,44 +466,30 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
 
   const renderClinicList = () => (
     <>
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <Input
-            type="text"
-            placeholder="Search clinics, specialties, or location..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pr-10"
-            icon={<Search className="h-4 w-4 text-gray-400" />}
-          />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full">
-              <X className="h-4 w-4 text-gray-500" />
-            </button>
+      {/* Filter Component */}
+      <ClinicFilters
+        onFiltersChange={setFilters}
+        onApplyFilters={() => setFiltersApplied(true)}
+        availableServices={availableServices}
+        loading={loading}
+      />
+
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">
+          {filters.location.useCurrentLocation ? 'Nearby Clinics' : 'Available Clinics'}
+          {filteredClinics.length > 0 && (
+            <span className="text-sm font-normal text-gray-500 ml-2">
+              ({filteredClinics.length} found)
+            </span>
           )}
-        </div>
+        </h2>
+        {filters.sortBy === 'distance' && filters.location.useCurrentLocation && (
+          <div className="flex items-center text-sm text-blue-600">
+            <Navigation className="h-4 w-4 mr-1" />
+            Sorted by distance
+          </div>
+        )}
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="hover:shadow-md transition">
-            <CardContent className="p-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-gray-500">{stat.title}</p>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className={`text-xs ${stat.changeType === 'positive' ? 'text-green-500' : 'text-gray-500'}`}>{stat.change}</p>
-                </div>
-                <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <h2 className="text-xl font-bold mb-4">Available Clinics</h2>
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
@@ -342,35 +500,22 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
             <Users className="h-16 w-16 mx-auto mb-4" />
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'No Clinics Match Your Search' : 'No Clinics Available'}
+            No Clinics Match Your Filters
           </h3>
           <p className="text-gray-500 mb-4">
-            {searchTerm 
-              ? 'Try adjusting your search criteria or clearing the search to see all clinics.' 
-              : 'No approved clinics are currently available for booking.'}
+            Try adjusting your location radius, service requirements, price range, or rating filters.
           </p>
-          {searchTerm && (
-            <Button 
-              variant="ghost" 
-              onClick={() => setSearchTerm('')}
-              className="mb-4"
-            >
-              Clear search
-            </Button>
-          )}
-          {!searchTerm && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mx-auto max-w-md">
-              <div className="text-sm text-blue-800">
-                <p className="font-medium mb-2">🔧 Troubleshooting Tips:</p>
-                <div className="text-left space-y-1">
-                  <p>• Check browser console (F12) for error messages</p>
-                  <p>• Verify Supabase database connection</p>
-                  <p>• Ensure clinics exist with 'approved' status</p>
-                  <p>• Contact administrator if problem persists</p>
-                </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mx-auto max-w-md">
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-2">💡 Filter Tips:</p>
+              <div className="text-left space-y-1">
+                <p>• Increase location radius for more results</p>
+                <p>• Remove specific service requirements</p>
+                <p>• Expand your price range</p>
+                <p>• Lower minimum rating requirement</p>
               </div>
             </div>
-          )}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -441,31 +586,49 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                     )}
                   </div>
                   
-                  {/* Specialties */}
+                  {/* Services with Pricing */}
                   <div className="mb-4">
-                    <div className="flex flex-wrap gap-2">
-                      {(clinic.specialties || []).slice(0, 2).map((specialty, index) => (
-                        <span key={index} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium border border-blue-200">
-                          {specialty}
-                        </span>
-                      ))}
-                      {(clinic.custom_specialties || []).slice(0, 2 - (clinic.specialties || []).length).map((specialty, index) => (
-                        <span key={`custom-${index}`} className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-medium border border-purple-200">
-                          {specialty}
-                        </span>
-                      ))}
-                      {((clinic.specialties || []).length + (clinic.custom_specialties || []).length) > 2 && (
-                        <span className="bg-gray-50 text-gray-700 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
-                          +{((clinic.specialties || []).length + (clinic.custom_specialties || []).length) - 2} more
-                        </span>
-                      )}
-                    </div>
-                    {/* Show fallback if no specialties */}
-                    {(!clinic.specialties || clinic.specialties.length === 0) && 
-                     (!clinic.custom_specialties || clinic.custom_specialties.length === 0) && (
-                      <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
-                        General Medicine
-                      </span>
+                    {clinic.services_with_pricing && clinic.services_with_pricing.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-gray-700">Available Services:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {clinic.services_with_pricing.slice(0, 3).map((service, index) => (
+                            <div key={index} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-medium border border-green-200 flex items-center">
+                              <span>{service.service_name}</span>
+                              <span className="ml-2 font-bold">₱{service.base_price}</span>
+                            </div>
+                          ))}
+                          {clinic.services_with_pricing.length > 3 && (
+                            <span className="bg-gray-50 text-gray-700 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
+                              +{clinic.services_with_pricing.length - 3} more services
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {(clinic.specialties || []).slice(0, 2).map((specialty, index) => (
+                          <span key={index} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium border border-blue-200">
+                            {specialty}
+                          </span>
+                        ))}
+                        {(clinic.custom_specialties || []).slice(0, 2 - (clinic.specialties || []).length).map((specialty, index) => (
+                          <span key={`custom-${index}`} className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-medium border border-purple-200">
+                            {specialty}
+                          </span>
+                        ))}
+                        {((clinic.specialties || []).length + (clinic.custom_specialties || []).length) > 2 && (
+                          <span className="bg-gray-50 text-gray-700 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
+                            +{((clinic.specialties || []).length + (clinic.custom_specialties || []).length) - 2} more
+                          </span>
+                        )}
+                        {(!clinic.specialties || clinic.specialties.length === 0) && 
+                         (!clinic.custom_specialties || clinic.custom_specialties.length === 0) && (
+                          <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
+                            General Medicine
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                   
@@ -480,6 +643,28 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                       </span>
                     </div>
                   )}
+                  
+                  {/* Distance, Price, and Rating Display */}
+                  <div className="flex justify-between items-center mb-3 text-sm">
+                    {clinic.distance && (
+                      <div className="flex items-center text-blue-600">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {clinic.distance.toFixed(1)} km away
+                      </div>
+                    )}
+                    <div className="flex items-center text-green-600">
+                      <span className="font-medium">
+                        {clinic.services_with_pricing && clinic.services_with_pricing.length > 0 
+                          ? `₱${Math.min(...clinic.services_with_pricing.map(s => s.base_price))}-${Math.max(...clinic.services_with_pricing.map(s => s.base_price))}`
+                          : `₱${clinic.estimatedPrice}`
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center text-yellow-600">
+                      <Star className="h-3 w-3 mr-1 fill-current" />
+                      {clinic.averageRating?.toFixed(1)}
+                    </div>
+                  </div>
                   
                   {/* Action Button */}
                   <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors shadow-md hover:shadow-lg">
@@ -758,44 +943,19 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
             />
           </div>
           
-          <div className="border-t pt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Payment</label>
-            <div className="bg-gray-50 p-3 rounded-lg mb-3">
-              <div className="flex justify-between text-sm">
-                <span>Consultation Fee:</span>
-                <span className="font-medium">₱500.00</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Booking Fee:</span>
-                <span className="font-medium">₱100.00</span>
-              </div>
-              <div className="border-t pt-2 mt-2 flex justify-between font-semibold">
-                <span>Total:</span>
-                <span>₱600.00</span>
-              </div>
-            </div>
-            <Button 
-              onClick={() => setPaymentDone(true)} 
-              disabled={paymentDone}
-              className={`w-full ${paymentDone ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-            >
-              {paymentDone ? '✔ Payment Completed' : 'Pay Now'}
-            </Button>
-          </div>
-          
           <div className="flex space-x-3 pt-4">
             <Button 
-              onClick={handleBookAppointment}
-              disabled={!date || !time || !paymentDone || bookingLoading}
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              onClick={() => setStep('payment')}
+              disabled={!date || !time || bookingLoading}
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               {bookingLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Booking...
+                  Processing...
                 </>
               ) : (
-                'Confirm Booking'
+                'Proceed to Payment'
               )}
             </Button>
             <Button 
@@ -813,6 +973,43 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
             </div>
           )}
         </div>
+      </div>
+    );
+  };
+
+  const renderPaymentForm = () => {
+    if (!selectedClinic || !currentPatient || !date || !time) {
+      return (
+        <div className="text-center py-12">
+          <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
+          <p className="text-gray-600 mb-4">Missing required information for payment.</p>
+          <Button 
+            onClick={() => setStep('book')}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            Back to Booking
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-2xl mx-auto">
+        <h2 className="text-xl font-bold mb-4">Payment - {selectedClinic.clinic_name}</h2>
+        <PaymentForm
+          clinicId={selectedClinic.id}
+          patientId={currentPatient.id}
+          appointmentData={{
+            consultation_fee: 500.00,
+            booking_fee: 100.00,
+            total_amount: 600.00
+          }}
+          onPaymentComplete={(response) => {
+            setPaymentResponse(response);
+            setStep('confirm');
+          }}
+          onBack={() => setStep('book')}
+        />
       </div>
     );
   };
@@ -842,10 +1039,25 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
         </div>
       )}
       
+      {paymentResponse && (
+        <div className="max-w-md mx-auto mb-6 p-4 bg-blue-50 rounded-lg text-left">
+          <h3 className="font-semibold text-gray-900 mb-2">Payment Details:</h3>
+          <div className="space-y-1 text-sm text-gray-600">
+            <p><span className="font-medium">Transaction Number:</span> {paymentResponse.transaction_number}</p>
+            <p><span className="font-medium">Status:</span> Payment Successful</p>
+            {paymentResponse.instructions && (
+              <div className="mt-2 p-2 bg-white rounded border">
+                <p className="text-xs text-blue-800">{paymentResponse.instructions}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-2 text-sm text-gray-600 mb-6">
         <p>📧 A confirmation email will be sent to you shortly</p>
         <p>📱 You'll receive SMS reminders before your appointment</p>
-        <p>💳 Payment of ₱600.00 has been processed</p>
+        <p>💳 Payment has been processed successfully</p>
       </div>
       
       <div className="flex space-x-3 justify-center">
@@ -858,6 +1070,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
           setPaymentDone(false);
           setBookingError(null);
           setSelectedClinic(null);
+          setPaymentResponse(null);
         }} className="bg-blue-600 hover:bg-blue-700">
           Book Another Appointment
         </Button>
@@ -876,6 +1089,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
       {step === 'home' && renderClinicList()}
       {step === 'clinic-details' && selectedClinic && renderClinicDetails(selectedClinic)}
       {step === 'book' && selectedClinic && renderBookingForm(selectedClinic)}
+      {step === 'payment' && renderPaymentForm()}
       {step === 'confirm' && renderConfirmation()}
     </div>
   );
