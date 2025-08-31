@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, User, CheckCircle, AlertCircle, CreditCard } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -7,6 +7,8 @@ import { Modal } from '../ui/Modal';
 import { AppointmentService } from '../../features/auth/utils/appointmentService';
 import { CreateAppointmentData, AppointmentType } from '../../types/appointments';
 import { supabase } from '../../lib/supabase';
+import { PaymentForm } from './PaymentForm';
+import { PaymentResponse } from '../../types/payment';
 
 interface BookAppointmentProps {
   isOpen: boolean;
@@ -33,6 +35,9 @@ export const BookAppointment: React.FC<BookAppointmentProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [patientId, setPatientId] = useState<string>('');
+  const [step, setStep] = useState<'form' | 'payment' | 'confirmation'>('form');
+  const [createdAppointment, setCreatedAppointment] = useState<any>(null);
+  const [paymentResponse, setPaymentResponse] = useState<PaymentResponse | null>(null);
 
   // Appointment types for selection
   const appointmentTypes: AppointmentType[] = [
@@ -137,11 +142,8 @@ export const BookAppointment: React.FC<BookAppointmentProps> = ({
       const result = await AppointmentService.createAppointment(appointmentData);
       
       if (result) {
-        setSuccess(true);
-        setTimeout(() => {
-          setSuccess(false);
-          onClose();
-        }, 3000);
+        setCreatedAppointment(result);
+        setStep('payment');
       } else {
         setError('Failed to book appointment. Please try again.');
       }
@@ -153,6 +155,12 @@ export const BookAppointment: React.FC<BookAppointmentProps> = ({
     }
   };
 
+  // Handle payment completion
+  const handlePaymentComplete = (response: PaymentResponse) => {
+    setPaymentResponse(response);
+    setStep('confirmation');
+  };
+
   // Reset form when modal closes
   const handleClose = () => {
     setSelectedTime('');
@@ -160,6 +168,9 @@ export const BookAppointment: React.FC<BookAppointmentProps> = ({
     setNotes('');
     setError(null);
     setSuccess(false);
+    setStep('form');
+    setCreatedAppointment(null);
+    setPaymentResponse(null);
     onClose();
   };
 
@@ -167,7 +178,7 @@ export const BookAppointment: React.FC<BookAppointmentProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Book an Appointment"
+      title={step === 'form' ? "Book an Appointment" : step === 'payment' ? "Payment" : "Appointment Confirmed"}
       size="lg"
     >
       <div className="space-y-6">
@@ -191,96 +202,142 @@ export const BookAppointment: React.FC<BookAppointmentProps> = ({
               </div>
             )}
 
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Clinic Information</h4>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="font-medium text-gray-900">{clinicName}</p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Select Date</h4>
-              <div className="flex items-center space-x-4">
-                <Calendar size={20} className="text-gray-400" />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Select Time</h4>
-              {loading ? (
-                <div className="text-center p-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading available time slots...</p>
+            {step === 'form' && (
+              <>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Clinic Information</h4>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="font-medium text-gray-900">{clinicName}</p>
+                  </div>
                 </div>
-              ) : availableTimeSlots.length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {availableTimeSlots.map((time) => (
-                    <button
-                      key={time}
-                      onClick={() => setSelectedTime(time)}
-                      className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${selectedTime === time
-                        ? 'bg-primary-600 text-white border-primary-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {formatTime(time)}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <p className="text-gray-600">No available time slots for this date. Please select another date.</p>
-                </div>
-              )}
-            </div>
 
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Appointment Type</h4>
-              <select
-                value={appointmentType}
-                onChange={(e) => setAppointmentType(e.target.value as AppointmentType)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                {appointmentTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {formatAppointmentType(type)}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Select Date</h4>
+                  <div className="flex items-center space-x-4">
+                    <Calendar size={20} className="text-gray-400" />
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                      required
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Reason for Visit</h4>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-                placeholder="Please describe your symptoms or reason for visit..."
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Select Time</h4>
+                  {loading ? (
+                    <div className="text-center p-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="mt-2 text-gray-600">Loading available time slots...</p>
+                    </div>
+                  ) : availableTimeSlots.length > 0 ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {availableTimeSlots.map((time) => (
+                        <button
+                          key={time}
+                          onClick={() => setSelectedTime(time)}
+                          className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${selectedTime === time
+                            ? 'bg-primary-600 text-white border-primary-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {formatTime(time)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-4 bg-gray-50 rounded-lg">
+                      <p className="text-gray-600">No available time slots for this date. Please select another date.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Appointment Type</h4>
+                  <select
+                    value={appointmentType}
+                    onChange={(e) => setAppointmentType(e.target.value as AppointmentType)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    {appointmentTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {formatAppointmentType(type)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Reason for Visit</h4>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                    placeholder="Please describe your symptoms or reason for visit..."
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                  <Button variant="outline" onClick={handleClose}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleBookAppointment} 
+                    loading={loading}
+                    disabled={!selectedDate || !selectedTime || loading}
+                  >
+                    Continue to Payment
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {step === 'payment' && createdAppointment && (
+              <PaymentForm
+                clinicId={clinicId}
+                patientId={patientId}
+                appointmentData={{
+                  appointment_id: createdAppointment.id,
+                  consultation_fee: 500.00, // Default consultation fee
+                  booking_fee: 100.00, // Default booking fee
+                  total_amount: 600.00 // Total amount
+                }}
+                onPaymentComplete={handlePaymentComplete}
+                onBack={() => setStep('form')}
               />
-            </div>
+            )}
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleBookAppointment} 
-                loading={loading}
-                disabled={!selectedDate || !selectedTime || loading}
-              >
-                Book Appointment
-              </Button>
-            </div>
+            {step === 'confirmation' && paymentResponse && (
+              <div className="text-center p-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Payment Successful!</h3>
+                <p className="text-gray-600 mb-4">
+                  Your appointment has been confirmed and payment has been processed.
+                </p>
+                <div className="bg-gray-50 rounded-lg p-4 text-left mb-6">
+                  <h4 className="font-medium text-gray-900 mb-2">Payment Details</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Transaction Number:</span>
+                      <span className="font-mono">{paymentResponse.transaction_number}</span>
+                    </div>
+                    {paymentResponse.instructions && (
+                      <div className="mt-2 p-2 bg-blue-50 rounded">
+                        <p className="text-xs text-blue-800">{paymentResponse.instructions}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <Button onClick={handleClose}>Close</Button>
+              </div>
+            )}
           </>
         )}
       </div>
