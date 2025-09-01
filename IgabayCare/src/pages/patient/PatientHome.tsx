@@ -9,10 +9,14 @@ import { patientService } from '../../features/auth/utils/patientService';
 import { authService } from '../../features/auth/utils/authService';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import { PaymentForm } from '../../components/patient/PaymentForm';
+import { PayMongoGCashPayment } from '../../components/patient/PayMongoGCashPayment';
 import { PaymentResponse } from '../../types/payment';
 import type { CreateAppointmentData, AppointmentType } from '../../types/appointments';
 import type { ClinicService } from '../../types/clinicServices';
 import ClinicFilters from '../../components/patient/ClinicFilters';
+import { AppointmentBookingModal } from '../../components/patient/AppointmentBookingModal';
+import { NotificationDropdown } from '../../components/patient/NotificationDropdown';
+import { ClinicMapModal } from '../../components/patient/ClinicMapModal';
 
 // Default clinic image for clinics without uploaded images
 const DEFAULT_CLINIC_IMAGE = 'https://images.pexels.com/photos/4173251/pexels-photo-4173251.jpeg?auto=compress&cs=tinysrgb&w=400';
@@ -60,7 +64,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
   const [clinics, setClinics] = useState<ClinicWithDistance[]>([]);
   const [filteredClinics, setFilteredClinics] = useState<ClinicWithDistance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<Step | 'payment'>('home');
+  const [step, setStep] = useState<Step | 'payment' | 'gcash-payment'>('home');
   const [selectedClinic, setSelectedClinic] = useState<ClinicProfile | null>(null);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -80,6 +84,9 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
   });
   const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [filtersApplied, setFiltersApplied] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [selectedClinicForMap, setSelectedClinicForMap] = useState<ClinicWithDistance | null>(null);
 
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -666,11 +673,25 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                   
-                  {/* Action Button */}
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors shadow-md hover:shadow-lg">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    View Details & Book Appointment
-                  </Button>
+                  {/* Action Buttons */}
+                  <div className="space-y-2">
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors shadow-md hover:shadow-lg">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      View Details & Book Appointment
+                    </Button>
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedClinicForMap(clinic);
+                        setShowMapModal(true);
+                      }}
+                      variant="outline" 
+                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 font-medium py-2 rounded-lg transition-colors"
+                    >
+                      <MapPin className="h-4 w-4 mr-2" />
+                      View Location & Directions
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -745,9 +766,23 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                   </div>
                 )}
                 {formatAddress(clinic) && (
-                  <div className="flex items-start">
-                    <MapPin className="h-4 w-4 mr-3 text-gray-500 mt-0.5" />
-                    <span>{formatAddress(clinic)}</span>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start">
+                      <MapPin className="h-4 w-4 mr-3 text-gray-500 mt-0.5" />
+                      <span>{formatAddress(clinic)}</span>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setSelectedClinicForMap(clinic as ClinicWithDistance);
+                        setShowMapModal(true);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="ml-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+                    >
+                      <MapPin className="h-3 w-3 mr-1" />
+                      Map
+                    </Button>
                   </div>
                 )}
               </div>
@@ -848,7 +883,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-4 pt-6">
           <Button 
-            onClick={() => setStep('book')} 
+            onClick={() => setShowBookingModal(true)} 
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
           >
             <Calendar className="h-5 w-5 mr-2" />
@@ -945,17 +980,17 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
           
           <div className="flex space-x-3 pt-4">
             <Button 
-              onClick={() => setStep('payment')}
+              onClick={() => setStep('gcash-payment')}
               disabled={!date || !time || bookingLoading}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               {bookingLoading ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  <Calendar className="h-4 w-4 mr-2 animate-spin" />
                   Processing...
                 </>
               ) : (
-                'Proceed to Payment'
+                'Pay with GCash'
               )}
             </Button>
             <Button 
@@ -1007,6 +1042,53 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
           onPaymentComplete={(response) => {
             setPaymentResponse(response);
             setStep('confirm');
+          }}
+          onBack={() => setStep('book')}
+        />
+      </div>
+    );
+  };
+
+  const renderGCashPayment = () => {
+    if (!selectedClinic || !currentPatient || !date || !time) {
+      return (
+        <div className="text-center py-12">
+          <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
+          <p className="text-gray-600 mb-4">Missing required information for payment.</p>
+          <Button 
+            onClick={() => setStep('book')}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            Back to Booking
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-2xl mx-auto">
+        <h2 className="text-xl font-bold mb-4">GCash Payment - {selectedClinic.clinic_name}</h2>
+        <PayMongoGCashPayment
+          amount={600.00}
+          description={`Medical consultation at ${selectedClinic.clinic_name}`}
+          appointmentId={undefined} // Will be set after appointment creation
+          clinicId={selectedClinic.id}
+          patientName={`${currentPatient.first_name} ${currentPatient.last_name}`}
+          patientEmail={currentPatient.email || ''}
+          patientPhone={currentPatient.phone || ''}
+          onPaymentSuccess={(paymentIntentId) => {
+            setPaymentResponse({
+              transaction_number: paymentIntentId,
+              status: 'success',
+              amount: 600.00,
+              instructions: 'Payment completed successfully via GCash'
+            });
+            setPaymentDone(true);
+            setStep('confirm');
+          }}
+          onPaymentError={(error) => {
+            setBookingError(error);
+            setPaymentDone(false);
           }}
           onBack={() => setStep('book')}
         />
@@ -1090,9 +1172,41 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
       {step === 'clinic-details' && selectedClinic && renderClinicDetails(selectedClinic)}
       {step === 'book' && selectedClinic && renderBookingForm(selectedClinic)}
       {step === 'payment' && renderPaymentForm()}
+      {step === 'gcash-payment' && renderGCashPayment()}
       {step === 'confirm' && renderConfirmation()}
+      
+      {/* Calendar Booking Modal */}
+      {showBookingModal && selectedClinic && currentPatient && (
+        <AppointmentBookingModal
+          isOpen={showBookingModal}
+          onClose={() => setShowBookingModal(false)}
+          clinic={{
+            id: selectedClinic.id,
+            clinic_name: selectedClinic.clinic_name,
+            operating_hours: selectedClinic.operating_hours
+          }}
+          patientId={currentPatient.id}
+          onAppointmentBooked={() => {
+            setShowBookingModal(false);
+            // Optionally refresh clinics or show success message
+          }}
+        />
+      )}
+
+      {/* Clinic Map Modal */}
+      {showMapModal && selectedClinicForMap && (
+        <ClinicMapModal
+          isOpen={showMapModal}
+          onClose={() => {
+            setShowMapModal(false);
+            setSelectedClinicForMap(null);
+          }}
+          clinic={selectedClinicForMap}
+        />
+      )}
     </div>
   );
+
 };
 
 export default PatientHome;

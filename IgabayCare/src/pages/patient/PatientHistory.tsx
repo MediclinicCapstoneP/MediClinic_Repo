@@ -12,7 +12,7 @@ import {
   APPOINTMENT_PRIORITY_COLORS
 } from '../../types/appointments';
 // Removed unused import
-import { patientAppointmentService } from '../../features/auth/utils/patientAppointmentService';
+import { enhancedPatientService } from '../../features/auth/utils/enhancedPatientService';
 
 interface PatientHistoryProps {
   patientId: string;
@@ -39,22 +39,22 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
       if (filterTo) filters.appointment_date_to = filterTo;
 
       console.log('🔍 Loading patient appointment history with filters:', filters);
-      const result = await patientAppointmentService.getPatientAppointmentHistory(patientId);
+      const result = await enhancedPatientService.getPatientAppointmentHistory(patientId);
       
       if (result.success && result.appointments) {
         // Apply additional filters if specified
         let filteredAppointments = result.appointments;
         
         if (filterStatus !== 'all') {
-          filteredAppointments = filteredAppointments.filter(apt => apt.status === filterStatus);
+          filteredAppointments = filteredAppointments.filter((apt: any) => apt.status === filterStatus);
         }
         
         if (filterFrom) {
-          filteredAppointments = filteredAppointments.filter(apt => apt.appointment_date >= filterFrom);
+          filteredAppointments = filteredAppointments.filter((apt: any) => apt.appointment_date >= filterFrom);
         }
         
         if (filterTo) {
-          filteredAppointments = filteredAppointments.filter(apt => apt.appointment_date <= filterTo);
+          filteredAppointments = filteredAppointments.filter((apt: any) => apt.appointment_date <= filterTo);
         }
         
         console.log(`✅ Found ${filteredAppointments.length} appointments for patient`);

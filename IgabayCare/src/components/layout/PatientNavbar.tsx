@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, User, Search, Heart, LogOut, MapPin, Calendar, Stethoscope, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bell, User, Search, Heart, LogOut, Calendar, Stethoscope } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { NotificationDropdown } from '../patient/NotificationDropdown';
 
 interface Notification {
   id: string;
@@ -155,18 +156,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
             </button>
 
             {/* Notifications */}
-            <button
-              onClick={() => setShowNotifications(true)}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors relative"
-              title="Notifications"
-            >
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 block h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-medium">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
+            <NotificationDropdown patientId={user?.id || ''} />
 
             {/* Profile */}
             <div className="flex items-center space-x-2">
@@ -184,7 +174,6 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
               size="sm"
               onClick={() => setShowLogoutConfirm(true)}
               className="flex items-center gap-2 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-              title="Sign Out"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign Out</span>

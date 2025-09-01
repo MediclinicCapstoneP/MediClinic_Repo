@@ -3,7 +3,7 @@
  * Interface Segregation Principle: Specific interfaces for UI concerns
  */
 
-import { ReactNode } from 'react';
+import { ReactNode, MouseEvent } from 'react';
 
 // Base component interfaces
 export interface IBaseComponent {
@@ -13,7 +13,7 @@ export interface IBaseComponent {
 }
 
 export interface IClickableComponent extends IBaseComponent {
-  onClick?: () => void;
+  onClick?: (event?: MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   loading?: boolean;
 }

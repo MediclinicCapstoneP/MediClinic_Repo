@@ -1,5 +1,5 @@
 import { supabase } from '../../../supabaseClient';
-import { AppointmentWithDetails, CreateAppointmentData } from '../../../types/appointments';
+import { AppointmentWithDetails } from '../../../types/appointments';
 
 export const patientAppointmentService = {
   /**
@@ -20,6 +20,12 @@ export const patientAppointmentService = {
             city,
             state,
             phone,
+            email
+          ),
+          doctor:doctors(
+            id,
+            full_name,
+            specialization,
             email
           )
         `)
@@ -48,53 +54,52 @@ export const patientAppointmentService = {
   },
 
   /**
-   * Create sample appointment data for testing
+   * Create sample appointment data for testing (adapted for existing schema)
    */
-  async createSampleAppointments(patientId: string, clinicId: string): Promise<{ success: boolean; error?: string }> {
+  async createSampleAppointments(patientId: string, clinicId: string, doctorId?: string): Promise<{ success: boolean; error?: string }> {
     try {
       const sampleAppointments = [
         {
           patient_id: patientId,
           clinic_id: clinicId,
+          doctor_id: doctorId || null,
           doctor_name: 'Dr. Sarah Johnson',
-          doctor_specialty: 'General Medicine',
           appointment_date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 10 days ago
           appointment_time: '10:30:00',
-          appointment_type: 'consultation' as const,
-          status: 'completed' as const,
-          priority: 'normal' as const,
+          appointment_type: 'consultation',
+          status: 'completed',
           duration_minutes: 30,
           patient_notes: 'Regular checkup and health screening',
-          total_cost: 500.00
+          payment_amount: 500.00,
+          notes: 'Patient reported feeling well overall'
         },
         {
           patient_id: patientId,
           clinic_id: clinicId,
+          doctor_id: doctorId || null,
           doctor_name: 'Dr. Michael Lee',
-          doctor_specialty: 'Cardiology',
           appointment_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days ago
           appointment_time: '14:00:00',
-          appointment_type: 'specialist_visit' as const,
-          status: 'completed' as const,
-          priority: 'high' as const,
+          appointment_type: 'consultation',
+          status: 'completed',
           duration_minutes: 60,
           patient_notes: 'Cardiology consultation for chest pain',
-          total_cost: 800.00
+          payment_amount: 800.00,
+          notes: 'EKG performed, results normal'
         },
         {
           patient_id: patientId,
           clinic_id: clinicId,
+          doctor_id: doctorId || null,
           doctor_name: 'Dr. Alice Reyes',
-          doctor_specialty: 'Dermatology',
           appointment_date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 60 days ago
           appointment_time: '09:15:00',
-          appointment_type: 'specialist_visit' as const,
-          status: 'cancelled' as const,
-          priority: 'low' as const,
+          appointment_type: 'consultation',
+          status: 'cancelled',
           duration_minutes: 45,
           patient_notes: 'Skin condition examination',
-          cancellation_reason: 'Patient requested cancellation',
-          total_cost: 600.00
+          payment_amount: 600.00,
+          notes: 'Cancelled due to patient schedule conflict'
         }
       ];
 
