@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MapPin, Calendar, Star, Users, Award, Shield, Phone, Mail, ExternalLink, Navigation } from 'lucide-react';
+import { MapPin, Calendar, Star, Users, Award, Shield, Phone, Mail, ExternalLink, Navigation, DollarSign } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -526,17 +526,17 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
           {filteredClinics.map((clinic) => (
             <div key={clinic.id} onClick={() => handleClinicClick(clinic.id)}>
               <Card className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-gray-200 hover:border-blue-300 bg-white">
-                <CardContent className="p-3 sm:p-6">
+                <CardContent className="p-2 sm:p-4 lg:p-6">
                   {/* Clinic Image */}
-                  <div className="relative mb-3 sm:mb-4">
+                  <div className="relative mb-2 sm:mb-3 lg:mb-4">
                     <img
                       src={clinic.profile_pic_url || DEFAULT_CLINIC_IMAGE}
                       alt={clinic.clinic_name}
-                      className="w-full h-32 sm:h-48 object-cover rounded-lg"
+                      className="w-full h-24 sm:h-32 lg:h-48 object-cover rounded-lg"
                       onError={(e) => {
                         e.currentTarget.src = DEFAULT_CLINIC_IMAGE;
                       }}
@@ -571,13 +571,26 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                     )}
                   </div>
                   
+                  {/* Location */}
+                  <div className="mb-1.5 sm:mb-2 lg:mb-3">
+                    <p className="text-xs text-gray-600 flex items-center line-clamp-1">
+                      <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+                      <span className="truncate">{clinic.address ? `${clinic.address}, ${clinic.city}` : clinic.city}</span>
+                      {clinic.distance && (
+                        <span className="ml-1 sm:ml-2 text-blue-600 font-medium text-xs whitespace-nowrap">
+                          ({clinic.distance.toFixed(1)}km)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  
                   {/* Contact Information */}
                   <div className="space-y-2 mb-4">
                     {/* Address */}
-                    {formatAddress(clinic) && (
+                    {formatAddress(clinic) && clinic.distance && (
                       <div className="flex items-start text-sm text-gray-600">
-                        <MapPin className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5 text-blue-500" />
-                        <span className="line-clamp-2">{formatAddress(clinic)}</span>
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {clinic.distance.toFixed(1)} km away
                       </div>
                     )}
                     
@@ -656,39 +669,32 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                     </div>
                   )}
                   
-                  {/* Distance, Price, and Rating Display */}
-                  <div className="flex justify-between items-center mb-3 text-sm">
-                    {clinic.distance && (
-                      <div className="flex items-center text-blue-600">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {clinic.distance.toFixed(1)} km away
-                      </div>
-                    )}
+                  {/* Price, Rating, and Distance */}
+                  <div className="flex items-center justify-between mb-2 sm:mb-3 lg:mb-4 text-xs">
                     <div className="flex items-center text-green-600">
-                      <span className="font-medium">
-                        {clinic.services_with_pricing && clinic.services_with_pricing.length > 0 
-                          ? `₱${Math.min(...clinic.services_with_pricing.map(s => s.base_price))}-${Math.max(...clinic.services_with_pricing.map(s => s.base_price))}`
-                          : `₱${clinic.estimatedPrice}`
-                        }
+                      <DollarSign className="h-3 w-3 mr-0.5 sm:mr-1" />
+                      <span className="font-medium text-xs sm:text-sm">
+                        ₱{clinic.estimatedPrice?.toLocaleString()}
                       </span>
                     </div>
                     <div className="flex items-center text-yellow-600">
-                      <Star className="h-3 w-3 mr-1 fill-current" />
-                      {clinic.averageRating?.toFixed(1)}
+                      <Star className="h-3 w-3 mr-0.5 sm:mr-1 fill-current" />
+                      <span className="text-xs sm:text-sm">{clinic.averageRating?.toFixed(1)}</span>
                     </div>
                   </div>
                   
                   {/* Action Buttons */}
-                  <div className="space-y-2">
+                  <div className="space-y-1 sm:space-y-2">
                     <Button 
                       onClick={() => {
                         setSelectedClinic(clinic);
                         setShowBookingModal(true);
                       }}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 sm:py-3 text-sm sm:text-base rounded-lg transition-colors shadow-md hover:shadow-lg"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 sm:py-2 lg:py-3 text-xs sm:text-sm lg:text-base rounded-lg transition-colors shadow-md hover:shadow-lg"
                     >
                       <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                      Book Appointment
+                      <span className="hidden sm:inline">Book Appointment</span>
+                      <span className="sm:hidden">Book</span>
                     </Button>
                     <Button 
                       onClick={(e) => {
@@ -697,11 +703,11 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                         setShowMapModal(true);
                       }}
                       variant="outline" 
-                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 font-medium py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors"
+                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 font-medium py-1 sm:py-1.5 lg:py-2 text-xs rounded-lg transition-colors"
                     >
-                      <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">View Location & Directions</span>
-                      <span className="sm:hidden">Location</span>
+                      <MapPin className="h-3 w-3 mr-1" />
+                      <span className="hidden sm:inline">View Location</span>
+                      <span className="sm:hidden">Map</span>
                     </Button>
                   </div>
                 </CardContent>
