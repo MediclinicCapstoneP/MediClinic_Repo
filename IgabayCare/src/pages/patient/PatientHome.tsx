@@ -15,7 +15,8 @@ import type { CreateAppointmentData, AppointmentType } from '../../types/appoint
 import type { ClinicService } from '../../types/clinicServices';
 import ClinicFilters from '../../components/patient/ClinicFilters';
 import { AppointmentBookingModal } from '../../components/patient/AppointmentBookingModal';
-import { NotificationDropdown } from '../../components/patient/NotificationDropdown';
+// NotificationDropdown now integrated in PatientNavbar
+// import { NotificationDropdown } from '../../components/patient/NotificationDropdown';
 import { ClinicMapModal } from '../../components/patient/ClinicMapModal';
 
 // Default clinic image for clinics without uploaded images
@@ -525,42 +526,46 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredClinics.map(clinic => (
-            <div
-              key={clinic.id}
-              className="cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl"
-              onClick={() => handleClinicClick(clinic.id)}
-            >
-              <Card className="hover:shadow-xl transition-all duration-300 overflow-hidden h-full border-2 hover:border-blue-200">
-                {/* Clinic Image */}
-                <div className="h-48 overflow-hidden relative">
-                  <img 
-                    src={clinic.profile_pic_url || DEFAULT_CLINIC_IMAGE} 
-                    alt={clinic.clinic_name} 
-                    className="w-full h-full object-cover transition-transform hover:scale-110"
-                    onError={(e) => {
-                      // Fallback to default image if profile picture fails to load
-                      const target = e.target as HTMLImageElement;
-                      target.src = DEFAULT_CLINIC_IMAGE;
-                    }}
-                  />
-                  {/* Status Badge Overlay */}
-                  <div className="absolute top-3 right-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-lg ${getStatusColor(clinic.status)}`}>
-                      {clinic.status === 'approved' ? '✓ Verified' : clinic.status}
-                    </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {filteredClinics.map((clinic) => (
+            <div key={clinic.id} onClick={() => handleClinicClick(clinic.id)}>
+              <Card className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-gray-200 hover:border-blue-300 bg-white">
+                <CardContent className="p-3 sm:p-6">
+                  {/* Clinic Image */}
+                  <div className="relative mb-3 sm:mb-4">
+                    <img
+                      src={clinic.profile_pic_url || DEFAULT_CLINIC_IMAGE}
+                      alt={clinic.clinic_name}
+                      className="w-full h-32 sm:h-48 object-cover rounded-lg"
+                      onError={(e) => {
+                        e.currentTarget.src = DEFAULT_CLINIC_IMAGE;
+                      }}
+                    />
+                    
+                    {/* Status Badge */}
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3">
+                      {clinic.status === 'approved' ? (
+                        <div className="bg-green-100 text-green-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium flex items-center">
+                          <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                          <span className="hidden sm:inline">Verified</span>
+                          <span className="sm:hidden">✓</span>
+                        </div>
+                      ) : (
+                        <div className="bg-yellow-100 text-yellow-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium">
+                          <span className="hidden sm:inline">Pending</span>
+                          <span className="sm:hidden">⏳</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                
-                <CardContent className="p-6">
+                  
                   {/* Clinic Name */}
                   <div className="mb-3">
-                    <h3 className="font-bold text-xl text-gray-900 line-clamp-2 mb-1">
+                    <h3 className="font-bold text-lg sm:text-xl text-gray-900 line-clamp-2 mb-1">
                       {clinic.clinic_name || 'Medical Clinic'}
                     </h3>
                     {clinic.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2">
+                      <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">
                         {clinic.description}
                       </p>
                     )}
@@ -675,9 +680,15 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                   
                   {/* Action Buttons */}
                   <div className="space-y-2">
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors shadow-md hover:shadow-lg">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      View Details & Book Appointment
+                    <Button 
+                      onClick={() => {
+                        setSelectedClinic(clinic);
+                        setShowBookingModal(true);
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 sm:py-3 text-sm sm:text-base rounded-lg transition-colors shadow-md hover:shadow-lg"
+                    >
+                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      Book Appointment
                     </Button>
                     <Button 
                       onClick={(e) => {
@@ -686,10 +697,11 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                         setShowMapModal(true);
                       }}
                       variant="outline" 
-                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 font-medium py-2 rounded-lg transition-colors"
+                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 font-medium py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors"
                     >
-                      <MapPin className="h-4 w-4 mr-2" />
-                      View Location & Directions
+                      <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">View Location & Directions</span>
+                      <span className="sm:hidden">Location</span>
                     </Button>
                   </div>
                 </CardContent>

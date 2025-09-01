@@ -6,6 +6,7 @@ import type { CreateAppointmentData, AppointmentType } from '../../types/appoint
 import { PaymentForm } from './PaymentForm';
 import { PayMongoGCashPayment } from './PayMongoGCashPayment';
 import type { PaymentResponse } from '../../types/payment';
+import { X, ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
 
 interface AppointmentBookingModalProps {
   isOpen: boolean;
@@ -358,82 +359,82 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   ];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
+        <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex justify-between items-center">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Book Appointment</h2>
-              <p className="text-gray-600">{clinic.clinic_name}</p>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Book Appointment</h2>
+              <p className="text-xs sm:text-sm text-gray-600">{clinic?.clinic_name}</p>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Calendar Section */}
-            <div>
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Select Date</h3>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => navigateMonth('prev')}
-                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <span className="text-lg font-medium min-w-[140px] text-center">
-                      {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-                    </span>
-                    <button
-                      onClick={() => navigateMonth('next')}
-                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
+          <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Calendar Section */}
+              <div>
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-3 sm:mb-4">
+                    <h3 className="text-base sm:text-lg font-semibold">Select Date</h3>
+                    <div className="flex items-center space-x-1 sm:space-x-2">
+                      <button
+                        onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
+                        className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                      <span className="font-medium text-gray-900 min-w-[120px] sm:min-w-[140px] text-center text-sm sm:text-base">
+                        {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                      </span>
+                      <button
+                        onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
+                        className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Calendar Grid */}
-                <div className="grid grid-cols-7 gap-1 mb-2">
+                <div className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-2">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+                    <div key={day} className="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">
                       {day}
                     </div>
                   ))}
                 </div>
 
-                <div className="grid grid-cols-7 gap-1">
-                  {calendarDays.map((day, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleDateSelect(day.dateString, day.isAvailable)}
-                      disabled={!day.isAvailable}
-                      className={`
-                        p-3 text-sm rounded-lg transition-all duration-200
-                        ${!day.isCurrentMonth ? 'text-gray-300' : ''}
-                        ${day.isPastDate ? 'text-gray-300 cursor-not-allowed' : ''}
-                        ${day.isToday ? 'ring-2 ring-blue-500' : ''}
-                        ${day.isSelected ? 'bg-blue-600 text-white' : ''}
-                        ${day.isAvailable && !day.isSelected ? 'hover:bg-blue-100 text-gray-700' : ''}
-                        ${!day.isAvailable ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
-                      `}
-                    >
-                      {day.day}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+                  {calendarDays.map((day, index) => {
+                    const isToday = day.date.toDateString() === new Date().toDateString();
+                    const isSelected = selectedDate && day.date.toDateString() === selectedDate.toDateString();
+                    const isPast = day.date < new Date(new Date().setHours(0, 0, 0, 0));
+                    const isAvailable = !isPast && day.isCurrentMonth;
+
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => isAvailable ? handleDateSelect(day.date) : null}
+                        disabled={!isAvailable}
+                        className={`
+                          p-1.5 sm:p-2 text-xs sm:text-sm rounded-lg cursor-pointer transition-colors min-h-[32px] sm:min-h-[36px] flex items-center justify-center
+                          ${isToday ? 'bg-blue-100 text-blue-600 font-semibold' : ''}
+                          ${isSelected ? 'bg-blue-600 text-white' : ''}
+                          ${isPast || !isAvailable ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}
+                          ${day.isCurrentMonth ? '' : 'text-gray-300'}
+                        `}
+                      >
+                        {day.date.getDate()}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Legend */}
@@ -457,8 +458,9 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
             {/* Time Slots and Booking Details */}
             <div>
               {selectedDate && (
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-3">
+                <div className="mb-4 sm:mb-6">
+                  <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3">
+                    <Clock className="inline h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
                     Available Times - {new Date(selectedDate).toLocaleDateString('en-US', { 
                       weekday: 'long', 
                       year: 'numeric', 
@@ -474,19 +476,19 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
                       ))}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2 max-h-40 sm:max-h-48 overflow-y-auto">
                       {availableTimeSlots.map((slot) => (
                         <button
                           key={slot.time}
                           onClick={() => setSelectedTime(slot.time)}
                           disabled={!slot.available}
                           className={`
-                            p-2 text-sm rounded-lg border transition-all duration-200
+                            px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border rounded-lg transition-colors min-h-[32px] sm:min-h-[36px] flex items-center justify-center
                             ${selectedTime === slot.time 
                               ? 'bg-blue-600 text-white border-blue-600' 
                               : slot.available 
-                                ? 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50 hover:border-blue-300'
-                                : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                ? 'border-gray-300 hover:border-blue-300 hover:bg-blue-50' 
+                                : 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
                             }
                           `}
                         >
@@ -533,66 +535,50 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
                   </div>
 
                   {/* Booking Summary */}
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-blue-900 mb-2">Appointment Summary</h4>
-                    <div className="space-y-1 text-sm text-blue-800">
-                      <p><strong>Clinic:</strong> {clinic.clinic_name}</p>
-                      <p><strong>Date:</strong> {new Date(selectedDate).toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}</p>
-                      <p><strong>Time:</strong> {new Date(`2000-01-01T${selectedTime}`).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })}</p>
-                      <p><strong>Type:</strong> {appointmentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                    <h4 className="text-sm sm:text-base font-semibold mb-2 sm:mb-3">Appointment Summary</h4>
+                    <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                      <div className="flex justify-between">
+                        <span>Clinic:</span>
+                        <span className="font-medium text-right">{clinic?.clinic_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Date:</span>
+                        <span className="font-medium text-right">
+                          {new Date(selectedDate).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Time:</span>
+                        <span className="font-medium text-right">{selectedTime}</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex space-x-3 pt-4">
+                  <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-3 sm:pt-4 border-t border-gray-200 px-3 sm:px-6 pb-3 sm:pb-4">
                     <Button
-                      onClick={onClose}
                       variant="outline"
-                      className="flex-1"
+                      onClick={onClose}
+                      className="w-full sm:w-auto px-4 sm:px-6 py-2"
+                      size="sm"
                     >
                       Cancel
                     </Button>
-                    {paymentCompleted ? (
-                      <Button
-                        onClick={handleBookAppointment}
-                        disabled={bookingLoading}
-                        className="flex-1"
-                      >
-                        {bookingLoading ? (
-                          <div className="flex items-center space-x-2">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            <span>Booking...</span>
-                          </div>
-                        ) : (
-                          'Confirm Appointment'
-                        )}
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          onClick={handleProceedToGCashPayment}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700"
-                        >
-                          Pay with GCash
-                        </Button>
-                        <Button
-                          onClick={handleProceedToPayment}
-                          variant="outline"
-                          className="flex-1"
-                        >
-                          Other Payment
-                        </Button>
-                      </>
-                    )}
+                    <Button
+                      onClick={handleBookAppointment}
+                      disabled={!selectedDate || !selectedTime || loading}
+                      loading={loading}
+                      className="w-full sm:w-auto px-4 sm:px-6 py-2 bg-blue-600 hover:bg-blue-700"
+                      size="sm"
+                    >
+                      Book Appointment
+                    </Button>
                   </div>
                 </div>
               )}

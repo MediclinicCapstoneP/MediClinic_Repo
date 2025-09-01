@@ -4,21 +4,21 @@ import { useMedicalTheme } from '../../core/providers/MedicalThemeProvider';
 
 // Button variant styles following medical design system
 const getButtonVariants = (userRole: string) => ({
-  primary: 'bg-primary-500 hover:bg-primary-600 text-white focus:ring-primary-500 shadow-lg hover:shadow-xl transition-all duration-200',
-  secondary: 'bg-medical-500 hover:bg-medical-600 text-white focus:ring-medical-500 shadow-lg hover:shadow-xl transition-all duration-200',
-  outline: 'border-2 border-primary-500 text-primary-500 hover:bg-primary-50 focus:ring-primary-500 transition-all duration-200',
-  ghost: 'text-neutral-600 hover:bg-neutral-100 focus:ring-neutral-500 transition-all duration-200',
-  medical: 'bg-clinical-500 hover:bg-clinical-600 text-white focus:ring-clinical-500 shadow-lg hover:shadow-xl transition-all duration-200',
-  danger: 'bg-emergency-500 hover:bg-emergency-600 text-white focus:ring-emergency-500 shadow-lg hover:shadow-xl transition-all duration-200',
-  gradient: 'bg-gradient-to-r from-primary-500 to-medical-500 hover:from-primary-600 hover:to-medical-600 text-white focus:ring-primary-500 shadow-lg hover:shadow-xl transition-all duration-200'
+  primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 shadow-lg hover:shadow-xl transition-all duration-200',
+  secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500 shadow-lg hover:shadow-xl transition-all duration-200',
+  outline: 'border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500 transition-all duration-200',
+  ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-blue-500 transition-all duration-200',
+  medical: 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 focus:ring-blue-500 shadow-md transition-all duration-200',
+  danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-lg hover:shadow-xl transition-all duration-200',
+  gradient: 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 focus:ring-purple-500 transition-all duration-200'
 });
 
 // Button size styles
 const buttonSizes = {
-  sm: 'px-3 py-1.5 text-sm rounded-md',
-  md: 'px-4 py-2 text-sm rounded-lg',
-  lg: 'px-6 py-3 text-base rounded-lg',
-  xl: 'px-8 py-4 text-lg rounded-xl'
+  sm: 'px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm min-h-[32px] sm:min-h-[36px]',
+  md: 'px-3 py-1.5 text-sm sm:px-4 sm:py-2 min-h-[36px] sm:min-h-[40px]',
+  lg: 'px-4 py-2 text-sm sm:px-6 sm:py-3 sm:text-base min-h-[40px] sm:min-h-[48px]',
+  xl: 'px-6 py-3 text-base sm:px-8 sm:py-4 sm:text-lg min-h-[48px] sm:min-h-[56px]'
 };
 
 // Loading spinner component (SRP: Single responsibility for loading indication)

@@ -56,7 +56,7 @@ const ClinicFilters: React.FC<ClinicFiltersProps> = ({
 
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showAdvancedFilters] = useState(true); // Always show filters for better UX
 
   // Update price range based on available services
   useEffect(() => {
@@ -168,55 +168,59 @@ const ClinicFilters: React.FC<ClinicFiltersProps> = ({
     onFiltersChange(defaultFilters);
   };
 
+  const resetFilters = () => {
+    clearFilters();
+  };
+
   return (
-    <Card className="mb-6">
-      <CardContent className="p-6">
+    <Card className="mb-4 sm:mb-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold flex items-center">
-            <Filter className="h-5 w-5 mr-2 text-blue-600" />
-            Find Nearby Clinics
-          </h2>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
+            Filter Clinics
+          </h3>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className="text-blue-600"
+            onClick={resetFilters}
+            className="text-gray-600 hover:text-gray-800 px-2 sm:px-3 py-1 text-xs sm:text-sm"
           >
-            {showAdvancedFilters ? 'Simple View' : 'Advanced Filters'}
+            Reset
           </Button>
         </div>
 
         <div className="space-y-4">
           {/* Location Filter */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 flex items-center">
-              <MapPin className="h-4 w-4 mr-1" />
+            <label className="text-xs sm:text-sm font-medium text-gray-700 flex items-center">
+              <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
               Location & Distance
             </label>
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
               <Button
                 onClick={getCurrentLocation}
                 disabled={locationLoading || loading}
                 variant={filters.location.useCurrentLocation ? "primary" : "outline"}
                 size="sm"
-                className="flex items-center"
+                className="flex items-center justify-center w-full sm:w-auto text-xs sm:text-sm px-2 sm:px-3 py-2"
               >
                 {locationLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
                 ) : (
-                  <Navigation className="h-4 w-4 mr-2" />
+                  <Navigation className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 )}
                 {filters.location.useCurrentLocation ? 'Using Current Location' : 'Use My Location'}
               </Button>
               
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Within</span>
+              <div className="flex items-center gap-2 justify-center sm:justify-start">
+                <span className="text-xs sm:text-sm text-gray-600">Within</span>
                 <select
                   value={filters.location.radius}
                   onChange={(e) => updateFilters({
                     location: { ...filters.location, radius: Number(e.target.value) }
                   })}
-                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="px-2 py-1 border border-gray-300 rounded text-xs sm:text-sm min-w-0 flex-shrink-0"
                   disabled={!filters.location.useCurrentLocation}
                 >
                   <option value={5}>5 km</option>
@@ -241,16 +245,16 @@ const ClinicFilters: React.FC<ClinicFiltersProps> = ({
 
           {/* Services Filter */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 flex items-center">
-              <Stethoscope className="h-4 w-4 mr-1" />
+            <label className="text-xs sm:text-sm font-medium text-gray-700 flex items-center">
+              <Stethoscope className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
               Services Needed
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1 sm:gap-2">
               {availableServices.map((service) => (
                 <button
                   key={service}
                   onClick={() => toggleService(service)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                     filters.services.includes(service)
                       ? 'bg-blue-100 text-blue-800 border-2 border-blue-300'
                       : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
@@ -261,7 +265,7 @@ const ClinicFilters: React.FC<ClinicFiltersProps> = ({
               ))}
             </div>
             {filters.services.length > 0 && (
-              <p className="text-sm text-blue-600">
+              <p className="text-xs sm:text-sm text-blue-600">
                 {filters.services.length} service{filters.services.length !== 1 ? 's' : ''} selected
               </p>
             )}
