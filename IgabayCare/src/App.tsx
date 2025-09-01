@@ -9,7 +9,8 @@ import ClinicSignUpPage from './features/auth/pages/ClinicSignUpPage';
 import AuthCallback from './features/auth/pages/AuthCallback';
 import PatientDashboard from './pages/patient/PatientDashboard';
 import { ClinicDashboard } from './pages/clinic/ClinicDashboard';
-import { FloatingChatBot } from './components/ui/FloatingChatBot';
+// Voiceflow chatbot now integrated via HTML script - removing old FloatingChatBot
+// import { FloatingChatBot } from './components/ui/FloatingChatBot';
 import DoctorSignUpPage from './features/auth/pages/DoctorSignUpPage';
 import DoctorSignInPage from './features/auth/pages/DoctorSignInPage';
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
@@ -48,8 +49,7 @@ const App: React.FC = () => {
             {import.meta.env.DEV && <Route path="/appointment-display-test" element={<AppointmentDisplayTestPage />} />}
           </Routes>
           
-          {/* Global Floating ChatBot */}
-          <FloatingChatBot />
+          {/* Voiceflow chatbot now loaded via HTML script in index.html */}
         </div>
       </Router>
     </MedicalThemeProvider>
