@@ -39,6 +39,39 @@ interface ClinicSignUpFormProps {
   onSuccess?: () => void;
 }
 
+// Helper component for unpriced services indicator
+interface UnpricedServicesIndicatorProps {
+  selectedServices: string[];
+  servicePricing: any[];
+}
+
+const UnpricedServicesIndicator: React.FC<UnpricedServicesIndicatorProps> = ({ 
+  selectedServices, 
+  servicePricing 
+}) => {
+  const pricedServices = servicePricing.map((s: any) => s.service_name).filter(Boolean);
+  const unpricedServices = selectedServices.filter(service => !pricedServices.includes(service));
+  
+  return (
+    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+      <h5 className="text-sm font-medium text-blue-900 mb-2">Services without pricing:</h5>
+      {unpricedServices.length === 0 ? (
+        <p className="text-sm text-green-700">
+          ✓ All selected services have pricing configured!
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {unpricedServices.map(service => (
+            <span key={service} className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-700">
+              {service}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,6 +83,9 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
   // Tag input states for specialties and services
   const [specialtyTags, setSpecialtyTags] = useState<Tag[]>([]);
   const [serviceTags, setServiceTags] = useState<Tag[]>([]);
+  
+  // Selected services state for step 5 (service pricing)
+  const [selectedServicesForPricing, setSelectedServicesForPricing] = useState<string[]>([]);
 
   // Service pricing handlers
   const addServicePricing = () => {
@@ -194,6 +230,10 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
       services: standardServices,
       custom_services: customServices
     }));
+    
+    // Update selected services for pricing step
+    const allServices = [...standardServices, ...customServices];
+    setSelectedServicesForPricing(allServices);
   }, [serviceTags]);
 
   const handleInputChange = (field: string, value: any) => {
@@ -746,7 +786,14 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <h4 className="text-lg font-medium text-gray-900">Service Pricing</h4>
-                          <p className="text-sm text-gray-600">Set prices for your medical services (optional but recommended)</p>
+                          <p className="text-sm text-gray-600">
+                            Set prices for your medical services (optional but recommended)
+                            {selectedServicesForPricing.length > 0 && (
+                              <span className="block text-green-600">
+                                ✓ {selectedServicesForPricing.length} service(s) available from Step 4
+                              </span>
+                            )}
+                          </p>
                         </div>
                         <Button
                           type="button"
@@ -754,6 +801,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                           variant="outline"
                           size="sm"
                           className="flex items-center"
+                          disabled={selectedServicesForPricing.length === 0}
                         >
                           <Plus className="h-4 w-4 mr-2" />
                           Add Service
@@ -761,80 +809,134 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                       </div>
 
                       {formData.service_pricing && formData.service_pricing.length > 0 ? (
-                        <div className="space-y-4">
-                          {formData.service_pricing.map((service: any, index: number) => (
-                            <div key={index} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-                              <div className="flex items-center justify-between mb-3">
-                                <h5 className="font-medium text-gray-900">Service {index + 1}</h5>
-                                <Button
-                                  type="button"
-                                  onClick={() => removeServicePricing(index)}
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                        <>
+                          <div className="space-y-4">
+                            {formData.service_pricing.map((service: any, index: number) => (
+                              <div key={index} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <div className="flex items-center justify-between mb-3">
+                                  <h5 className="font-medium text-gray-900">Service {index + 1}</h5>
+                                  <Button
+                                    type="button"
+                                    onClick={() => removeServicePricing(index)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Service Name
+                                    </label>
+                                    <select
+                                      value={service.service_name}
+                                      onChange={(e) => updateServicePricing(index, 'service_name', e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary-500 disabled:bg-gray-50"
+                                      disabled={isLoading}
+                                    >
+                                      <option value="">Select a service...</option>
+                                      {selectedServicesForPricing.map((serviceName) => {
+                                        const isAlreadyUsed = formData.service_pricing?.some(
+                                          (s: any, i: number) => i !== index && s.service_name === serviceName
+                                        );
+                                        return (
+                                          <option 
+                                            key={serviceName} 
+                                            value={serviceName}
+                                            disabled={isAlreadyUsed}
+                                          >
+                                            {serviceName} {isAlreadyUsed ? '(Already added)' : ''}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                    {selectedServicesForPricing.length === 0 && (
+                                      <p className="text-xs text-amber-600 mt-1">
+                                        No services selected in Step 4. Please go back and select services first.
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Input
+                                    label="Base Price (₱)"
+                                    type="number"
+                                    value={service.base_price}
+                                    onChange={(e) => updateServicePricing(index, 'base_price', parseFloat(e.target.value) || 0)}
+                                    placeholder="500"
+                                    disabled={isLoading}
+                                  />
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                  <Input
+                                    label="Duration (minutes)"
+                                    type="number"
+                                    value={service.duration_minutes}
+                                    onChange={(e) => updateServicePricing(index, 'duration_minutes', parseInt(e.target.value) || 30)}
+                                    placeholder="30"
+                                    disabled={isLoading}
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Service Description
+                                  </label>
+                                  <textarea
+                                    value={service.description}
+                                    onChange={(e) => updateServicePricing(index, 'description', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary-500 disabled:bg-gray-50"
+                                    rows={2}
+                                    placeholder="Brief description of the service..."
+                                    disabled={isLoading}
+                                  />
+                                </div>
                               </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <Input
-                                  label="Service Name"
-                                  value={service.service_name}
-                                  onChange={(e) => updateServicePricing(index, 'service_name', e.target.value)}
-                                  placeholder="e.g., General Consultation"
-                                  disabled={isLoading}
-                                />
-                                <Input
-                                  label="Base Price (₱)"
-                                  type="number"
-                                  value={service.base_price}
-                                  onChange={(e) => updateServicePricing(index, 'base_price', parseFloat(e.target.value) || 0)}
-                                  placeholder="500"
-                                  disabled={isLoading}
-                                />
-                              </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <Input
-                                  label="Duration (minutes)"
-                                  type="number"
-                                  value={service.duration_minutes}
-                                  onChange={(e) => updateServicePricing(index, 'duration_minutes', parseInt(e.target.value) || 30)}
-                                  placeholder="30"
-                                  disabled={isLoading}
-                                />
-                              </div>
-                              
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Service Description
-                                </label>
-                                <textarea
-                                  value={service.description}
-                                  onChange={(e) => updateServicePricing(index, 'description', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary-500 disabled:bg-gray-50"
-                                  rows={2}
-                                  placeholder="Brief description of the service..."
-                                  disabled={isLoading}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                          
+                          {/* Show unpriced services */}
+                          {selectedServicesForPricing.length > 0 && formData.service_pricing && formData.service_pricing.length > 0 && (
+                            <UnpricedServicesIndicator 
+                              selectedServices={selectedServicesForPricing}
+                              servicePricing={formData.service_pricing}
+                            />
+                          )}
+                        </>
                       ) : (
                         <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
                           <DollarSign className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                          <p className="text-gray-600 mb-4">No services added yet</p>
-                          <Button
-                            type="button"
-                            onClick={addServicePricing}
-                            variant="outline"
-                            className="flex items-center mx-auto"
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Your First Service
-                          </Button>
+                          {selectedServicesForPricing.length > 0 ? (
+                            <>
+                              <p className="text-gray-600 mb-4">No pricing added yet for your services</p>
+                              <Button
+                                type="button"
+                                onClick={addServicePricing}
+                                variant="outline"
+                                className="flex items-center mx-auto"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Your First Service Pricing
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-gray-600 mb-4">No services available for pricing</p>
+                              <p className="text-sm text-amber-600 mb-4">
+                                Please go back to Step 4 and select medical services first.
+                              </p>
+                              <Button
+                                type="button"
+                                onClick={() => setCurrentStep(4)}
+                                variant="outline"
+                                className="flex items-center mx-auto"
+                              >
+                                Go Back to Step 4
+                              </Button>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
