@@ -297,13 +297,13 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
             
             for (const service of formData.service_pricing) {
               if (service.service_name && service.base_price > 0) {
-                await clinicServicePricingService.createClinicService(result.clinic.id, {
+                await clinicServicePricingService.createClinicService({
+                  clinic_id: result.clinic.id,
                   service_name: service.service_name,
                   base_price: service.base_price,
                   description: service.description || '',
                   duration_minutes: service.duration_minutes || 30,
-                  service_category: 'consultation',
-                  clinic_id: result.clinic.id
+                  service_category: 'consultation'
                 });
               }
             }
