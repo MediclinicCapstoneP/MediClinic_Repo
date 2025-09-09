@@ -1,78 +1,54 @@
-import React, { useState } from 'react';
-import { User, Search, Filter, MoreHorizontal, Phone, Mail, Calendar, FileText, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Search, Filter, MoreHorizontal, Phone, Mail, Calendar, FileText, Eye, Loader2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import { clinicDashboardService, type PatientRecord } from '../../features/auth/utils/clinicDashboardService';
+import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthService';
+import { clinicService } from '../../features/auth/utils/clinicService';
 
 export const ClinicPatients: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [showPatientModal, setShowPatientModal] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [clinicId, setClinicId] = useState<string | null>(null);
 
-  const patients = [
-    {
-      id: 1,
-      name: 'John Smith',
-      age: 35,
-      gender: 'Male',
-      email: 'john.smith@email.com',
-      phone: '+1 234-567-8900',
-      lastVisit: '2024-01-15',
-      nextAppointment: '2024-02-20',
-      status: 'active',
-      primaryDoctor: 'Dr. Sarah Johnson',
-      medicalHistory: ['Hypertension', 'Diabetes Type 2'],
-      allergies: ['Penicillin'],
-      emergencyContact: 'Jane Smith (+1 234-567-8901)'
-    },
-    {
-      id: 2,
-      name: 'Emily Davis',
-      age: 28,
-      gender: 'Female',
-      email: 'emily.davis@email.com',
-      phone: '+1 234-567-8901',
-      lastVisit: '2024-01-10',
-      nextAppointment: null,
-      status: 'active',
-      primaryDoctor: 'Dr. Emily Davis',
-      medicalHistory: ['Asthma'],
-      allergies: ['Dust', 'Pollen'],
-      emergencyContact: 'Mike Davis (+1 234-567-8902)'
-    },
-    {
-      id: 3,
-      name: 'Michael Chen',
-      age: 42,
-      gender: 'Male',
-      email: 'michael.chen@email.com',
-      phone: '+1 234-567-8902',
-      lastVisit: '2024-01-05',
-      nextAppointment: '2024-01-25',
-      status: 'active',
-      primaryDoctor: 'Dr. Michael Wilson',
-      medicalHistory: ['Heart Disease', 'High Cholesterol'],
-      allergies: ['Shellfish'],
-      emergencyContact: 'Lisa Chen (+1 234-567-8903)'
-    },
-    {
-      id: 4,
-      name: 'Sarah Brown',
-      age: 31,
-      gender: 'Female',
-      email: 'sarah.brown@email.com',
-      phone: '+1 234-567-8903',
-      lastVisit: '2024-01-12',
-      nextAppointment: null,
-      status: 'inactive',
-      primaryDoctor: 'Dr. Sarah Johnson',
-      medicalHistory: ['Migraine'],
-      allergies: ['None'],
-      emergencyContact: 'Tom Brown (+1 234-567-8904)'
-    }
-  ];
+  // Fetch clinic patients data
+  useEffect(() => {
+    const fetchPatientsData = async () => {
+      try {
+        setLoading(true);
+        
+        // Get current user and clinic ID
+        const currentUser = await roleBasedAuthService.getCurrentUser();
+        if (!currentUser || currentUser.role !== 'clinic') {
+          return;
+        }
+
+        const clinicResult = await clinicService.getClinicByUserId(currentUser.user.id);
+        if (clinicResult.success && clinicResult.clinic) {
+          const clinicId = clinicResult.clinic.id;
+          setClinicId(clinicId);
+
+          // Fetch patients
+          const patientsResult = await clinicDashboardService.getClinicPatients(clinicId);
+          if (patientsResult.success && patientsResult.patients) {
+            setPatients(patientsResult.patients);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching patients data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatientsData();
+  }, []);
 
   const filters = [
     { id: 'all', label: 'All Patients' },
@@ -83,7 +59,8 @@ export const ClinicPatients: React.FC = () => {
   ];
 
   const filteredPatients = patients.filter(patient => {
-    const matchesSearch = patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const patientName = `${patient.first_name} ${patient.last_name}`;
+    const matchesSearch = patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          patient.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = selectedFilter === 'all' || 
                          patient.status === selectedFilter ||
@@ -92,9 +69,22 @@ export const ClinicPatients: React.FC = () => {
     return matchesSearch && matchesFilter;
   });
 
-  const handleViewPatient = (patient: any) => {
+  const handleViewPatient = (patient: PatientRecord) => {
     setSelectedPatient(patient);
     setShowPatientModal(true);
+  };
+
+  // Helper function to calculate age
+  const calculateAge = (dateOfBirth: string | undefined): number => {
+    if (!dateOfBirth) return 0;
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   };
 
   const getStatusColor = (status: string) => {
@@ -107,6 +97,19 @@ export const ClinicPatients: React.FC = () => {
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center min-h-96">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading patients...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -154,75 +157,90 @@ export const ClinicPatients: React.FC = () => {
 
       {/* Patients List */}
       <div className="space-y-4">
-        {filteredPatients.map((patient) => (
-          <Card key={patient.id} className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <User className="h-6 w-6 text-blue-600" />
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {patient.name}
-                      </h3>
-                      <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(patient.status)}`}>
-                        {patient.status}
-                      </span>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                      <div className="flex items-center space-x-2">
-                        <User size={16} />
-                        <span>{patient.age} years old • {patient.gender}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Phone size={16} />
-                        <span>{patient.phone}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Mail size={16} />
-                        <span>{patient.email}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Calendar size={16} />
-                        <span>Last visit: {patient.lastVisit}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-700">
-                        <strong>Primary Doctor:</strong> {patient.primaryDoctor}
-                      </p>
-                      {patient.nextAppointment && (
-                        <p className="text-sm text-blue-600">
-                          <strong>Next Appointment:</strong> {patient.nextAppointment}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewPatient(patient)}
-                  >
-                    <Eye size={16} className="mr-1" />
-                    View Details
-                  </Button>
-                  
-                  <Button variant="outline" size="sm">
-                    <MoreHorizontal size={16} />
-                  </Button>
-                </div>
-              </div>
+        {filteredPatients.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-gray-500">
+              <User className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>No patients found</p>
+              <p className="text-sm">Patients will appear here after they book appointments with your clinic.</p>
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          filteredPatients.map((patient) => {
+            const patientAge = calculateAge(patient.date_of_birth);
+            const patientName = `${patient.first_name} ${patient.last_name}`;
+            
+            return (
+              <Card key={patient.id} className="hover:shadow-lg transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <User className="h-6 w-6 text-blue-600" />
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {patientName}
+                          </h3>
+                          <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(patient.status)}`}>
+                            {patient.status}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                          <div className="flex items-center space-x-2">
+                            <User size={16} />
+                            <span>{patientAge > 0 ? `${patientAge} years old` : 'Age unknown'} • {patient.gender || 'Gender not specified'}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Phone size={16} />
+                            <span>{patient.phone || 'No phone number'}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Mail size={16} />
+                            <span>{patient.email}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Calendar size={16} />
+                            <span>Last visit: {patient.lastVisit || 'No visits yet'}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-2">
+                          <p className="text-sm text-gray-700">
+                            <strong>Primary Doctor:</strong> {patient.primaryDoctor || 'Not assigned'}
+                          </p>
+                          {patient.nextAppointment && (
+                            <p className="text-sm text-blue-600">
+                              <strong>Next Appointment:</strong> {new Date(patient.nextAppointment).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewPatient(patient)}
+                      >
+                        <Eye size={16} className="mr-1" />
+                        View Details
+                      </Button>
+                      
+                      <Button variant="outline" size="sm">
+                        <MoreHorizontal size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
       </div>
 
       {/* Patient Details Modal */}
@@ -240,15 +258,15 @@ export const ClinicPatients: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
                   <p className="text-sm text-gray-600">Name</p>
-                  <p className="font-medium">{selectedPatient.name}</p>
+                  <p className="font-medium">{selectedPatient.first_name} {selectedPatient.last_name}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Age</p>
-                  <p className="font-medium">{selectedPatient.age} years old</p>
+                  <p className="font-medium">{calculateAge(selectedPatient.date_of_birth)} years old</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Gender</p>
-                  <p className="font-medium">{selectedPatient.gender}</p>
+                  <p className="font-medium">{selectedPatient.gender || 'Not specified'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Status</p>
@@ -258,7 +276,7 @@ export const ClinicPatients: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Phone</p>
-                  <p className="font-medium">{selectedPatient.phone}</p>
+                  <p className="font-medium">{selectedPatient.phone || 'Not provided'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Email</p>
@@ -274,9 +292,9 @@ export const ClinicPatients: React.FC = () => {
                 <div>
                   <h5 className="font-medium text-gray-900 mb-2">Medical History</h5>
                   <div className="bg-gray-50 p-3 rounded-lg">
-                    {selectedPatient.medicalHistory.length > 0 ? (
+                    {selectedPatient.medical_history && selectedPatient.medical_history.length > 0 ? (
                       <ul className="space-y-1">
-                        {selectedPatient.medicalHistory.map((condition: string, index: number) => (
+                        {selectedPatient.medical_history.map((condition: string, index: number) => (
                           <li key={index} className="text-sm text-gray-700">• {condition}</li>
                         ))}
                       </ul>
@@ -289,7 +307,7 @@ export const ClinicPatients: React.FC = () => {
                 <div>
                   <h5 className="font-medium text-gray-900 mb-2">Allergies</h5>
                   <div className="bg-gray-50 p-3 rounded-lg">
-                    {selectedPatient.allergies.length > 0 ? (
+                    {selectedPatient.allergies && selectedPatient.allergies.length > 0 ? (
                       <ul className="space-y-1">
                         {selectedPatient.allergies.map((allergy: string, index: number) => (
                           <li key={index} className="text-sm text-gray-700">• {allergy}</li>
@@ -309,21 +327,26 @@ export const ClinicPatients: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
                   <p className="text-sm text-gray-600">Primary Doctor</p>
-                  <p className="font-medium">{selectedPatient.primaryDoctor}</p>
+                  <p className="font-medium">{selectedPatient.primaryDoctor || 'Not assigned'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Last Visit</p>
-                  <p className="font-medium">{selectedPatient.lastVisit}</p>
+                  <p className="font-medium">{selectedPatient.lastVisit ? new Date(selectedPatient.lastVisit).toLocaleDateString() : 'No visits yet'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Next Appointment</p>
                   <p className="font-medium">
-                    {selectedPatient.nextAppointment || 'No upcoming appointments'}
+                    {selectedPatient.nextAppointment ? new Date(selectedPatient.nextAppointment).toLocaleDateString() : 'No upcoming appointments'}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Emergency Contact</p>
-                  <p className="font-medium">{selectedPatient.emergencyContact}</p>
+                  <p className="font-medium">
+                    {selectedPatient.emergency_contact_name && selectedPatient.emergency_contact_phone 
+                      ? `${selectedPatient.emergency_contact_name} (${selectedPatient.emergency_contact_phone})`
+                      : 'Not provided'
+                    }
+                  </p>
                 </div>
               </div>
             </div>
