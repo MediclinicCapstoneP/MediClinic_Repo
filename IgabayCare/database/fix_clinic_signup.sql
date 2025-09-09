@@ -165,6 +165,8 @@ SELECT
     number_of_doctors,
     number_of_staff,
     description,
+    latitude,
+    longitude,
     created_at
 FROM clinics 
 WHERE status = 'approved';
@@ -261,6 +263,8 @@ RETURNS TABLE (
     number_of_doctors integer,
     number_of_staff integer,
     description text,
+    latitude numeric,
+    longitude numeric,
     status text,
     created_at timestamptz,
     updated_at timestamptz
@@ -285,6 +289,8 @@ BEGIN
         c.number_of_doctors,
         c.number_of_staff,
         c.description,
+        c.latitude,
+        c.longitude,
         c.status,
         c.created_at,
         c.updated_at
@@ -327,6 +333,8 @@ RETURNS TABLE (
     state text,
     specialties text[],
     services text[],
+    latitude numeric,
+    longitude numeric,
     status text
 ) AS $$
 BEGIN
@@ -341,6 +349,8 @@ BEGIN
         c.state,
         c.specialties,
         c.services,
+        c.latitude,
+        c.longitude,
         c.status
     FROM clinics c
     WHERE c.status = 'approved'

@@ -1140,8 +1140,8 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
             isOpen={showMapModal}
             onClose={() => setShowMapModal(false)}
             onLocationSelect={handleLocationSelect}
-            initialLatitude={formData.latitude || 14.5995}
-            initialLongitude={formData.longitude || 120.9842}
+            initialLatitude={formData.latitude || 11.049430}
+            initialLongitude={formData.longitude || 124.005128}
             title="Select Your Clinic Location"
           />
         </div>

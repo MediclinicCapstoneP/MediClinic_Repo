@@ -249,6 +249,8 @@ export const roleBasedAuthService = {
             number_of_doctors: data.number_of_doctors || 0,
             number_of_staff: data.number_of_staff || 0,
             description: data.description,
+            latitude: data.latitude,
+            longitude: data.longitude,
             status: "approved" // Set status to approved for new registrations
           }
         };
@@ -338,6 +340,8 @@ export const roleBasedAuthService = {
           number_of_doctors: registrationData.number_of_doctors || 0,
           number_of_staff: registrationData.number_of_staff || 0,
           description: registrationData.description,
+          latitude: registrationData.latitude,
+          longitude: registrationData.longitude,
         });
 
         if (!clinicResult.success) {
