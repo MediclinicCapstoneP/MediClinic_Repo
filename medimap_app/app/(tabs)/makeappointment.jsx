@@ -1,14 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from 'expo-router';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
+import ServicesSelector from '../../components/ServicesSelector';
+import { dataService } from '../../services/dataService';
 
 export default function MakeAppointmentScreen() {
   const [selectedClinic, setSelectedClinic] = useState(null);
@@ -18,6 +21,8 @@ export default function MakeAppointmentScreen() {
   const [time, setTime] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [servicesOptions, setServicesOptions] = useState([]);
+  const [selectedServices, setSelectedServices] = useState([]);
 
   const clinics = [
     { id: 1, name: "Bogo Clinical Laboratory", location: "San Vicente, Bogo City (Behind PNB)" },
@@ -30,6 +35,44 @@ export default function MakeAppointmentScreen() {
     { id: 2, name: "Bank Transfer", icon: "card" },
     { id: 3, name: "Cash on Clinic", icon: "cash" },
   ];
+
+  // Load services for selected clinic
+  useEffect(() => {
+    const loadClinicServices = async () => {
+      if (!selectedClinic) {
+        setServicesOptions([]);
+        setSelectedServices([]);
+        return;
+      }
+
+      try {
+        // For demo purposes, use mock services since we're using hardcoded clinics
+        // In a real app, you'd fetch from the database using dataService.getClinicById()
+        const mockServices = {
+          1: ['Laboratory Tests', 'Blood Work', 'X-Ray', 'Medical Consultation'],
+          2: ['General Check-up', 'Specialist Consultation', 'Vaccination', 'Health Screening'],
+          3: ['Dental Check-up', 'General Consultation', 'Physical Therapy', 'Medical Certificate']
+        };
+        
+        setServicesOptions(mockServices[selectedClinic] || []);
+        setSelectedServices([]);
+      } catch (error) {
+        console.error('Error loading clinic services:', error);
+        setServicesOptions([]);
+      }
+    };
+
+    loadClinicServices();
+  }, [selectedClinic]);
+
+  // Helper functions
+  const toggleServiceSelection = (service) => {
+    setSelectedServices(prev => 
+      prev.includes(service) 
+        ? prev.filter(s => s !== service) 
+        : [...prev, service]
+    );
+  };
 
   // Success Screen
   if (isConfirmed) {
@@ -49,6 +92,11 @@ export default function MakeAppointmentScreen() {
         <Text style={styles.successDetails}>
           Payment: {selectedPayment && payments.find((p) => p.id === selectedPayment)?.name}
         </Text>
+        {selectedServices.length > 0 && (
+          <Text style={styles.successDetails}>
+            Services: {selectedServices.join(', ')}
+          </Text>
+        )}
         <TouchableOpacity
           style={styles.doneButton}
           onPress={() => router.push('/(tabs)/homepage')}
@@ -162,7 +210,16 @@ export default function MakeAppointmentScreen() {
         </>
       )}
 
-      {/* Step 4: Payment Method */}
+      {/* Step 4: Services Selection */}
+      {selectedClinic && date && time && (
+        <ServicesSelector
+          servicesOptions={servicesOptions}
+          selectedServices={selectedServices}
+          onServiceToggle={toggleServiceSelection}
+        />
+      )}
+
+      {/* Step 5: Payment Method */}
       {selectedClinic && date && time && (
         <>
           <Text style={styles.sectionTitle}>Payment Method</Text>
@@ -196,11 +253,25 @@ export default function MakeAppointmentScreen() {
         </>
       )}
 
-      {/* Step 5: Confirm Booking */}
+      {/* Step 6: Confirm Booking */}
       {selectedClinic && date && time && selectedPayment && (
         <TouchableOpacity
           style={styles.confirmButton}
-          onPress={() => setIsConfirmed(true)}
+          onPress={() => {
+            // Show confirmation with selected services if any
+            if (selectedServices.length > 0) {
+              Alert.alert(
+                'Confirm Appointment',
+                `You have selected the following services:\n\n${selectedServices.join('\n• ')}\n\nProceed with booking?`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Confirm', onPress: () => setIsConfirmed(true) },
+                ]
+              );
+            } else {
+              setIsConfirmed(true);
+            }
+          }}
         >
           <Text style={styles.confirmText}>Confirm Booking</Text>
         </TouchableOpacity>

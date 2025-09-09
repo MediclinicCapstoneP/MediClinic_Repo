@@ -1,4 +1,4 @@
-import { StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { useState, useEffect } from "react";
 import { useRouter } from 'expo-router';
@@ -16,6 +16,10 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const router = useRouter();
 
   // Check if user is already authenticated
@@ -80,9 +84,44 @@ export default function LoginScreen() {
     }
   };
 
-  const handleSignUp = () => {
-    // Navigate to sign up screen (you can create this later)
-    Alert.alert('Sign Up', 'Sign up functionality coming soon!');
+  const handleSignUp = async () => {
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await authService.patientSignUp({ 
+        email, 
+        password, 
+        firstName, 
+        lastName 
+      });
+      
+      if (result.success) {
+        Alert.alert('Success', 'Account created successfully! Please check your email to verify your account.', [
+          { text: 'OK', onPress: () => setIsSignUp(false) }
+        ]);
+      } else {
+        Alert.alert('Error', result.error || 'Sign up failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred');
+      console.error('Sign up error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (isCheckingAuth) {
@@ -95,7 +134,14 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+      >
       {/* App Logo / Title */}
       <Text style={styles.logo}>
         <Text style={{ color: "#003399", fontWeight: "bold" }}>iGabay</Text>
@@ -104,7 +150,34 @@ export default function LoginScreen() {
         <Text style={{ color: "green" }}>🍀</Text>
       </Text>
 
-      <Text style={styles.loginText}>Log in</Text>
+      <Text style={styles.loginText}>{isSignUp ? 'Sign Up' : 'Log in'}</Text>
+
+      {/* Sign Up Fields */}
+      {isSignUp && (
+        <>
+          <View style={styles.inputContainer}>
+            <Ionicons name="person" size={20} color="black" style={styles.icon} />
+            <TextInput
+              style={styles.input}
+              placeholder="First Name"
+              value={firstName}
+              onChangeText={setFirstName}
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="person" size={20} color="black" style={styles.icon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Last Name"
+              value={lastName}
+              onChangeText={setLastName}
+              autoCapitalize="words"
+            />
+          </View>
+        </>
+      )}
 
       {/* Email Input */}
       <View style={styles.inputContainer}>
@@ -136,31 +209,55 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity onPress={handleForgotPassword}>
-        <Text style={styles.forgotPassword}>Forgot Password</Text>
-      </TouchableOpacity>
+      {/* Confirm Password for Sign Up */}
+      {isSignUp && (
+        <View style={styles.inputContainer}>
+          <FontAwesome name="lock" size={20} color="black" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Confirm Password"
+            secureTextEntry={!showPassword}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
+        </View>
+      )}
 
-      {/* Sign In Button */}
+      {!isSignUp && (
+        <TouchableOpacity onPress={handleForgotPassword}>
+          <Text style={styles.forgotPassword}>Forgot Password</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Sign In/Up Button */}
       <TouchableOpacity 
         style={[styles.signInBtn, loading && styles.disabledBtn]} 
-        onPress={handleSignIn}
+        onPress={isSignUp ? handleSignUp : handleSignIn}
         disabled={loading}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.signInText}>Sign in</Text>
+          <Text style={styles.signInText}>{isSignUp ? 'Create Account' : 'Sign in'}</Text>
         )}
       </TouchableOpacity>
 
-      {/* Sign Up */}
+      {/* Toggle Sign Up/In */}
       <View style={styles.signupContainer}>
-        <Text>Dont have an Account? </Text>
-        <TouchableOpacity onPress={handleSignUp}>
-          <Text style={styles.signupText}>Sign up</Text>
+        <Text>{isSignUp ? 'Already have an account? ' : 'Dont have an Account? '}</Text>
+        <TouchableOpacity onPress={() => {
+          setIsSignUp(!isSignUp);
+          setFirstName('');
+          setLastName('');
+          setConfirmPassword('');
+          setEmail('');
+          setPassword('');
+        }}>
+          <Text style={styles.signupText}>{isSignUp ? 'Sign in' : 'Sign up'}</Text>
         </TouchableOpacity>
       </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -168,6 +265,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
