@@ -10,7 +10,6 @@ import {
 import { Button } from '../../components/ui/Button';
 import { authService } from '../../features/auth/utils/authService';
 import PatientHome from './PatientHome';
-import { NearbyClinic } from './NearbyClinic';
 import { PatientProfileComponent } from './PatientProfile';
 import { PatientAppointments } from './PatientAppointments';
 import {PatientHistory} from './PatientHistory';
@@ -63,12 +62,6 @@ const PatientDashboard: React.FC = () => {
       href: '#'
     },
     {
-      id: 'nearby',
-      label: 'Nearby',
-      icon: MapPin,
-      href: '#'
-    },
-    {
       id: 'appointments',
       label: 'Appointments',
       icon: Calendar,
@@ -94,8 +87,6 @@ const PatientDashboard: React.FC = () => {
     switch (activeTab) {
       case 'home':
         return <PatientHome onNavigate={setActiveTab} />;
-      case 'nearby':
-        return <NearbyClinic />;
       case 'appointments':
         return <PatientAppointments onNavigate={setActiveTab} />;
       case 'history':

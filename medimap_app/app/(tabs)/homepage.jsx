@@ -1,31 +1,99 @@
 import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { dataService } from '../../services/dataService';
+import { authService } from '../../services/authService';
 
 
-function ProfileHeader() {
+function ProfileHeader({ userName, onProfilePress }) {
+  // Get the first letter of the first name for profile avatar
+  const getInitials = (name) => {
+    return name ? name.charAt(0).toUpperCase() : 'U';
+  };
+
   return (
     <View style={styles.header}>
       <Text style={styles.logo}>
         <Text style={{color: 'blue'}}>iGabayAti</Text>
         <Text style={{color: 'black'}}>Care</Text>🍀
       </Text>
-      <TouchableOpacity style={styles.profileButton}>
-        <Text style={styles.profileButtonText}>A</Text>
+      <TouchableOpacity style={styles.profileButton} onPress={onProfilePress}>
+        <Text style={styles.profileButtonText}>{getInitials(userName)}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 export default function HomeScreen() {
+  const { user, loading, signOut } = useAuth();
+  const [patientName, setPatientName] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!loading) {
+      loadUserData();
+    }
+  }, [loading]);
+
+  const loadUserData = async () => {
+    try {
+      if (!user) {
+        // If not authenticated, redirect to login
+        router.replace('/');
+        return;
+      }
+
+      // Try to get patient profile
+      const profile = user.profile;
+      if (profile && 'first_name' in profile) {
+        setPatientName(profile.first_name + ' ' + (profile.last_name || ''));
+      } else {
+        // Fallback: fetch profile by user id
+        const result = await dataService.getPatientProfile(user.user.id);
+        if (result.success && result.data) {
+          setPatientName(result.data.first_name + ' ' + (result.data.last_name || ''));
+        } else {
+          setPatientName(user.user.email || 'User');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      setPatientName('User');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProfilePress = () => {
+    Alert.alert(
+      'Profile Options',
+      'What would you like to do?',
+      [
+        { text: 'Logout', onPress: async () => { await signOut(); router.replace('/'); } },
+        { text: 'Close', style: 'cancel' }
+      ]
+    );
+  };
+
+  if (loading || isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#1a4fb4" />
+        <Text style={{ marginTop: 10, color: '#666' }}>Loading your homepage...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{flex: 1}}>
       <ScrollView style={styles.container}>
         {/* Header */}
-        <ProfileHeader />
+        <ProfileHeader userName={patientName} onProfilePress={handleProfilePress} />
 
         <Text style={styles.greeting}>👋 Hello!</Text>
-        <Text style={styles.userName}>Louis Argawanon</Text>
+        <Text style={styles.userName}>{patientName || 'Welcome'}</Text>
 
         {/* Search Bar */}
         <View style={styles.searchBox}>

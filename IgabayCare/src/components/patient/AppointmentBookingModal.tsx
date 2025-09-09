@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { AppointmentService } from '../../features/auth/utils/appointmentService';
+import { appointmentBookingService } from '../../features/auth/utils/appointmentBookingService';
+import { appointmentManagementAPI } from '../../features/auth/utils/appointmentManagementAPI';
 import { supabase } from '../../supabaseClient';
-import type { CreateAppointmentData, AppointmentType } from '../../types/appointments';
+import type { AppointmentType } from '../../types/appointments';
 import { PaymentForm } from './PaymentForm';
 import { PayMongoGCashPayment } from './PayMongoGCashPayment';
 import type { PaymentResponse } from '../../types/payment';
-import { X, ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Clock, CheckCircle } from 'lucide-react';
 
 interface AppointmentBookingModalProps {
   isOpen: boolean;
@@ -38,14 +39,17 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(false);
-  const [bookingLoading, setBookingLoading] = useState(false);
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('consultation');
   const [patientNotes, setPatientNotes] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [showGCashPayment, setShowGCashPayment] = useState(false);
   const [appointmentData, setAppointmentData] = useState<any>(null);
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [patientData, setPatientData] = useState<any>(null);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+
+  // Services selection state
+  const [servicesOptions, setServicesOptions] = useState<string[]>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
   // -------- Calendar helpers ----------
   const generateCalendarDays = () => {
@@ -94,43 +98,6 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   };
 
   // -------- Time slots ----------
-  const generateTimeSlots = async (date: Date): Promise<TimeSlot[]> => {
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      console.error("Invalid date passed to generateTimeSlots:", date);
-      return [];
-    }
-
-    try {
-      const dateStr = date.toISOString().split('T')[0];
-      const { data: existingAppointments } = await supabase
-        .from('appointments')
-        .select('appointment_time')
-        .eq('clinic_id', clinic.id)
-        .eq('appointment_date', dateStr)
-        .in('status', ['scheduled', 'confirmed']);
-
-      const bookedTimes = new Set(
-        existingAppointments?.map(apt => apt.appointment_time.substring(0, 5)) || []
-      );
-
-      const slots = [
-        '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-        '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
-      ];
-
-      return slots.map(time => ({
-        time,
-        available: !bookedTimes.has(time),
-        formatted: new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
-          hour: 'numeric', minute: '2-digit', hour12: true
-        })
-      }));
-    } catch (error) {
-      console.error('Error generating time slots:', error);
-      return [];
-    }
-  };
-
   const loadTimeSlots = async (date: Date) => {
     if (!(date instanceof Date) || isNaN(date.getTime())) {
       console.error("Invalid date in loadTimeSlots:", date);
@@ -140,9 +107,11 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
     setLoading(true);
     try {
-      const slots = await generateTimeSlots(date);
+      const dateStr = date.toISOString().split('T')[0];
+      const slots = await appointmentBookingService.getAvailableTimeSlots(clinic.id, dateStr);
       setAvailableTimeSlots(slots);
-    } catch {
+    } catch (error) {
+      console.error('Error loading time slots:', error);
       setAvailableTimeSlots([]);
     } finally {
       setLoading(false);
@@ -163,61 +132,50 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const handleBookAppointment = async () => {
     if (!selectedDate || !selectedTime) return;
 
-    setBookingLoading(true);
+    setLoading(true);
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
-      const appointmentData: CreateAppointmentData = {
+      
+      const composedNotes = buildComposedNotes(patientNotes, selectedServices);
+
+      const result = await appointmentBookingService.createAppointment({
         patient_id: patientId,
         clinic_id: clinic.id,
         appointment_date: dateStr,
         appointment_time: selectedTime + ':00',
         appointment_type: appointmentType,
+        patient_notes: composedNotes,
         status: 'scheduled'
-      };
+      });
 
-      const result = await AppointmentService.createAppointment(appointmentData);
-      if (result) {
-        await createAppointmentNotification(patientId, clinic.clinic_name, selectedDate, selectedTime);
+      if (result.success) {
+        // Create notification
+        await appointmentBookingService.createAppointmentNotification(
+          patientId,
+          clinic.clinic_name,
+          dateStr,
+          selectedTime
+        );
+
+        setBookingSuccess(true);
         onAppointmentBooked?.();
-        onClose();
-        setSelectedDate(null);
-        setSelectedTime('');
-        setPatientNotes('');
+        
+        // Reset form after short delay to show success
+        setTimeout(() => {
+          onClose();
+          setSelectedDate(null);
+          setSelectedTime('');
+          setPatientNotes('');
+          setBookingSuccess(false);
+        }, 2000);
       } else {
-        alert('Failed to book appointment. Please try again.');
+        alert(`Failed to book appointment: ${result.error}`);
       }
     } catch (error) {
       console.error('Error booking appointment:', error);
       alert('Failed to book appointment. Please try again.');
     } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  const createAppointmentNotification = async (
-    patientId: string,
-    clinicName: string,
-    appointmentDate: Date,
-    appointmentTime: string
-  ) => {
-    try {
-      const formattedDate = appointmentDate.toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
-      const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
-        hour: 'numeric', minute: '2-digit', hour12: true
-      });
-
-      await supabase.from('notifications').insert([{
-        user_id: patientId,
-        user_type: 'patient',
-        title: 'Appointment Confirmed',
-        message: `Your appointment at ${clinicName} is scheduled for ${formattedDate} at ${formattedTime}`,
-        type: 'appointment_confirmation',
-        is_read: false
-      }]);
-    } catch (error) {
-      console.error('Error creating notification:', error);
+      setLoading(false);
     }
   };
 
@@ -233,22 +191,81 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
     setShowGCashPayment(true);
   };
 
-  const handleProceedToPayment = () => {
-    if (!selectedDate || !selectedTime) return;
-    setAppointmentData({ appointment_id: `temp_${Date.now()}`, ...calculateAppointmentCost() });
-    setShowPayment(true);
-  };
 
-  const handlePaymentComplete = (paymentResponse: PaymentResponse) => {
-    setPaymentCompleted(true);
+  const handlePaymentComplete = async (paymentResponse: PaymentResponse) => {
     setShowPayment(false);
-    handleBookAppointment();
+    
+    if (!selectedDate || !selectedTime) return;
+    
+    // Use the comprehensive appointment booking API with payment
+    const dateStr = selectedDate.toISOString().split('T')[0];
+    const composedNotes = buildComposedNotes(patientNotes, selectedServices);
+    const result = await appointmentManagementAPI.completeAppointmentBooking({
+      patientId,
+      clinicId: clinic.id,
+      appointmentDate: dateStr,
+      appointmentTime: selectedTime + ':00',
+      appointmentType,
+      patientNotes: composedNotes,
+      paymentMethod: 'credit_card',
+      paymentProvider: 'paymongo',
+      externalPaymentId: (paymentResponse as any).payment_id || 'manual_payment',
+      totalAmount: calculateAppointmentCost().total_amount,
+      consultationFee: calculateAppointmentCost().consultation_fee,
+      bookingFee: calculateAppointmentCost().booking_fee
+    });
+
+    if (result.success) {
+      setBookingSuccess(true);
+      onAppointmentBooked?.();
+      setTimeout(() => {
+        onClose();
+        setSelectedDate(null);
+        setSelectedTime('');
+        setPatientNotes('');
+        setBookingSuccess(false);
+      }, 2000);
+    } else {
+      alert(`Payment confirmation failed: ${result.error}`);
+    }
   };
 
-  const handleGCashPaymentComplete = (paymentIntentId: string) => {
-    setPaymentCompleted(true);
+  const handleGCashPaymentComplete = async (paymentIntentId: string) => {
     setShowGCashPayment(false);
-    handleBookAppointment();
+    
+    if (!selectedDate || !selectedTime) return;
+    
+    // Use the comprehensive appointment booking API with GCash payment
+    const dateStr = selectedDate.toISOString().split('T')[0];
+    const composedNotes = buildComposedNotes(patientNotes, selectedServices);
+    const result = await appointmentManagementAPI.completeAppointmentBooking({
+      patientId,
+      clinicId: clinic.id,
+      appointmentDate: dateStr,
+      appointmentTime: selectedTime + ':00',
+      appointmentType,
+      patientNotes: composedNotes,
+      paymentMethod: 'gcash',
+      paymentProvider: 'paymongo',
+      externalPaymentId: paymentIntentId,
+      totalAmount: calculateAppointmentCost().total_amount,
+      consultationFee: calculateAppointmentCost().consultation_fee,
+      bookingFee: calculateAppointmentCost().booking_fee
+    });
+
+    if (result.success) {
+      setBookingSuccess(true);
+      onAppointmentBooked?.();
+      setTimeout(() => {
+        onClose();
+        setSelectedDate(null);
+        setSelectedTime('');
+        setPatientNotes('');
+        setBookingSuccess(false);
+      }, 2000);
+    } else {
+      alert(`Payment confirmation failed: ${result.error}`);
+    }
   };
 
   const handleGCashPaymentError = (error: string) => {
@@ -271,6 +288,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
   useEffect(() => {
     if (isOpen) {
+      // Load patient data for payment modal
       supabase.auth.getUser().then(({ data: user }) => {
         if (user?.user) {
           supabase.from('patients').select('*').eq('user_id', user.user.id).single().then(({ data: patient }) => {
@@ -278,13 +296,48 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
           });
         }
       });
+
+      // Load clinic services to offer as selectable options
+      if (clinic?.id) {
+        supabase
+          .from('clinics')
+          .select('services, custom_services')
+          .eq('id', clinic.id)
+          .single()
+          .then(({ data }) => {
+            const combined = [
+              ...(Array.isArray(data?.services) ? data!.services : []),
+              ...(Array.isArray(data?.custom_services) ? data!.custom_services : []),
+            ]
+              .map((s: any) => (typeof s === 'string' ? s : String(s)))
+              .filter(Boolean);
+            setServicesOptions(Array.from(new Set(combined)).sort());
+          })
+          .catch(() => setServicesOptions([]));
+      }
+
+      // Reset selections when opening
+      setSelectedServices([]);
     }
-  }, [isOpen]);
+  }, [isOpen, clinic?.id]);
 
   if (!isOpen) return null;
 
   const calendarDays = generateCalendarDays();
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Helpers
+  const toggleServiceSelection = (service: string) => {
+    setSelectedServices((prev) => (
+      prev.includes(service) ? prev.filter((s) => s !== service) : [...prev, service]
+    ));
+  };
+
+  const buildComposedNotes = (notes: string, services: string[]) => {
+    if (!services || services.length === 0) return notes || '';
+    const header = 'Requested services: ' + services.join(', ');
+    return notes ? `${header}\n${notes}` : header;
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
@@ -432,6 +485,31 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Services Needed (select all that apply)
+                          </label>
+                          {servicesOptions.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {servicesOptions.map((svc) => {
+                                const selected = selectedServices.includes(svc);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={svc}
+                                    onClick={() => toggleServiceSelection(svc)}
+                                    className={`px-3 py-1 rounded-full border text-xs sm:text-sm transition-colors ${
+                                      selected ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'
+                                    }`}
+                                  >
+                                    {svc}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 mb-3">No specific services listed by the clinic. You may describe your needs below.</p>
+                          )}
+
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
                             Notes (Optional)
                           </label>
                           <textarea
@@ -467,14 +545,30 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
                           <Button variant="outline" onClick={onClose}>
                             Cancel
                           </Button>
-                          <Button
-                            onClick={handleBookAppointment}
-                            disabled={!selectedDate || !selectedTime || loading}
-                            loading={loading}
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            Book Appointment
-                          </Button>
+                          {bookingSuccess ? (
+                            <div className="flex items-center text-green-600">
+                              <CheckCircle className="h-5 w-5 mr-2" />
+                              <span>Appointment Booked!</span>
+                            </div>
+                          ) : (
+                            <>
+                              <Button
+                                onClick={handleProceedToGCashPayment}
+                                disabled={!selectedDate || !selectedTime || loading}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                Pay with GCash (₱{calculateAppointmentCost().total_amount})
+                              </Button>
+                              <Button
+                                onClick={handleBookAppointment}
+                                disabled={!selectedDate || !selectedTime || loading}
+                                loading={loading}
+                                className="bg-blue-600 hover:bg-blue-700"
+                              >
+                                Book Without Payment
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}

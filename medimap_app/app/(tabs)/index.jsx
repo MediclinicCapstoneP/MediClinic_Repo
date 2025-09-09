@@ -1,19 +1,98 @@
-import { StyleSheet } from 'react-native';
-
-
+import { StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from 'expo-router';
 import {
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
+import { authService } from '../../services/authService';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const router = useRouter();
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        // User is already authenticated, redirect to homepage
+        router.replace('/homepage');
+      }
+    } catch (error) {
+      console.log('Error checking auth status:', error);
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  };
+
+  const handleSignIn = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await authService.patientSignIn({ email, password });
+      
+      if (result.success) {
+        Alert.alert('Success', 'Logged in successfully!', [
+          { text: 'OK', onPress: () => router.replace('/homepage') }
+        ]);
+      } else {
+        Alert.alert('Error', result.error || 'Login failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred');
+      console.error('Login error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email address first');
+      return;
+    }
+
+    try {
+      const result = await authService.resetPassword(email);
+      if (result.success) {
+        Alert.alert('Success', 'Password reset email sent! Check your inbox.');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to send reset email');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred');
+    }
+  };
+
+  const handleSignUp = () => {
+    // Navigate to sign up screen (you can create this later)
+    Alert.alert('Sign Up', 'Sign up functionality coming soon!');
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#00BFFF" />
+        <Text style={styles.loadingText}>Checking authentication...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -57,19 +136,27 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity>
+      <TouchableOpacity onPress={handleForgotPassword}>
         <Text style={styles.forgotPassword}>Forgot Password</Text>
       </TouchableOpacity>
 
       {/* Sign In Button */}
-      <TouchableOpacity style={styles.signInBtn}>
-        <Text style={styles.signInText}>Sign in</Text>
+      <TouchableOpacity 
+        style={[styles.signInBtn, loading && styles.disabledBtn]} 
+        onPress={handleSignIn}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.signInText}>Sign in</Text>
+        )}
       </TouchableOpacity>
 
       {/* Sign Up */}
       <View style={styles.signupContainer}>
         <Text>Dont have an Account? </Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleSignUp}>
           <Text style={styles.signupText}>Sign up</Text>
         </TouchableOpacity>
       </View>
@@ -159,5 +246,17 @@ const styles = StyleSheet.create({
   signupText: {
     color: "#00BFFF",
     fontWeight: "bold",
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+    fontSize: 16,
+  },
+  disabledBtn: {
+    opacity: 0.6,
   },
 });
