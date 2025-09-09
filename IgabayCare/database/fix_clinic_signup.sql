@@ -27,11 +27,18 @@ CREATE TABLE IF NOT EXISTS public.clinics (
   description text,
   profile_picture_url text,
   profile_picture_path text,
+  latitude numeric(10,8),
+  longitude numeric(11,8),
   status text DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT clinics_pkey PRIMARY KEY (id)
 );
+
+-- Add latitude and longitude columns to existing clinics table if they don't exist
+ALTER TABLE public.clinics 
+ADD COLUMN IF NOT EXISTS latitude numeric(10,8),
+ADD COLUMN IF NOT EXISTS longitude numeric(11,8);
 
 -- 2. Drop existing RLS policies for clinics to recreate them
 DROP POLICY IF EXISTS "Clinics can view own profile" ON clinics;
