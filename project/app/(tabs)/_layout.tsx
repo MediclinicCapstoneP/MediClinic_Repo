@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity, Search, Hospital } from 'lucide-react-native';
+import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity, Search, Hospital, MapPin } from 'lucide-react-native';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,11 +109,11 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
-            name="profile/index"
+            name="map"
             options={{
-              title: 'Profile',
+              title: 'Map',
               tabBarIcon: ({ color }) => (
-                <User size={getResponsiveIconSize()} color={color} />
+                <MapPin size={getResponsiveIconSize()} color={color} />
               ),
             }}
           />
@@ -124,6 +124,10 @@ export default function TabLayout() {
           />
           <Tabs.Screen
             name="patients"
+            options={{ href: null }}
+          />
+          <Tabs.Screen
+            name="profile"
             options={{ href: null }}
           />
         </Tabs>
@@ -207,6 +211,10 @@ export default function TabLayout() {
           />
           <Tabs.Screen
             name="clinics"
+            options={{ href: null }}
+          />
+          <Tabs.Screen
+            name="map"
             options={{ href: null }}
           />
         </Tabs>

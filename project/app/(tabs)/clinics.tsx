@@ -18,6 +18,7 @@ import {
   Phone,
   ChevronRight,
 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { clinicService } from '@/services/clinicService';
 import { ClinicWithDetails } from '@/lib/supabase';
 import { AppointmentBookingModal } from '@/components/appointment/AppointmentBookingModal';
@@ -31,6 +32,7 @@ interface FilterState {
 }
 
 export default function ClinicsScreen() {
+  const router = useRouter();
   const [clinics, setClinics] = useState<ClinicWithDetails[]>([]);
   const [filteredClinics, setFilteredClinics] = useState<ClinicWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +154,12 @@ export default function ClinicsScreen() {
     setShowBookingModal(true);
   };
 
+  const handleViewOnMap = (clinic: ClinicWithDetails) => {
+    // Navigate to map and center on this clinic
+    router.push('/map');
+    // Note: You could pass clinic ID as a parameter to center the map on this specific clinic
+  };
+
   const renderClinicCard = (clinic: ClinicWithDetails) => (
     <View key={clinic.id} style={styles.clinicCard}>
       <View style={styles.clinicHeader}>
@@ -217,6 +225,14 @@ export default function ClinicsScreen() {
 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
+        <TouchableOpacity 
+          style={styles.mapButton}
+          onPress={() => handleViewOnMap(clinic)}
+        >
+          <MapPin size={16} color="#10B981" />
+          <Text style={styles.mapButtonText}>Map</Text>
+        </TouchableOpacity>
+        
         <TouchableOpacity style={styles.callButton}>
           <Phone size={16} color="#2563EB" />
           <Text style={styles.callButtonText}>Call</Text>
@@ -584,14 +600,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  mapButtonText: {
+    fontSize: 14,
+    color: '#10B981',
+    marginLeft: 4,
+  },
   callButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: '#F3F4F6',
     borderRadius: 8,
-    marginRight: 12,
+    marginRight: 8,
   },
   callButtonText: {
     fontSize: 14,

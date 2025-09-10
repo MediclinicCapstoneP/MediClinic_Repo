@@ -40,8 +40,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
           *,
           patient:patients(*),
           clinic:clinics(*),
-          doctor:doctors(*),
-          payment:payments(*)
+          doctor:doctors(*)
         `);
 
       // Apply role-based filtering
