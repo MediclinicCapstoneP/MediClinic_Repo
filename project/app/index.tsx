@@ -44,7 +44,7 @@ export default function SplashScreen() {
     );
     pulseAnimation.start();
 
-    // Navigate based on auth state after 3 seconds
+    // Navigate based on auth state after shorter delay
     const timer = setTimeout(() => {
       if (!loading) {
         if (user) {
@@ -60,7 +60,7 @@ export default function SplashScreen() {
           router.replace('/(auth)/login');
         }
       }
-    }, 3000);
+    }, 1500); // Reduced from 3000ms to 1500ms for faster navigation
 
     return () => {
       clearTimeout(timer);

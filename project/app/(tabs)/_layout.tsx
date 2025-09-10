@@ -2,9 +2,42 @@ import { Tabs } from 'expo-router';
 import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity } from 'lucide-react-native';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Dimensions, Platform } from 'react-native';
 
 export default function TabLayout() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  
+  // Get screen dimensions for responsive design
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const isTablet = screenWidth >= 768;
+  const isSmallScreen = screenWidth < 375;
+  
+  // Calculate responsive dimensions
+  const getResponsiveTabBarHeight = () => {
+    if (isTablet) return 80;
+    if (isSmallScreen) return 65;
+    return 70;
+  };
+  
+  const getResponsiveIconSize = () => {
+    if (isTablet) return 28;
+    if (isSmallScreen) return 20;
+    return 24;
+  };
+  
+  const getResponsiveFontSize = () => {
+    if (isTablet) return 14;
+    if (isSmallScreen) return 10;
+    return 12;
+  };
+  
+  const getResponsivePadding = () => {
+    if (isTablet) return 12;
+    if (isSmallScreen) return 6;
+    return 8;
+  };
 
   // Show different tabs based on user role
   const getTabsForRole = () => {
@@ -76,9 +109,10 @@ export default function TabLayout() {
             backgroundColor: '#FFFFFF',
             borderTopWidth: 1,
             borderTopColor: '#E5E7EB',
-            paddingTop: 8,
-            paddingBottom: 8,
-            height: 70,
+            paddingTop: getResponsivePadding(),
+            paddingBottom: Math.max(insets.bottom, getResponsivePadding()),
+            paddingHorizontal: isTablet ? 20 : 0,
+            height: getResponsiveTabBarHeight() + Math.max(insets.bottom, 0),
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.1,
@@ -86,9 +120,12 @@ export default function TabLayout() {
             elevation: 8,
           },
           tabBarLabelStyle: {
-            fontSize: 12,
+            fontSize: getResponsiveFontSize(),
             fontWeight: '500',
-            marginTop: 4,
+            marginTop: isSmallScreen ? 2 : 4,
+          },
+          tabBarIconStyle: {
+            marginBottom: isSmallScreen ? 2 : 4,
           },
         }}
       >
@@ -99,7 +136,7 @@ export default function TabLayout() {
             options={{
               title: tab.title,
               tabBarIcon: ({ size, color }) => (
-                <tab.icon size={size} color={color} />
+                <tab.icon size={getResponsiveIconSize()} color={color} />
               ),
               href: user && tab.allowedRoles.includes(user.role) ? undefined : null,
             }}

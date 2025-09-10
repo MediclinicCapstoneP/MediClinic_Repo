@@ -35,8 +35,8 @@ class ClinicService {
         .from('clinics')
         .select(`
           *,
-          services:clinic_services (
-            id, service_name, service_type, base_price, duration_minutes
+          clinic_services:clinic_services (
+            id, service_name, service_category, base_price, duration_minutes
           ),
           doctors (
             id, full_name, specialization, rating, profile_picture_url
@@ -159,8 +159,8 @@ class ClinicService {
         .from('clinics')
         .select(`
           *,
-          services:clinic_services (
-            id, service_name, service_type, base_price, duration_minutes
+          clinic_services:clinic_services (
+            id, service_name, service_category, base_price, duration_minutes
           ),
           doctors (
             id, full_name, specialization, rating, profile_picture_url
@@ -240,9 +240,9 @@ class ClinicService {
         .from('clinics')
         .select(`
           *,
-          services:clinic_services (
-            id, service_name, service_type, description, 
-            base_price, duration_minutes, is_active
+          clinic_services:clinic_services (
+            id, service_name, service_category, description, 
+            base_price, duration_minutes, is_available
           ),
           doctors (
             id, full_name, specialization, years_experience,
@@ -313,8 +313,8 @@ class ClinicService {
         .from('clinics')
         .select(`
           *,
-          services:clinic_services (
-            id, service_name, service_type, base_price, duration_minutes
+          clinic_services:clinic_services (
+            id, service_name, service_category, base_price, duration_minutes
           ),
           doctors (
             id, full_name, specialization, profile_picture_url

@@ -27,11 +27,13 @@ import {
   Filter,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import ClinicCard from '@/components/ClinicCard';
+import { SkeletonBox, SkeletonClinicCard, SkeletonStatCard } from '@/components/SkeletonLoader';
+import UserProfileDropdown from '@/components/UserProfileDropdown';
 import { clinicService } from '@/services/clinicService';
 import { appointmentService } from '@/services/appointmentService';
 import { ClinicWithDetails, AppointmentWithDetails } from '@/lib/supabase';
 import { AppointmentBookingModal } from '@/components/appointment/AppointmentBookingModal';
-import { SkeletonBox, SkeletonClinicCard, SkeletonStatCard } from '@/components/SkeletonLoader';
 
 const quickActions = [
   { id: '1', title: 'Book Appointment', icon: Calendar, color: '#2563EB' },
@@ -106,14 +108,6 @@ export default function PatientHomeScreen() {
     }
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace('/(auth)/login');
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
-  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -202,9 +196,7 @@ export default function PatientHomeScreen() {
                   Welcome back, {(user?.profile as any)?.data?.first_name || 'Patient'}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.notificationBadge} onPress={handleSignOut}>
-                <LogOut size={24} color="#DC2626" />
-              </TouchableOpacity>
+              <UserProfileDropdown />
             </>
           )}
         </View>

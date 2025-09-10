@@ -241,11 +241,11 @@ export interface ClinicService {
   id: string;
   clinic_id: string;
   service_name: string;
-  service_type: string;
+  service_category: string;
   description?: string;
   base_price: number;
   duration_minutes: number;
-  is_active: boolean;
+  is_available: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -270,7 +270,7 @@ export interface Review {
 }
 
 // Enhanced interfaces with relationships
-export interface AppointmentWithDetails extends Appointment {
+export interface AppointmentWithDetails extends Omit<Appointment, 'review'> {
   patient?: Patient;
   clinic?: Clinic;
   doctor?: Doctor;
@@ -283,8 +283,8 @@ export interface PatientWithAppointments extends Patient {
   reviews?: Review[];
 }
 
-export interface ClinicWithDetails extends Clinic {
-  services?: ClinicService[];
+export interface ClinicWithDetails extends Omit<Clinic, 'services'> {
+  clinic_services?: ClinicService[];
   doctors?: Doctor[];
   appointments?: Appointment[];
   reviews?: Review[];

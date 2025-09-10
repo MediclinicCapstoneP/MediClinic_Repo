@@ -31,10 +31,30 @@ export default function LoginScreen() {
     
     try {
       await signIn(email, password);
-      // Navigation will be handled by the auth state listener in _layout.tsx
-      // The user state will be updated automatically and redirect appropriately
+      
+      // Add a small delay to ensure auth state is updated, then navigate to splash
+      setTimeout(() => {
+        router.replace('/');
+      }, 500);
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Invalid email or password');
+      let errorMessage = 'Invalid email or password';
+      
+      // Check for specific error types
+      if (error.message) {
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Incorrect email or password. Please check your credentials and try again.';
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = 'Please check your email and confirm your account before signing in.';
+        } else if (error.message.includes('Too many requests')) {
+          errorMessage = 'Too many login attempts. Please wait a few minutes before trying again.';
+        } else if (error.message.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Login Failed', errorMessage);
     } finally {
       setLoading(false);
     }
