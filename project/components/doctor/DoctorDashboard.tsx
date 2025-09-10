@@ -79,13 +79,9 @@ export const DoctorDashboard: React.FC = () => {
 
       const today = new Date().toISOString().split('T')[0];
 
-      const { data, error } = await supabase
+      const { data: appointmentData, error } = await supabase
         .from('appointments')
-        .select(`
-          *,
-          patient:patients(*),
-          clinic:clinics(*)
-        `)
+        .select('*')
         .eq('doctor_id', doctorData.id)
         .eq('appointment_date', today)
         .in('status', ['scheduled', 'confirmed', 'payment_confirmed', 'in_progress'])
@@ -96,7 +92,41 @@ export const DoctorDashboard: React.FC = () => {
         return;
       }
 
-      setTodayAppointments(data || []);
+      // Manually fetch related data
+      const enrichedAppointments = await Promise.all(
+        (appointmentData || []).map(async (appointment) => {
+          try {
+            const enriched: any = { ...appointment };
+            
+            // Fetch patient data
+            if (appointment.patient_id) {
+              const { data: patient } = await supabase
+                .from('patients')
+                .select('*')
+                .eq('id', appointment.patient_id)
+                .single();
+              enriched.patient = patient;
+            }
+            
+            // Fetch clinic data
+            if (appointment.clinic_id) {
+              const { data: clinic } = await supabase
+                .from('clinics')
+                .select('*')
+                .eq('id', appointment.clinic_id)
+                .single();
+              enriched.clinic = clinic;
+            }
+            
+            return enriched;
+          } catch (err) {
+            console.warn('Error enriching appointment:', err);
+            return appointment;
+          }
+        })
+      );
+
+      setTodayAppointments(enrichedAppointments);
     } catch (error) {
       console.error('Error:', error);
     } finally {

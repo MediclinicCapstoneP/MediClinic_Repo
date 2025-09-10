@@ -146,24 +146,17 @@ class AppointmentService {
         .from('appointments')
         .select(`
           *,
-          patients:patient_id (
+          patient:patients!patient_id(
             id, first_name, last_name, email, phone, 
             date_of_birth, profile_pic_url
           ),
-          clinics:clinic_id (
+          clinic:clinics!clinic_id(
             id, clinic_name, address, phone, email,
             operating_hours, profile_pic_url, latitude, longitude
           ),
-          doctors:doctor_id (
+          doctor:doctors!doctor_id(
             id, full_name, specialization, email, phone,
             profile_picture_url
-          ),
-          transactions!appointment_id (
-            id, amount, payment_method, status,
-            transaction_id, created_at
-          ),
-          reviews!appointment_id (
-            id, rating, review_text, created_at
           )
         `)
         .eq('id', id)
@@ -179,14 +172,7 @@ class AppointmentService {
 
       return {
         success: true,
-        appointment: {
-          ...appointment,
-          patient: appointment.patients,
-          clinic: appointment.clinics,
-          doctor: appointment.doctors,
-          payment: appointment.transactions?.[0],
-          review: appointment.reviews?.[0],
-        },
+        appointment,
       };
     } catch (error) {
       console.error('Error in getAppointmentWithDetails:', error);
@@ -211,13 +197,13 @@ class AppointmentService {
         .from('appointments')
         .select(`
           *,
-          patients:patient_id (
+          patient:patients!patient_id(
             id, first_name, last_name, email, phone, profile_pic_url
           ),
-          clinics:clinic_id (
+          clinic:clinics!clinic_id(
             id, clinic_name, address, phone, profile_pic_url
           ),
-          doctors:doctor_id (
+          doctor:doctors!doctor_id(
             id, full_name, specialization, profile_picture_url
           )
         `, { count: 'exact' });

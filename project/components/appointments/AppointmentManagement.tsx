@@ -44,47 +44,47 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
     if (!user) return;
 
     try {
-      let query = supabase
-        .from('appointments')
-        .select(`
-          *,
-          patient:patients(*),
-          clinic:clinics(*),
-          doctor:doctors(*),
-          payment:payments(*)
-        `);
-
-      // Apply role-based filtering
+      // Get user's profile ID first
+      let userProfileId: string | null = null;
+      
       if (userRole === 'patient') {
         const { data: patientData } = await supabase
           .from('patients')
           .select('id')
           .eq('user_id', user.id)
           .single();
-        
-        if (patientData) {
-          query = query.eq('patient_id', patientData.id);
-        }
+        userProfileId = patientData?.id || null;
       } else if (userRole === 'doctor') {
         const { data: doctorData } = await supabase
           .from('doctors')
           .select('id')
           .eq('user_id', user.id)
           .single();
-        
-        if (doctorData) {
-          query = query.eq('doctor_id', doctorData.id);
-        }
+        userProfileId = doctorData?.id || null;
       } else if (userRole === 'clinic') {
         const { data: clinicData } = await supabase
           .from('clinics')
           .select('id')
           .eq('user_id', user.id)
           .single();
-        
-        if (clinicData) {
-          query = query.eq('clinic_id', clinicData.id);
-        }
+        userProfileId = clinicData?.id || null;
+      }
+
+      if (!userProfileId) {
+        setAppointments([]);
+        return;
+      }
+
+      // Try with relationships first, fallback to basic query if it fails
+      let query = supabase.from('appointments').select('*');
+      
+      // Apply role-based filtering
+      if (userRole === 'patient') {
+        query = query.eq('patient_id', userProfileId);
+      } else if (userRole === 'doctor') {
+        query = query.eq('doctor_id', userProfileId);
+      } else if (userRole === 'clinic') {
+        query = query.eq('clinic_id', userProfileId);
       }
 
       // Apply status filtering
@@ -98,7 +98,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
 
       query = query.order('appointment_date', { ascending: false });
 
-      const { data, error } = await query;
+      const { data: appointmentData, error } = await query;
 
       if (error) {
         console.error('Error fetching appointments:', error);
@@ -106,7 +106,51 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
         return;
       }
 
-      setAppointments(data || []);
+      // Manually fetch related data
+      const enrichedAppointments = await Promise.all(
+        (appointmentData || []).map(async (appointment) => {
+          try {
+            const enriched: any = { ...appointment };
+            
+            // Fetch patient data
+            if (appointment.patient_id) {
+              const { data: patient } = await supabase
+                .from('patients')
+                .select('*')
+                .eq('id', appointment.patient_id)
+                .single();
+              enriched.patient = patient;
+            }
+            
+            // Fetch clinic data  
+            if (appointment.clinic_id) {
+              const { data: clinic } = await supabase
+                .from('clinics')
+                .select('*')
+                .eq('id', appointment.clinic_id)
+                .single();
+              enriched.clinic = clinic;
+            }
+            
+            // Fetch doctor data
+            if (appointment.doctor_id) {
+              const { data: doctor } = await supabase
+                .from('doctors')
+                .select('*')
+                .eq('id', appointment.doctor_id)
+                .single();
+              enriched.doctor = doctor;
+            }
+            
+            return enriched;
+          } catch (err) {
+            console.warn('Error enriching appointment:', err);
+            return appointment;
+          }
+        })
+      );
+
+      setAppointments(enrichedAppointments);
     } catch (error) {
       console.error('Error:', error);
     } finally {
