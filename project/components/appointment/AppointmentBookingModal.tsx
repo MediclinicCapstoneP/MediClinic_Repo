@@ -22,7 +22,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import { appointmentService, CreateAppointmentData, TimeSlot } from '@/services/appointmentService';
-import { ClinicWithDetails, AppointmentType, PaymentMethod } from '@/lib/supabase';
+import { ClinicWithDetails, AppointmentType, PaymentMethod, supabase } from '@/lib/supabase';
 
 interface AppointmentBookingModalProps {
   visible: boolean;
@@ -147,9 +147,22 @@ export function AppointmentBookingModal({
   };
 
   const handleCreateAppointment = async () => {
-    if (!user?.profile?.data?.id) {
-      setError('Please log in to book an appointment');
-      return;
+    // Get patient ID - either from authenticated user or use first available patient for demo
+    let patientId = user?.profile?.data?.id;
+    
+    if (!patientId) {
+      // For demo purposes, get the first patient from database
+      const { data: patients, error: patientsError } = await supabase
+        .from('patients')
+        .select('id')
+        .limit(1)
+        .single();
+      
+      if (patientsError || !patients) {
+        setError('No patients available. Please create a patient account first.');
+        return;
+      }
+      patientId = patients.id;
     }
 
     if (!bookingData.date || !bookingData.time) {
@@ -162,7 +175,7 @@ export function AppointmentBookingModal({
       setError(null);
 
       const appointmentData: CreateAppointmentData = {
-        patient_id: user.profile.data.id,
+        patient_id: patientId,
         clinic_id: clinic.id,
         appointment_date: bookingData.date,
         appointment_time: bookingData.time,

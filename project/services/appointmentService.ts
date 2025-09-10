@@ -136,9 +136,9 @@ class AppointmentService {
             id, full_name, specialization, email, phone,
             profile_picture_url
           ),
-          payments!appointment_id (
-            id, amount, payment_method, payment_status,
-            transaction_number, payment_reference, created_at
+          transactions!appointment_id (
+            id, amount, payment_method, status,
+            transaction_id, created_at
           ),
           reviews!appointment_id (
             id, rating, review_text, created_at
@@ -162,7 +162,7 @@ class AppointmentService {
           patient: appointment.patients,
           clinic: appointment.clinics,
           doctor: appointment.doctors,
-          payment: appointment.payments?.[0],
+          payment: appointment.transactions?.[0],
           review: appointment.reviews?.[0],
         },
       };
@@ -478,16 +478,18 @@ class AppointmentService {
       // Generate mock transaction number for now
       const transactionNumber = `TXN${Date.now()}${Math.random().toString(36).substr(2, 5)}`;
 
-      // Create payment record
+      // Create payment record in transactions table
       const { data: payment, error: paymentError } = await supabase
-        .from('payments')
+        .from('transactions')
         .insert([{
           appointment_id: paymentRequest.appointment_id,
           amount: paymentRequest.amount,
           payment_method: paymentRequest.payment_method,
-          payment_status: 'paid' as PaymentStatus,
-          transaction_number: transactionNumber,
-          payment_date: new Date().toISOString(),
+          status: 'completed',
+          transaction_id: transactionNumber,
+          created_at: new Date().toISOString(),
+          clinic_id: null, // Will be set from appointment
+          patient_id: null // Will be set from appointment
         }])
         .select()
         .single();
