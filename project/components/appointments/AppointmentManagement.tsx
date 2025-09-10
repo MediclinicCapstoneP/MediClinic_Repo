@@ -7,7 +7,9 @@ import {
   StyleSheet,
   Alert,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase, Appointment, AppointmentWithDetails } from '../../lib/supabase';
@@ -25,6 +27,13 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<AppointmentFilter>('all');
+
+  // Reschedule state
+  const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
+  const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState<string | null>(null);
+  const [newDate, setNewDate] = useState<string>('');
+  const [newTime, setNewTime] = useState<string>('');
+  const [rescheduling, setRescheduling] = useState(false);
 
   useEffect(() => {
     fetchAppointments();
@@ -148,9 +157,38 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
     }
   };
 
-  const handleRescheduleAppointment = (appointmentId: string) => {
-    // TODO: Implement reschedule functionality
-    Alert.alert('Coming Soon', 'Reschedule functionality will be available soon');
+  const openRescheduleModal = (appointmentId: string) => {
+    setRescheduleAppointmentId(appointmentId);
+    setNewDate('');
+    setNewTime('');
+    setRescheduleModalVisible(true);
+  };
+
+  const handleRescheduleAppointment = async () => {
+    if (!rescheduleAppointmentId) return;
+    if (!newDate || !newTime) {
+      Alert.alert('Select new slot', 'Please enter a valid date (YYYY-MM-DD) and time (HH:MM)');
+      return;
+    }
+    try {
+      setRescheduling(true);
+      const { success, error } = await appointmentService.rescheduleAppointment(
+        rescheduleAppointmentId,
+        newDate,
+        newTime
+      );
+      if (!success) {
+        Alert.alert('Reschedule failed', error || 'Unknown error');
+        return;
+      }
+      setRescheduleModalVisible(false);
+      fetchAppointments();
+      Alert.alert('Rescheduled', 'Your appointment has been moved');
+    } catch (e) {
+      Alert.alert('Reschedule failed', 'An unexpected error occurred');
+    } finally {
+      setRescheduling(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -303,7 +341,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[styles.actionButton, styles.rescheduleButton]}
-            onPress={() => handleRescheduleAppointment(appointment.id)}
+            onPress={() => openRescheduleModal(appointment.id)}
           >
             <Ionicons name="calendar-outline" size={16} color="#3B82F6" />
             <Text style={[styles.actionButtonText, { color: '#3B82F6' }]}>
@@ -336,6 +374,52 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
   return (
     <View style={styles.container}>
       {renderFilterButtons()}
+
+      {/* Reschedule Modal */}
+      <Modal
+        visible={rescheduleModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRescheduleModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Reschedule Appointment</Text>
+            <Text style={styles.modalLabel}>New Date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="2025-01-15"
+              value={newDate}
+              onChangeText={setNewDate}
+            />
+            <Text style={styles.modalLabel}>New Time (HH:MM - 24h)</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="14:30"
+              value={newTime}
+              onChangeText={setNewTime}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancel]}
+                onPress={() => setRescheduleModalVisible(false)}
+                disabled={rescheduling}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirm]}
+                onPress={handleRescheduleAppointment}
+                disabled={rescheduling}
+              >
+                <Text style={styles.modalConfirmText}>
+                  {rescheduling ? 'Rescheduling...' : 'Confirm'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
       <ScrollView
         style={styles.appointmentsList}
@@ -504,6 +588,67 @@ const styles = StyleSheet.create({
     borderTopColor: '#F3F4F6',
     paddingTop: 12,
     marginTop: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 8,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#111827',
+    marginTop: 6,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 16,
+  },
+  modalButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  modalCancel: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalConfirm: {
+    backgroundColor: '#2563EB',
+  },
+  modalCancelText: {
+    color: '#374151',
+    fontWeight: '600',
+  },
+  modalConfirmText: {
+    color: 'white',
+    fontWeight: '600',
   },
   actionButton: {
     flexDirection: 'row',

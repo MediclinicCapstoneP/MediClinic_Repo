@@ -7,6 +7,7 @@ import {
   PaymentStatus,
   ClinicWithDetails,
 } from '@/lib/supabase';
+import { notificationService } from '@/lib/services/notificationService';
 
 export interface CreateAppointmentData {
   patient_id: string;
@@ -96,6 +97,26 @@ class AppointmentService {
           success: false,
           error: 'Failed to create appointment',
         };
+      }
+
+      // Notify patient of booking
+      try {
+        const { data: patientRow } = await supabase
+          .from('patients')
+          .select('user_id')
+          .eq('id', appointment.patient_id)
+          .single();
+        const patientUserId = patientRow?.user_id;
+        if (patientUserId) {
+          await notificationService.createSystemNotification(
+            patientUserId,
+            'Appointment Scheduled',
+            `Your appointment on ${appointment.appointment_date} at ${appointment.appointment_time} has been scheduled.`,
+            { appointment_id: appointment.id }
+          );
+        }
+      } catch (e) {
+        console.warn('Notification error (create):', e);
       }
 
       return {
@@ -378,6 +399,41 @@ class AppointmentService {
         };
       }
 
+      // Fire notifications based on status
+      try {
+        // Fetch related patient auth user id
+        const { data: aptFull } = await supabase
+          .from('appointments')
+          .select('patient_id, clinic_id, doctor_id')
+          .eq('id', id)
+          .single();
+
+        let patientUserId: string | null = null;
+        if (aptFull?.patient_id) {
+          const { data: patientRow } = await supabase
+            .from('patients')
+            .select('user_id')
+            .eq('id', aptFull.patient_id)
+            .single();
+          patientUserId = patientRow?.user_id || null;
+        }
+
+        // Send simple status notifications to patient
+        if (patientUserId) {
+          const statusTitleMap: Record<string, string> = {
+            confirmed: 'Appointment Confirmed',
+            in_progress: 'Appointment In Progress',
+            completed: 'Appointment Completed',
+            cancelled: 'Appointment Cancelled',
+          };
+          const title = statusTitleMap[status] || 'Appointment Update';
+          const message = `Your appointment status changed to ${status.replace('_', ' ')}.`;
+          await notificationService.createSystemNotification(patientUserId, title, message, { appointment_id: id, status });
+        }
+      } catch (e) {
+        console.warn('Notification error (update status):', e);
+      }
+
       return {
         success: true,
         appointment,
@@ -388,6 +444,93 @@ class AppointmentService {
         success: false,
         error: 'An unexpected error occurred',
       };
+    }
+  }
+
+  /**
+   * Reschedule an appointment (change date/time with availability check)
+   */
+  async rescheduleAppointment(
+    id: string,
+    newDate: string,
+    newTime: string,
+    durationMinutes?: number
+  ): Promise<{ success: boolean; appointment?: Appointment; error?: string }> {
+    try {
+      // Load appointment to get clinic & duration
+      const { data: current, error: fetchError } = await supabase
+        .from('appointments')
+        .select('clinic_id, duration_minutes')
+        .eq('id', id)
+        .single();
+
+      if (fetchError || !current) {
+        return { success: false, error: 'Appointment not found' };
+      }
+
+      const duration = durationMinutes || current.duration_minutes || 30;
+
+      // Check availability on new slot
+      const isAvailable = await this.checkTimeSlotAvailability(
+        current.clinic_id,
+        newDate,
+        newTime,
+        duration
+      );
+
+      if (!isAvailable) {
+        return { success: false, error: 'Selected new time slot is not available' };
+      }
+
+      // Update appointment
+      const { data: updated, error: updateError } = await supabase
+        .from('appointments')
+        .update({
+          appointment_date: newDate,
+          appointment_time: newTime,
+          updated_at: new Date().toISOString(),
+          status: 'confirmed',
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error rescheduling appointment:', updateError);
+        return { success: false, error: 'Failed to reschedule appointment' };
+      }
+
+      // Notify patient
+      try {
+        const { data: aptFull } = await supabase
+          .from('appointments')
+          .select('patient_id')
+          .eq('id', id)
+          .single();
+        if (aptFull?.patient_id) {
+          const { data: patientRow } = await supabase
+            .from('patients')
+            .select('user_id')
+            .eq('id', aptFull.patient_id)
+            .single();
+          const patientUserId = patientRow?.user_id;
+          if (patientUserId) {
+            await notificationService.createSystemNotification(
+              patientUserId,
+              'Appointment Rescheduled',
+              `Your appointment was moved to ${newDate} at ${newTime}.`,
+              { appointment_id: id, newDate, newTime }
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('Notification error (reschedule):', e);
+      }
+
+      return { success: true, appointment: updated };
+    } catch (error) {
+      console.error('Error in rescheduleAppointment:', error);
+      return { success: false, error: 'An unexpected error occurred' };
     }
   }
 
@@ -519,6 +662,33 @@ class AppointmentService {
           success: false,
           error: 'Payment processed but failed to update appointment',
         };
+      }
+
+      // Notify patient about payment confirmation
+      try {
+        const { data: apt } = await supabase
+          .from('appointments')
+          .select('patient_id')
+          .eq('id', paymentRequest.appointment_id)
+          .single();
+        if (apt?.patient_id) {
+          const { data: patientRow } = await supabase
+            .from('patients')
+            .select('user_id')
+            .eq('id', apt.patient_id)
+            .single();
+          const patientUserId = patientRow?.user_id;
+          if (patientUserId) {
+            await notificationService.createSystemNotification(
+              patientUserId,
+              'Payment Confirmed',
+              `Your payment has been processed. Transaction: ${transactionNumber}`,
+              { appointment_id: paymentRequest.appointment_id, transactionNumber }
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('Notification error (payment):', e);
       }
 
       return {
