@@ -14,6 +14,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase, Appointment, AppointmentWithDetails } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { appointmentService } from '../../services/appointmentService';
+import { DateTimePicker } from '../ui/DateTimePicker';
 
 type AppointmentFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
 
@@ -31,8 +33,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
   // Reschedule state
   const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
   const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState<string | null>(null);
-  const [newDate, setNewDate] = useState<string>('');
-  const [newTime, setNewTime] = useState<string>('');
+  const [newDateTime, setNewDateTime] = useState<Date | undefined>(undefined);
   const [rescheduling, setRescheduling] = useState(false);
 
   useEffect(() => {
@@ -159,19 +160,20 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
 
   const openRescheduleModal = (appointmentId: string) => {
     setRescheduleAppointmentId(appointmentId);
-    setNewDate('');
-    setNewTime('');
+    setNewDateTime(undefined);
     setRescheduleModalVisible(true);
   };
 
   const handleRescheduleAppointment = async () => {
-    if (!rescheduleAppointmentId) return;
-    if (!newDate || !newTime) {
-      Alert.alert('Select new slot', 'Please enter a valid date (YYYY-MM-DD) and time (HH:MM)');
+    if (!rescheduleAppointmentId || !newDateTime) {
+      Alert.alert('Select new slot', 'Please select a new date and time for your appointment');
       return;
     }
     try {
       setRescheduling(true);
+      const newDate = newDateTime.toISOString().split('T')[0]; // YYYY-MM-DD
+      const newTime = newDateTime.toTimeString().slice(0, 5); // HH:MM
+      
       const { success, error } = await appointmentService.rescheduleAppointment(
         rescheduleAppointmentId,
         newDate,
@@ -385,19 +387,14 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Reschedule Appointment</Text>
-            <Text style={styles.modalLabel}>New Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="2025-01-15"
-              value={newDate}
-              onChangeText={setNewDate}
-            />
-            <Text style={styles.modalLabel}>New Time (HH:MM - 24h)</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="14:30"
-              value={newTime}
-              onChangeText={setNewTime}
+            <Text style={styles.modalLabel}>Select New Date & Time</Text>
+            <DateTimePicker
+              date={newDateTime}
+              mode="datetime"
+              onDateChange={setNewDateTime}
+              minimumDate={new Date()}
+              placeholder="Choose new appointment slot"
+              style={styles.dateTimePicker}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -614,16 +611,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginTop: 8,
+    marginBottom: 8,
   },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: '#111827',
-    marginTop: 6,
+  dateTimePicker: {
+    marginBottom: 16,
   },
   modalActions: {
     flexDirection: 'row',

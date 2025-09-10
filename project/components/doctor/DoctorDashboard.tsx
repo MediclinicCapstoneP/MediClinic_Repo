@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase, AppointmentWithDetails, Doctor } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +24,7 @@ interface DashboardStats {
 
 export const DoctorDashboard: React.FC = () => {
   const { user } = useAuth();
+  const router = useRouter();
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     todayAppointments: 0,
@@ -364,7 +366,10 @@ export const DoctorDashboard: React.FC = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActionsContainer}>
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => router.push('/(tabs)/doctor/appointments' as any)}
+          >
             <Ionicons name="calendar-outline" size={24} color="#3B82F6" />
             <Text style={styles.quickActionText}>View All Appointments</Text>
           </TouchableOpacity>

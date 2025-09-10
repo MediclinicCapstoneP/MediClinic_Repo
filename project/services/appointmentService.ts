@@ -110,9 +110,10 @@ class AppointmentService {
         if (patientUserId) {
           await notificationService.createSystemNotification(
             patientUserId,
+            'patient',
             'Appointment Scheduled',
             `Your appointment on ${appointment.appointment_date} at ${appointment.appointment_time} has been scheduled.`,
-            { appointment_id: appointment.id }
+            appointment.id
           );
         }
       } catch (e) {
@@ -428,7 +429,15 @@ class AppointmentService {
           };
           const title = statusTitleMap[status] || 'Appointment Update';
           const message = `Your appointment status changed to ${status.replace('_', ' ')}.`;
-          await notificationService.createSystemNotification(patientUserId, title, message, { appointment_id: id, status });
+          await notificationService.createAppointmentNotification(
+            patientUserId,
+            'patient',
+            id,
+            status === 'confirmed' ? 'confirmed' : 
+            status === 'cancelled' ? 'cancelled' : 
+            status === 'completed' ? 'completed' : 'confirmed',
+            message
+          );
         }
       } catch (e) {
         console.warn('Notification error (update status):', e);
@@ -517,9 +526,10 @@ class AppointmentService {
           if (patientUserId) {
             await notificationService.createSystemNotification(
               patientUserId,
+              'patient',
               'Appointment Rescheduled',
               `Your appointment was moved to ${newDate} at ${newTime}.`,
-              { appointment_id: id, newDate, newTime }
+              id
             );
           }
         }
@@ -679,11 +689,11 @@ class AppointmentService {
             .single();
           const patientUserId = patientRow?.user_id;
           if (patientUserId) {
-            await notificationService.createSystemNotification(
+            await notificationService.createPaymentNotification(
               patientUserId,
-              'Payment Confirmed',
-              `Your payment has been processed. Transaction: ${transactionNumber}`,
-              { appointment_id: paymentRequest.appointment_id, transactionNumber }
+              'patient',
+              paymentRequest.appointment_id,
+              paymentRequest.amount
             );
           }
         }

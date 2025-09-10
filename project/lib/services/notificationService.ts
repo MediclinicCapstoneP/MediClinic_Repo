@@ -3,29 +3,32 @@ import { supabase } from '../supabase';
 export interface Notification {
   id: string;
   user_id: string;
+  user_type: 'patient' | 'doctor' | 'clinic';
   title: string;
   message: string;
-  type: 'appointment' | 'payment' | 'reminder' | 'system';
-  read: boolean;
+  notification_type: 'appointment_confirmed' | 'appointment_cancelled' | 'appointment_reminder' | 'payment_received' | 'rating_request' | 'system_update' | 'appointment_pending_payment' | 'appointment_completed';
+  appointment_id?: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  read_at?: string;
   created_at: string;
-  updated_at: string;
-  data?: any; // Additional metadata
 }
 
 export interface GetNotificationsParams {
   user_id: string;
   limit?: number;
   offset?: number;
-  type?: string;
-  read?: boolean;
+  notification_type?: string;
+  unread_only?: boolean;
 }
 
 export interface CreateNotificationParams {
   user_id: string;
+  user_type: 'patient' | 'doctor' | 'clinic';
   title: string;
   message: string;
-  type: 'appointment' | 'payment' | 'reminder' | 'system';
-  data?: any;
+  notification_type: 'appointment_confirmed' | 'appointment_cancelled' | 'appointment_reminder' | 'payment_received' | 'rating_request' | 'system_update' | 'appointment_pending_payment' | 'appointment_completed';
+  appointment_id?: string;
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
 }
 
 export class NotificationService {
@@ -37,12 +40,12 @@ export class NotificationService {
         .eq('user_id', params.user_id)
         .order('created_at', { ascending: false });
 
-      if (params.type) {
-        query = query.eq('type', params.type);
+      if (params.notification_type) {
+        query = query.eq('notification_type', params.notification_type);
       }
 
-      if (params.read !== undefined) {
-        query = query.eq('read', params.read);
+      if (params.unread_only) {
+        query = query.is('read_at', null);
       }
 
       if (params.limit) {
@@ -77,11 +80,12 @@ export class NotificationService {
         .insert([
           {
             user_id: params.user_id,
+            user_type: params.user_type,
             title: params.title,
             message: params.message,
-            type: params.type,
-            data: params.data,
-            read: false,
+            notification_type: params.notification_type,
+            appointment_id: params.appointment_id,
+            priority: params.priority || 'normal',
           },
         ])
         .select()
@@ -106,7 +110,7 @@ export class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true, updated_at: new Date().toISOString() })
+        .update({ read_at: new Date().toISOString() })
         .eq('id', notificationId);
 
       if (error) {
@@ -125,9 +129,9 @@ export class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true, updated_at: new Date().toISOString() })
+        .update({ read_at: new Date().toISOString() })
         .eq('user_id', userId)
-        .eq('read', false);
+        .is('read_at', null);
 
       if (error) {
         console.error('Error marking all notifications as read:', error);
@@ -166,7 +170,7 @@ export class NotificationService {
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('read', false);
+        .is('read_at', null);
 
       if (error) {
         console.error('Error fetching unread count:', error);
@@ -186,62 +190,70 @@ export class NotificationService {
   // Helper methods for creating specific notification types
   async createAppointmentNotification(
     userId: string,
+    userType: 'patient' | 'doctor' | 'clinic',
     appointmentId: string,
-    type: 'booked' | 'confirmed' | 'cancelled' | 'reminder',
-    appointmentDetails?: any
+    type: 'confirmed' | 'cancelled' | 'reminder' | 'pending_payment' | 'completed',
+    customMessage?: string
   ) {
     const messages = {
-      booked: 'Your appointment has been successfully booked',
       confirmed: 'Your appointment has been confirmed',
       cancelled: 'Your appointment has been cancelled',
       reminder: 'You have an upcoming appointment',
+      pending_payment: 'Payment is required for your appointment',
+      completed: 'Your appointment has been completed',
+    };
+
+    const notificationTypes = {
+      confirmed: 'appointment_confirmed' as const,
+      cancelled: 'appointment_cancelled' as const,
+      reminder: 'appointment_reminder' as const,
+      pending_payment: 'appointment_pending_payment' as const,
+      completed: 'appointment_completed' as const,
     };
 
     return this.createNotification({
       user_id: userId,
-      title: `Appointment ${type}`,
-      message: messages[type],
-      type: 'appointment',
-      data: {
-        appointment_id: appointmentId,
-        appointment_type: type,
-        ...appointmentDetails,
-      },
+      user_type: userType,
+      title: `Appointment ${type.replace('_', ' ')}`,
+      message: customMessage || messages[type],
+      notification_type: notificationTypes[type],
+      appointment_id: appointmentId,
+      priority: type === 'pending_payment' ? 'high' : 'normal',
     });
   }
 
   async createPaymentNotification(
     userId: string,
-    paymentId: string,
-    type: 'success' | 'failed' | 'refund',
-    amount?: number
+    userType: 'patient' | 'doctor' | 'clinic',
+    appointmentId: string,
+    amount: number
   ) {
-    const messages = {
-      success: `Payment of ₱${amount} was successful`,
-      failed: `Payment of ₱${amount} failed`,
-      refund: `Refund of ₱${amount} has been processed`,
-    };
-
     return this.createNotification({
       user_id: userId,
-      title: `Payment ${type}`,
-      message: messages[type],
-      type: 'payment',
-      data: {
-        payment_id: paymentId,
-        payment_type: type,
-        amount,
-      },
+      user_type: userType,
+      title: 'Payment Received',
+      message: `Payment of ₱${amount} was successfully processed`,
+      notification_type: 'payment_received',
+      appointment_id: appointmentId,
+      priority: 'normal',
     });
   }
 
-  async createSystemNotification(userId: string, title: string, message: string, data?: any) {
+  async createSystemNotification(
+    userId: string,
+    userType: 'patient' | 'doctor' | 'clinic',
+    title: string,
+    message: string,
+    appointmentId?: string
+  ) {
     return this.createNotification({
       user_id: userId,
+      user_type: userType,
       title,
       message,
-      type: 'system',
-      data,
+      notification_type: 'system_update',
+      appointment_id: appointmentId,
+      priority: 'normal',
     });
   }
 
