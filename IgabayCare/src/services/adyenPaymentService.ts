@@ -1,15 +1,17 @@
 import { supabase } from '../lib/supabase';
 
-// Adyen Configuration
-const ADYEN_API_KEY = 'AQEqhmfuXNWTK0Qc+iSXn2Uxq8WYS4RYA4caCTCP4B3ixRe1SHORCNTAJqPBEMFdWw2+5HzctViMSCJMYAc=-HUc+Bqwdey3Z3DN4Gjafg9oTFfsPVQOxXV+FOI57zT0=-i1iH}:[8Id95Gvns)rZ';
-const ADYEN_MERCHANT_ACCOUNT = 'IgabayAtiCare'; // Replace with your merchant account
-const ADYEN_ENVIRONMENT = 'test'; // 'test' for testing, 'live' for production
-const ADYEN_CLIENT_KEY = 'test_client_key'; // Replace with your client key
+// Adyen Configuration from environment variables
+const ADYEN_ENVIRONMENT = import.meta.env.VITE_ADYEN_ENVIRONMENT || 'test';
+const ADYEN_CLIENT_KEY = import.meta.env.VITE_ADYEN_CLIENT_KEY;
+const ADYEN_MERCHANT_ACCOUNT = import.meta.env.VITE_ADYEN_MERCHANT_ACCOUNT;
 
-// Adyen API URLs
-const ADYEN_CHECKOUT_API = ADYEN_ENVIRONMENT === 'live' 
-  ? 'https://checkout-live.adyen.com/v71' 
-  : 'https://checkout-test.adyen.com/v71';
+// API Base URL for our backend endpoints
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// Validate environment variables
+if (!ADYEN_CLIENT_KEY || !ADYEN_MERCHANT_ACCOUNT || !API_BASE_URL) {
+  console.error('Missing required Adyen environment variables. Please check your .env file.');
+}
 
 export interface PaymentRequest {
   patientId: string;
@@ -52,78 +54,49 @@ export const adyenPaymentService = {
    */
   async createPaymentSession(request: PaymentRequest): Promise<{ success: boolean; session?: PaymentSession; error?: string }> {
     try {
-      // Convert amount to cents (Adyen uses minor units)
-      const amountValue = Math.round(request.amount * 100);
-      
-      // Generate unique merchant reference
-      const merchantReference = request.reference || `IGC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Create payment session request
+      if (!API_BASE_URL) {
+        throw new Error('API_BASE_URL is not configured');
+      }
+
+      // Create session request for our backend
       const sessionRequest = {
-        merchantAccount: ADYEN_MERCHANT_ACCOUNT,
-        amount: {
-          currency: request.currency || 'PHP',
-          value: amountValue
-        },
-        reference: merchantReference,
+        patientId: request.patientId,
+        clinicId: request.clinicId,
+        appointmentId: request.appointmentId,
+        amount: request.amount,
+        currency: request.currency || 'PHP',
+        paymentMethod: request.paymentMethod,
         returnUrl: request.returnUrl,
-        countryCode: 'PH',
-        shopperLocale: 'en_PH',
-        allowedPaymentMethods: this.getAllowedPaymentMethods(request.paymentMethod),
-        lineItems: [{
-          id: request.appointmentId || 'consultation',
-          description: 'Medical Consultation Fee',
-          amountIncludingTax: amountValue,
-          quantity: 1
-        }],
-        additionalData: {
-          allow3DS2: 'true'
-        },
-        metadata: {
-          patientId: request.patientId,
-          clinicId: request.clinicId,
-          appointmentId: request.appointmentId
-        }
+        reference: request.reference
       };
 
-      // Call Adyen Sessions API
-      const response = await fetch(`${ADYEN_CHECKOUT_API}/sessions`, {
+      // Call our backend sessions endpoint
+      const response = await fetch(`${API_BASE_URL}/adyen-sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': ADYEN_API_KEY
         },
         body: JSON.stringify(sessionRequest)
       });
 
-      const sessionData = await response.json();
+      const result = await response.json();
 
-      if (!response.ok) {
-        console.error('Adyen session creation failed:', sessionData);
-        return { success: false, error: sessionData.message || 'Payment session creation failed' };
+      if (!response.ok || !result.success) {
+        console.error('Backend session creation failed:', result);
+        return { success: false, error: result.error || 'Payment session creation failed' };
       }
 
-      // Store payment record in database
-      await this.createPaymentRecord({
-        merchantReference,
-        patientId: request.patientId,
-        clinicId: request.clinicId,
-        appointmentId: request.appointmentId,
-        amountValue,
-        currency: request.currency || 'PHP',
-        paymentMethod: request.paymentMethod,
-        status: 'pending'
-      });
+      const sessionData = result.data;
 
       return {
         success: true,
         session: {
-          sessionId: sessionData.id,
+          sessionId: sessionData.sessionId,
           sessionData: sessionData.sessionData,
-          paymentMethods: sessionData.paymentMethods,
+          paymentMethods: sessionData.paymentMethods || [],
           amount: sessionData.amount,
           merchantAccount: sessionData.merchantAccount,
-          reference: merchantReference,
+          reference: sessionData.reference,
           returnUrl: sessionData.returnUrl
         }
       };
@@ -137,49 +110,41 @@ export const adyenPaymentService = {
   /**
    * Process payment using Adyen Components
    */
-  async processPayment(paymentData: any, stateData: any): Promise<PaymentResult> {
+  async processPayment(paymentData: any, stateData: any, merchantReference?: string): Promise<PaymentResult> {
     try {
+      if (!API_BASE_URL) {
+        throw new Error('API_BASE_URL is not configured');
+      }
+
       const paymentRequest = {
-        merchantAccount: ADYEN_MERCHANT_ACCOUNT,
-        ...paymentData,
-        ...stateData,
-        additionalData: {
-          allow3DS2: 'true'
-        }
+        paymentData,
+        stateData,
+        merchantReference
       };
 
-      const response = await fetch(`${ADYEN_CHECKOUT_API}/payments`, {
+      const response = await fetch(`${API_BASE_URL}/adyen-payments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': ADYEN_API_KEY
         },
         body: JSON.stringify(paymentRequest)
       });
 
       const result = await response.json();
 
-      if (!response.ok) {
-        return { success: false, error: result.message || 'Payment processing failed' };
+      if (!response.ok || !result.success) {
+        return { success: false, error: result.error || 'Payment processing failed' };
       }
 
-      // Update payment record with Adyen response
-      if (result.pspReference && paymentRequest.reference) {
-        await this.updatePaymentRecord(paymentRequest.reference, {
-          adyen_psp_reference: result.pspReference,
-          adyen_result_code: result.resultCode,
-          adyen_response: result,
-          status: this.mapAdyenStatusToLocal(result.resultCode)
-        });
-      }
-
+      const paymentResult = result.data;
+      
       return {
-        success: result.resultCode === 'Authorised',
-        paymentId: result.pspReference,
-        pspReference: result.pspReference,
-        resultCode: result.resultCode,
-        action: result.action,
-        redirectUrl: result.redirect?.url
+        success: paymentResult.success,
+        paymentId: paymentResult.paymentId,
+        pspReference: paymentResult.pspReference,
+        resultCode: paymentResult.resultCode,
+        action: paymentResult.action,
+        redirectUrl: paymentResult.redirectUrl
       };
 
     } catch (error) {
@@ -193,32 +158,37 @@ export const adyenPaymentService = {
    */
   async submitPaymentDetails(details: any, paymentData?: any): Promise<PaymentResult> {
     try {
+      if (!API_BASE_URL) {
+        throw new Error('API_BASE_URL is not configured');
+      }
+
       const detailsRequest = {
         details,
         paymentData
       };
 
-      const response = await fetch(`${ADYEN_CHECKOUT_API}/payments/details`, {
+      const response = await fetch(`${API_BASE_URL}/adyen-payment-details`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': ADYEN_API_KEY
         },
         body: JSON.stringify(detailsRequest)
       });
 
       const result = await response.json();
 
-      if (!response.ok) {
-        return { success: false, error: result.message || 'Payment details processing failed' };
+      if (!response.ok || !result.success) {
+        return { success: false, error: result.error || 'Payment details processing failed' };
       }
 
+      const detailsResult = result.data;
+
       return {
-        success: result.resultCode === 'Authorised',
-        paymentId: result.pspReference,
-        pspReference: result.pspReference,
-        resultCode: result.resultCode,
-        action: result.action
+        success: detailsResult.resultCode === 'Authorised',
+        paymentId: detailsResult.pspReference,
+        pspReference: detailsResult.pspReference,
+        resultCode: detailsResult.resultCode,
+        action: detailsResult.action
       };
 
     } catch (error) {
@@ -251,89 +221,16 @@ export const adyenPaymentService = {
   },
 
   /**
-   * Process refund
+   * Process refund (Note: This should ideally be done server-side as well)
    */
   async processRefund(pspReference: string, refundAmount: number, reason: string): Promise<{ success: boolean; refundReference?: string; error?: string }> {
     try {
-      const refundRequest = {
-        merchantAccount: ADYEN_MERCHANT_ACCOUNT,
-        amount: {
-          currency: 'PHP',
-          value: Math.round(refundAmount * 100)
-        },
-        reference: `REFUND-${pspReference}-${Date.now()}`,
-        originalReference: pspReference
-      };
-
-      const response = await fetch(`${ADYEN_CHECKOUT_API}/payments/${pspReference}/refunds`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': ADYEN_API_KEY
-        },
-        body: JSON.stringify(refundRequest)
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.message || 'Refund processing failed' };
-      }
-
-      // Update payment record with refund information
-      await supabase
-        .from('payments')
-        .update({
-          refund_amount: Math.round(refundAmount * 100),
-          refund_reason: reason,
-          refunded_at: new Date().toISOString(),
-          status: refundAmount === 0 ? 'refunded' : 'partially_refunded'
-        })
-        .eq('adyen_psp_reference', pspReference);
-
-      return { success: true, refundReference: result.pspReference };
-
+      // TODO: Implement refund endpoint on backend
+      console.warn('Refund processing should be implemented on backend');
+      return { success: false, error: 'Refund processing not implemented yet' };
     } catch (error) {
       console.error('Error processing refund:', error);
       return { success: false, error: 'Refund processing failed' };
-    }
-  },
-
-  /**
-   * Get available payment methods for Philippines
-   */
-  async getPaymentMethods(amount: number, currency: string = 'PHP'): Promise<{ success: boolean; paymentMethods?: any[]; error?: string }> {
-    try {
-      const request = {
-        merchantAccount: ADYEN_MERCHANT_ACCOUNT,
-        countryCode: 'PH',
-        amount: {
-          currency,
-          value: Math.round(amount * 100)
-        },
-        channel: 'Web'
-      };
-
-      const response = await fetch(`${ADYEN_CHECKOUT_API}/paymentMethods`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': ADYEN_API_KEY
-        },
-        body: JSON.stringify(request)
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.message || 'Failed to get payment methods' };
-      }
-
-      return { success: true, paymentMethods: result.paymentMethods };
-
-    } catch (error) {
-      console.error('Error getting payment methods:', error);
-      return { success: false, error: 'Failed to get payment methods' };
     }
   },
 
@@ -365,53 +262,7 @@ export const adyenPaymentService = {
     return statusMap[resultCode] || 'pending';
   },
 
-  private async createPaymentRecord(paymentData: {
-    merchantReference: string;
-    patientId: string;
-    clinicId: string;
-    appointmentId?: string;
-    amountValue: number;
-    currency: string;
-    paymentMethod: string;
-    status: string;
-  }): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('payments')
-        .insert([{
-          merchant_reference: paymentData.merchantReference,
-          patient_id: paymentData.patientId,
-          clinic_id: paymentData.clinicId,
-          appointment_id: paymentData.appointmentId,
-          amount_value: paymentData.amountValue,
-          currency: paymentData.currency,
-          payment_method: paymentData.paymentMethod,
-          status: paymentData.status,
-          expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 minutes
-        }]);
-
-      if (error) {
-        console.error('Error creating payment record:', error);
-      }
-    } catch (error) {
-      console.error('Error in createPaymentRecord:', error);
-    }
-  },
-
-  private async updatePaymentRecord(merchantReference: string, updates: any): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('payments')
-        .update(updates)
-        .eq('merchant_reference', merchantReference);
-
-      if (error) {
-        console.error('Error updating payment record:', error);
-      }
-    } catch (error) {
-      console.error('Error in updatePaymentRecord:', error);
-    }
-  }
+  // Database operations are now handled by backend endpoints
 };
 
 // Configuration object for Adyen Web Components
@@ -419,7 +270,7 @@ export const adyenConfiguration = {
   environment: ADYEN_ENVIRONMENT,
   clientKey: ADYEN_CLIENT_KEY,
   analytics: {
-    enabled: false // Set to true for production analytics
+    enabled: ADYEN_ENVIRONMENT === 'live' // Enable analytics for production
   },
   paymentMethodsConfiguration: {
     card: {
@@ -432,6 +283,9 @@ export const adyenConfiguration = {
     },
     paymaya: {
       showImage: true
+    },
+    grabpay_PH: {
+      showImage: true
     }
   },
   locale: 'en_PH',
@@ -441,3 +295,28 @@ export const adyenConfiguration = {
     value: 0 // Will be set dynamically
   }
 };
+
+// Helper function to get configuration with session data
+export function getAdyenConfiguration(session?: { id: string; sessionData: string }) {
+  if (!ADYEN_CLIENT_KEY) {
+    throw new Error('Adyen Client Key is not configured. Please check your environment variables.');
+  }
+
+  const config = {
+    ...adyenConfiguration,
+    clientKey: ADYEN_CLIENT_KEY,
+    environment: ADYEN_ENVIRONMENT
+  };
+
+  if (session) {
+    return {
+      ...config,
+      session: {
+        id: session.id,
+        sessionData: session.sessionData
+      }
+    };
+  }
+
+  return config;
+}

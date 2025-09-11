@@ -27,6 +27,7 @@ import { LatestReviews } from "../../components/dashboard/LatestReviews";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, Title } from "chart.js";
 import { clinicDashboardService, type ClinicStats, type RecentActivity } from "../../features/auth/utils/clinicDashboardService";
+import { reviewsService, type ReviewSentiment, type ReviewAnalytics } from "../../features/auth/utils/reviewsService";
 import { roleBasedAuthService } from "../../features/auth/utils/roleBasedAuthService";
 import { clinicService } from "../../features/auth/utils/clinicService";
 ChartJS.register(ArcElement, Tooltip, Legend, Title);
@@ -41,6 +42,8 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
   const [stats, setStats] = useState<ClinicStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [clinicId, setClinicId] = useState<string | null>(null);
+  const [reviewSentiment, setReviewSentiment] = useState<ReviewSentiment | null>(null);
+  const [reviewAnalytics, setReviewAnalytics] = useState<ReviewAnalytics | null>(null);
 
   const quickActions = [
     {
@@ -92,10 +95,12 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
           const clinicId = clinicResult.clinic.id;
           setClinicId(clinicId);
 
-          // Fetch stats and recent activity
-          const [statsResult, activityResult] = await Promise.all([
+          // Fetch stats, recent activity, and review data
+          const [statsResult, activityResult, sentimentResult, analyticsResult] = await Promise.all([
             clinicDashboardService.getClinicStats(clinicId),
-            clinicDashboardService.getRecentActivity(clinicId, 5)
+            clinicDashboardService.getRecentActivity(clinicId, 5),
+            reviewsService.getReviewSentiment(clinicId),
+            reviewsService.getReviewAnalytics(clinicId)
           ]);
 
           if (statsResult.success && statsResult.stats) {
@@ -104,6 +109,14 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
 
           if (activityResult.success && activityResult.activities) {
             setRecentActivity(activityResult.activities);
+          }
+
+          if (sentimentResult.success && sentimentResult.sentiment) {
+            setReviewSentiment(sentimentResult.sentiment);
+          }
+
+          if (analyticsResult.success && analyticsResult.analytics) {
+            setReviewAnalytics(analyticsResult.analytics);
           }
         }
       } catch (error) {
@@ -241,53 +254,111 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Reviews Table */}
           <div className="w-full lg:w-2/3">
-            <LatestReviews />
+            <LatestReviews clinicId={clinicId || undefined} limit={5} />
           </div>
 
-          {/* Pie Chart */}
-          {/* Pie Chart */}
-          <div className="w-full lg:w-1/3 bg-white rounded-lg shadow p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Review Sentiment
-            </h3>
+          {/* Enhanced Pie Chart */}
+          <div className="w-full lg:w-1/3">
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Review Analytics
+                </h3>
+                {reviewAnalytics && (
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-yellow-600">
+                      {reviewAnalytics.averageRating}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {reviewAnalytics.totalReviews} reviews
+                    </p>
+                  </div>
+                )}
+              </div>
 
-            <div
-              style={{ position: "relative", height: "250px", width: "100%" }}
-            >
-              <Pie
-                data={{
-                  labels: ["Positive", "Negative", "Neutral"],
-                  datasets: [
-                    {
-                      label: "Sentiment",
-                      data: [10, 5, 2],
-                      backgroundColor: [
-                        "rgba(34, 197, 94, 0.5)", // Green
-                        "rgba(239, 68, 68, 0.5)", // Red
-                        "rgba(234, 179, 8, 0.5)", // Yellow
+              {reviewSentiment && (reviewSentiment.positive + reviewSentiment.negative + reviewSentiment.neutral) > 0 ? (
+                <div
+                  style={{ position: "relative", height: "200px", width: "100%" }}
+                >
+                  <Pie
+                    data={{
+                      labels: ["Positive (4-5★)", "Neutral (3★)", "Negative (1-2★)"],
+                      datasets: [
+                        {
+                          label: "Reviews",
+                          data: [reviewSentiment.positive, reviewSentiment.neutral, reviewSentiment.negative],
+                          backgroundColor: [
+                            "rgba(34, 197, 94, 0.8)", // Green
+                            "rgba(234, 179, 8, 0.8)", // Yellow
+                            "rgba(239, 68, 68, 0.8)", // Red
+                          ],
+                          borderColor: [
+                            "rgba(34, 197, 94, 1)",
+                            "rgba(234, 179, 8, 1)",
+                            "rgba(239, 68, 68, 1)",
+                          ],
+                          borderWidth: 2,
+                        },
                       ],
-                      borderColor: [
-                        "rgba(34, 197, 94, 1)",
-                        "rgba(239, 68, 68, 1)",
-                        "rgba(234, 179, 8, 1)",
-                      ],
-                      borderWidth: 1,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: "bottom",
-                    },
-                    title: {
-                      display: false,
-                    },
-                  },
-                }}
-              />
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: "bottom",
+                          labels: {
+                            padding: 15,
+                            font: {
+                              size: 11
+                            }
+                          }
+                        },
+                        title: {
+                          display: false,
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: (context) => {
+                              const total = reviewSentiment.positive + reviewSentiment.neutral + reviewSentiment.negative;
+                              const percentage = Math.round((context.raw as number / total) * 100);
+                              return `${context.label}: ${context.raw} reviews (${percentage}%)`;
+                            }
+                          }
+                        }
+                      },
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-40">
+                  <div className="text-center text-gray-400">
+                    <Star className="h-12 w-12 mx-auto mb-2" />
+                    <p className="text-sm">No review data yet</p>
+                    <p className="text-xs">Reviews will appear here once patients leave feedback</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional metrics */}
+              {reviewAnalytics && reviewAnalytics.totalReviews > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-gray-500">Recommendation Rate</p>
+                      <p className="text-sm font-semibold text-green-600">
+                        {reviewAnalytics.recommendationRate}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Verified Reviews</p>
+                      <p className="text-sm font-semibold text-blue-600">
+                        {reviewAnalytics.verifiedReviewsCount}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -14,6 +14,8 @@ import { Modal } from '../../components/ui/Modal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthService';
 import { prescriptionService, PrescriptionWithPatient, CreatePrescriptionData } from '../../features/auth/utils/prescriptionService';
+import { doctorDashboardService, DoctorStats, DoctorActivity } from '../../features/auth/utils/doctorDashboardService';
+import { doctorService, DoctorProfile } from '../../features/auth/utils/doctorService';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { DoctorAppointments } from './DoctorAppointments';
 import { SkeletonDashboard } from '../../components/ui/Skeleton';
@@ -50,6 +52,9 @@ interface Patient {
 
 export const DoctorDashboard: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
+  const [doctorStats, setDoctorStats] = useState<DoctorStats | null>(null);
+  const [doctorActivity, setDoctorActivity] = useState<DoctorActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('appointments');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -74,6 +79,14 @@ export const DoctorDashboard: React.FC = () => {
   });
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [profileUpdateData, setProfileUpdateData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    specialization: '',
+    availability: '',
+    years_experience: 0
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -86,7 +99,7 @@ export const DoctorDashboard: React.FC = () => {
           return;
         }
         setCurrentUser(user);
-        loadMockData();
+        await loadDoctorData(user.user.id);
       } catch (error) {
         console.error('Auth check error:', error);
         navigate('/doctor-signin');
@@ -98,113 +111,46 @@ export const DoctorDashboard: React.FC = () => {
     checkAuth();
   }, [navigate]);
 
-  const loadMockData = async () => {
-    // Mock appointments data
-    const mockAppointments: Appointment[] = [
-      {
-        id: '1',
-        patientName: 'John Smith',
-        patientId: 'P001',
-        patientEmail: 'john.smith@email.com',
-        patientPhone: '+1 234-567-8901',
-        date: '2024-01-15',
-        time: '09:00',
-        status: 'scheduled',
-        type: 'General Consultation',
-        notes: 'Follow-up appointment for blood pressure monitoring'
-      },
-      {
-        id: '2',
-        patientName: 'Sarah Johnson',
-        patientId: 'P002',
-        patientEmail: 'sarah.johnson@email.com',
-        patientPhone: '+1 234-567-8902',
-        date: '2024-01-15',
-        time: '10:30',
-        status: 'in-progress',
-        type: 'Physical Examination',
-        notes: 'Annual checkup and vaccination'
-      },
-      {
-        id: '3',
-        patientName: 'Michael Brown',
-        patientId: 'P003',
-        patientEmail: 'michael.brown@email.com',
-        patientPhone: '+1 234-567-8903',
-        date: '2024-01-15',
-        time: '14:00',
-        status: 'completed',
-        type: 'Follow-up Consultation',
-        notes: 'Diabetes management review',
-        prescription: 'Metformin 500mg twice daily'
-      },
-      {
-        id: '4',
-        patientName: 'Emily Davis',
-        patientId: 'P004',
-        patientEmail: 'emily.davis@email.com',
-        patientPhone: '+1 234-567-8904',
-        date: '2024-01-16',
-        time: '11:00',
-        status: 'scheduled',
-        type: 'Emergency Consultation',
-        notes: 'Chest pain and shortness of breath'
-      }
-    ];
+  const loadDoctorData = async (userId: string) => {
+    try {
+      // Get doctor profile
+      const doctorResult = await doctorDashboardService.getDoctorByUserId(userId);
+      if (doctorResult.success && doctorResult.doctor) {
+        const doctor = doctorResult.doctor;
+        setDoctorProfile(doctor);
+        
+        // Set profile update data
+        setProfileUpdateData({
+          full_name: doctor.full_name || '',
+          email: doctor.email || '',
+          phone: doctor.phone || '',
+          specialization: doctor.specialization || '',
+          availability: doctor.availability || '',
+          years_experience: doctor.years_experience || 0
+        });
 
-    // Mock patients data
-    const mockPatients: Patient[] = [
-      {
-        id: 'P001',
-        name: 'John Smith',
-        email: 'john.smith@email.com',
-        phone: '+1 234-567-8901',
-        age: 45,
-        gender: 'Male',
-        lastVisit: '2024-01-08',
-        medicalHistory: 'Hypertension, Type 2 Diabetes',
-        allergies: 'Penicillin',
-        currentMedications: 'Lisinopril 10mg daily, Metformin 500mg twice daily'
-      },
-      {
-        id: 'P002',
-        name: 'Sarah Johnson',
-        email: 'sarah.johnson@email.com',
-        phone: '+1 234-567-8902',
-        age: 32,
-        gender: 'Female',
-        lastVisit: '2024-01-10',
-        medicalHistory: 'Asthma, Seasonal allergies',
-        allergies: 'None known',
-        currentMedications: 'Albuterol inhaler as needed'
-      },
-      {
-        id: 'P003',
-        name: 'Michael Brown',
-        email: 'michael.brown@email.com',
-        phone: '+1 234-567-8903',
-        age: 58,
-        gender: 'Male',
-        lastVisit: '2024-01-12',
-        medicalHistory: 'Type 2 Diabetes, High cholesterol',
-        allergies: 'Sulfa drugs',
-        currentMedications: 'Metformin 500mg twice daily, Atorvastatin 20mg daily'
-      }
-    ];
-
-    setAppointments(mockAppointments);
-    setPatients(mockPatients);
-    
-    // Load real prescriptions if user is authenticated
-    if (currentUser?.user?.id) {
-      try {
-        const result = await prescriptionService.getPrescriptionsByDoctor(currentUser.user.id);
-        if (result.success && result.prescriptions) {
-          setPrescriptions(result.prescriptions);
+        // Load doctor stats
+        const statsResult = await doctorDashboardService.getDoctorStats(doctor.id);
+        if (statsResult.success && statsResult.stats) {
+          setDoctorStats(statsResult.stats);
         }
-      } catch (error) {
-        console.error('Error loading prescriptions:', error);
+
+        // Load doctor activity
+        const activityResult = await doctorDashboardService.getDoctorActivity(doctor.id, 10);
+        if (activityResult.success && activityResult.activities) {
+          setDoctorActivity(activityResult.activities);
+        }
+
+        // Load prescriptions
+        const prescriptionsResult = await prescriptionService.getPrescriptionsByDoctor(doctor.id);
+        if (prescriptionsResult.success && prescriptionsResult.prescriptions) {
+          setPrescriptions(prescriptionsResult.prescriptions);
+        }
+      } else {
+        console.error('Failed to load doctor profile:', doctorResult.error);
       }
+    } catch (error) {
+      console.error('Error loading doctor data:', error);
     }
   };
 
@@ -363,10 +309,49 @@ export const DoctorDashboard: React.FC = () => {
     }));
   };
 
-  const handleProfilePictureUpload = (file: File) => {
-    setProfilePicture(file);
-    // Here you would typically upload to your storage service
-    console.log('Profile picture uploaded:', file.name);
+  const handleProfilePictureUpload = async (file: File) => {
+    if (!doctorProfile) return;
+    
+    try {
+      setProfilePicture(file);
+      const result = await doctorDashboardService.uploadProfilePicture(doctorProfile.id, file);
+      
+      if (result.success) {
+        // Update doctor profile state
+        setDoctorProfile(prev => prev ? {
+          ...prev,
+          profile_picture_url: result.url,
+          profile_picture_path: result.path
+        } : null);
+        alert('Profile picture updated successfully!');
+      } else {
+        alert(`Failed to upload profile picture: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      alert('Failed to upload profile picture');
+    } finally {
+      setProfilePicture(null);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!doctorProfile) return;
+    
+    try {
+      const result = await doctorDashboardService.updateDoctorProfile(doctorProfile.id, profileUpdateData);
+      
+      if (result.success && result.doctor) {
+        setDoctorProfile(result.doctor);
+        setShowProfileModal(false);
+        alert('Profile updated successfully!');
+      } else {
+        alert(`Failed to update profile: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Failed to update profile');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -944,9 +929,11 @@ export const DoctorDashboard: React.FC = () => {
   );
 
   const renderContent = () => {
+    const doctorId = doctorProfile?.id || '';
+    
     switch (activeTab) {
       case 'appointments':
-        return <DoctorAppointments doctorId={currentUser?.id || ''} />;
+        return <DoctorAppointments doctorId={doctorId} />;
       case 'history':
         return renderHistory();
       case 'prescriptions':
@@ -956,7 +943,7 @@ export const DoctorDashboard: React.FC = () => {
       case 'profile':
         return renderProfile();
       default:
-        return <DoctorAppointments doctorId={currentUser?.id || ''} />;
+        return <DoctorAppointments doctorId={doctorId} />;
     }
   };
 

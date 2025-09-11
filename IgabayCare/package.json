@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@adyen/adyen-web": "^6.21.0",
+    "@adyen/api-library": "^29.1.0",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-tooltip": "^1.2.8",
@@ -20,6 +21,7 @@
     "chart.js": "^4.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "googleapis": "^159.0.0",
     "leaflet": "^1.9.4",
     "leaflet-routing-machine": "^3.2.12",
     "lucide-react": "^0.344.0",

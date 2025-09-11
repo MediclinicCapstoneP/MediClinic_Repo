@@ -7,6 +7,7 @@ import {
   AppointmentWithDetails,
   AppointmentStats
 } from '../../../types/appointments';
+import googleCalendarService from '../../../services/googleCalendarService';
 
 export class AppointmentService {
   private static TABLE_NAME = 'appointments';
@@ -25,6 +26,61 @@ export class AppointmentService {
       if (error) {
         console.error('Error creating appointment:', error);
         throw error;
+      }
+
+      // Try to create Google Calendar event
+      if (appointment) {
+        try {
+          // Get patient and doctor details for the calendar event
+          const patientQuery = supabase
+            .from('patients')
+            .select('first_name, last_name, email')
+            .eq('id', appointment.patient_id)
+            .single();
+
+          const doctorQuery = appointment.doctor_id 
+            ? supabase
+                .from('doctors')
+                .select('first_name, last_name, email')
+                .eq('id', appointment.doctor_id)
+                .single()
+            : null;
+
+          const [patientResult, doctorResult] = await Promise.all([
+            patientQuery,
+            doctorQuery
+          ]);
+
+          const patient = patientResult.data;
+          const doctor = doctorResult?.data;
+
+          const googleCalendarEventId = await googleCalendarService.createAppointmentEvent({
+            patientName: patient ? `${patient.first_name} ${patient.last_name}` : 'Unknown Patient',
+            doctorName: doctor ? `Dr. ${doctor.first_name} ${doctor.last_name}` : 'Unknown Doctor',
+            service: appointment.appointment_type || 'Medical Consultation',
+            date: appointment.appointment_date,
+            time: appointment.appointment_time,
+            duration: appointment.duration_minutes || 30,
+            patientEmail: patient?.email,
+            doctorEmail: doctor?.email,
+            notes: appointment.patient_notes || appointment.notes
+          });
+
+          // Update appointment with Google Calendar event ID if created successfully
+          if (googleCalendarEventId) {
+            await supabase
+              .from(this.TABLE_NAME)
+              .update({ google_calendar_event_id: googleCalendarEventId })
+              .eq('id', appointment.id);
+            
+            // Update the returned appointment object
+            appointment.google_calendar_event_id = googleCalendarEventId;
+            console.log('Google Calendar event created:', googleCalendarEventId);
+          }
+        } catch (calendarError) {
+          console.warn('Failed to create Google Calendar event (appointment still created):', calendarError);
+          // Don't fail the appointment creation if calendar creation fails
+        }
       }
 
       return appointment;
@@ -151,6 +207,7 @@ export class AppointmentService {
    */
   static async getAppointmentsWithDetails(filters: AppointmentFilters = {}): Promise<AppointmentWithDetails[]> {
     try {
+      // First, try to get appointments with patient and clinic joins
       let query = supabase
         .from(this.TABLE_NAME)
         .select(`
@@ -198,10 +255,55 @@ export class AppointmentService {
         query = query.eq('priority', filters.priority);
       }
 
-      const { data: appointments, error } = await query;
+      let { data: appointments, error } = await query;
+
+      // If the query fails (possibly due to missing patients table or join issues),
+      // fallback to a simple query without joins
+      if (error) {
+        console.warn('Failed to fetch appointments with joins, trying fallback query:', error.message);
+        
+        let fallbackQuery = supabase
+          .from(this.TABLE_NAME)
+          .select('*')
+          .order('appointment_date', { ascending: true })
+          .order('appointment_time', { ascending: true });
+
+        // Apply same filters to fallback query
+        if (filters.patient_id) {
+          fallbackQuery = fallbackQuery.eq('patient_id', filters.patient_id);
+        }
+        if (filters.clinic_id) {
+          fallbackQuery = fallbackQuery.eq('clinic_id', filters.clinic_id);
+        }
+        if (filters.doctor_id) {
+          fallbackQuery = fallbackQuery.eq('doctor_id', filters.doctor_id);
+        }
+        if (filters.appointment_date) {
+          fallbackQuery = fallbackQuery.eq('appointment_date', filters.appointment_date);
+        }
+        if (filters.appointment_date_from) {
+          fallbackQuery = fallbackQuery.gte('appointment_date', filters.appointment_date_from);
+        }
+        if (filters.appointment_date_to) {
+          fallbackQuery = fallbackQuery.lte('appointment_date', filters.appointment_date_to);
+        }
+        if (filters.status) {
+          fallbackQuery = fallbackQuery.eq('status', filters.status);
+        }
+        if (filters.appointment_type) {
+          fallbackQuery = fallbackQuery.eq('appointment_type', filters.appointment_type);
+        }
+        if (filters.priority) {
+          fallbackQuery = fallbackQuery.eq('priority', filters.priority);
+        }
+
+        const fallbackResult = await fallbackQuery;
+        appointments = fallbackResult.data;
+        error = fallbackResult.error;
+      }
 
       if (error) {
-        console.error('Error fetching appointments with details:', error);
+        console.error('Error fetching appointments:', error);
         return [];
       }
 
@@ -269,6 +371,64 @@ export class AppointmentService {
         throw error;
       }
 
+      // Try to update Google Calendar event if it exists
+      if (appointment && appointment.google_calendar_event_id) {
+        try {
+          // Get patient and doctor details if they're being updated
+          let patientName, doctorName, patientEmail, doctorEmail;
+          
+          if (data.patient_id || data.doctor_id) {
+            const patientQuery = data.patient_id 
+              ? supabase
+                  .from('patients')
+                  .select('first_name, last_name, email')
+                  .eq('id', data.patient_id)
+                  .single()
+              : null;
+
+            const doctorQuery = data.doctor_id 
+              ? supabase
+                  .from('doctors')
+                  .select('first_name, last_name, email')
+                  .eq('id', data.doctor_id)
+                  .single()
+              : null;
+
+            if (patientQuery || doctorQuery) {
+              const [patientResult, doctorResult] = await Promise.all([
+                patientQuery,
+                doctorQuery
+              ]);
+
+              const patient = patientResult?.data;
+              const doctor = doctorResult?.data;
+              
+              patientName = patient ? `${patient.first_name} ${patient.last_name}` : undefined;
+              doctorName = doctor ? `Dr. ${doctor.first_name} ${doctor.last_name}` : undefined;
+              patientEmail = patient?.email;
+              doctorEmail = doctor?.email;
+            }
+          }
+
+          await googleCalendarService.updateAppointmentEvent(appointment.google_calendar_event_id, {
+            patientName,
+            doctorName,
+            service: data.appointment_type,
+            date: data.appointment_date,
+            time: data.appointment_time,
+            duration: data.duration_minutes,
+            patientEmail,
+            doctorEmail,
+            notes: data.patient_notes || data.notes
+          });
+          
+          console.log('Google Calendar event updated:', appointment.google_calendar_event_id);
+        } catch (calendarError) {
+          console.warn('Failed to update Google Calendar event:', calendarError);
+          // Don't fail the appointment update if calendar update fails
+        }
+      }
+
       return appointment;
     } catch (error) {
       console.error('Error updating appointment:', error);
@@ -281,6 +441,18 @@ export class AppointmentService {
    */
   static async deleteAppointment(id: string): Promise<boolean> {
     try {
+      // First, get the appointment to check if it has a Google Calendar event
+      const { data: appointment, error: fetchError } = await supabase
+        .from(this.TABLE_NAME)
+        .select('google_calendar_event_id')
+        .eq('id', id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
+        console.error('Error fetching appointment for deletion:', fetchError);
+      }
+
+      // Delete from database
       const { error } = await supabase
         .from(this.TABLE_NAME)
         .delete()
@@ -289,6 +461,17 @@ export class AppointmentService {
       if (error) {
         console.error('Error deleting appointment:', error);
         throw error;
+      }
+
+      // Try to delete Google Calendar event if it exists
+      if (appointment?.google_calendar_event_id) {
+        try {
+          await googleCalendarService.deleteAppointmentEvent(appointment.google_calendar_event_id);
+          console.log('Google Calendar event deleted:', appointment.google_calendar_event_id);
+        } catch (calendarError) {
+          console.warn('Failed to delete Google Calendar event:', calendarError);
+          // Don't fail the appointment deletion if calendar deletion fails
+        }
       }
 
       return true;
