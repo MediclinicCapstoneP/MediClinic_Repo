@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MapPin, Calendar, Star, Users, Award, Shield, Phone, Mail, ExternalLink, Navigation, DollarSign } from 'lucide-react';
+import { MapPin, Calendar, Star, Users, Award, Shield, Phone, Mail, ExternalLink, Navigation, DollarSign, Stethoscope } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -301,12 +301,6 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
 
   // Apply filters and sorting to clinics
   const applyFilters = useCallback(() => {
-    if (!filtersApplied) {
-      // Show all clinics by default when no filters are applied
-      setFilteredClinics(clinics);
-      return;
-    }
-
     let filtered = [...clinics];
 
     // Calculate distances if location is available
@@ -400,19 +394,12 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
     setFilteredClinics(filtered);
   }, [clinics, filters, calculateDistance, filtersApplied]);
 
-  // Initial load - show all clinics
+  // Apply filters whenever clinics or filters change
   useEffect(() => {
-    if (clinics.length > 0 && !filtersApplied) {
-      setFilteredClinics(clinics);
-    }
-  }, [clinics, filtersApplied]);
-
-  // Apply filters when they change
-  useEffect(() => {
-    if (filtersApplied) {
+    if (clinics.length > 0) {
       applyFilters();
     }
-  }, [filters, filtersApplied, applyFilters]);
+  }, [clinics, filters, applyFilters]);
 
   // Reset appointment type when clinic changes or services change
   useEffect(() => {
@@ -476,239 +463,310 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
     <>
       {/* Filter Component */}
       <ClinicFilters
-        onFiltersChange={setFilters}
+        onFiltersChange={(newFilters) => {
+          setFilters(newFilters);
+          setFiltersApplied(true);
+        }}
         onApplyFilters={() => setFiltersApplied(true)}
         availableServices={availableServices}
         loading={loading}
       />
 
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">
-          {filters.location.useCurrentLocation ? 'Nearby Clinics' : 'Available Clinics'}
-          {filteredClinics.length > 0 && (
-            <span className="text-sm font-normal text-gray-500 ml-2">
-              ({filteredClinics.length} found)
-            </span>
-          )}
-        </h2>
-        {filters.sortBy === 'distance' && filters.location.useCurrentLocation && (
-          <div className="flex items-center text-sm text-blue-600">
-            <Navigation className="h-4 w-4 mr-1" />
-            Sorted by distance
+      <div className="bg-white rounded-lg p-4 mb-6 shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {filters.location.useCurrentLocation ? '📍 Nearby Clinics' : '🏥 Available Clinics'}
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {filteredClinics.length > 0 ? (
+                `${filteredClinics.length} clinic${filteredClinics.length !== 1 ? 's' : ''} found`
+              ) : (
+                'No clinics match your current filters'
+              )}
+            </p>
           </div>
-        )}
+          {filters.sortBy === 'distance' && filters.location.useCurrentLocation && (
+            <div className="flex items-center text-sm bg-blue-100 text-blue-800 px-3 py-2 rounded-full font-medium">
+              <Navigation className="h-4 w-4 mr-2" />
+              Sorted by distance
+            </div>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : filteredClinics.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-gray-400 mb-4">
-            <Users className="h-16 w-16 mx-auto mb-4" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            No Clinics Match Your Filters
-          </h3>
-          <p className="text-gray-500 mb-4">
-            Try adjusting your location radius, service requirements, price range, or rating filters.
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mx-auto max-w-md">
-            <div className="text-sm text-blue-800">
-              <p className="font-medium mb-2">💡 Filter Tips:</p>
-              <div className="text-left space-y-1">
-                <p>• Increase location radius for more results</p>
-                <p>• Remove specific service requirements</p>
-                <p>• Expand your price range</p>
-                <p>• Lower minimum rating requirement</p>
+        <div className="text-center py-16">
+          <div className="max-w-md mx-auto">
+            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Users className="h-12 w-12 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">
+              No Clinics Found
+            </h3>
+            <p className="text-gray-600 mb-8 leading-relaxed">
+              We couldn't find any clinics matching your current filters. Try adjusting your search criteria to see more results.
+            </p>
+            
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 text-left">
+              <div className="flex items-center mb-4">
+                <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center mr-3">
+                  <span className="text-blue-700 text-sm font-bold">💡</span>
+                </div>
+                <h4 className="font-semibold text-blue-900">Helpful Tips</h4>
+              </div>
+              <div className="space-y-3 text-sm text-blue-800">
+                <div className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  <p>Increase your location radius to include more distant clinics</p>
+                </div>
+                <div className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  <p>Remove specific service requirements to see general clinics</p>
+                </div>
+                <div className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  <p>Expand your budget range for more options</p>
+                </div>
+                <div className="flex items-start">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                  <p>Lower the minimum rating requirement</p>
+                </div>
+              </div>
+              
+              <div className="mt-6 pt-4 border-t border-blue-200">
+                <Button
+                  onClick={() => {
+                    setFilters({
+                      location: { latitude: null, longitude: null, radius: 10, useCurrentLocation: false },
+                      services: [],
+                      priceRange: { min: 0, max: 5000 },
+                      rating: { minimum: 0 },
+                      sortBy: 'distance'
+                    });
+                    setFiltersApplied(false);
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Reset All Filters
+                </Button>
               </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
           {filteredClinics.map((clinic) => (
             <div key={clinic.id} onClick={() => handleClinicClick(clinic.id)}>
-              <Card className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-gray-200 hover:border-blue-300 bg-white">
-                <CardContent className="p-2 sm:p-4 lg:p-6">
+              <Card className="cursor-pointer hover:shadow-xl transition-all duration-300 border border-gray-200 hover:border-blue-400 bg-white hover:-translate-y-1 group">
+                <CardContent className="p-3 sm:p-4 lg:p-6">
                   {/* Clinic Image */}
-                  <div className="relative mb-2 sm:mb-3 lg:mb-4">
+                  <div className="relative mb-3 sm:mb-4 lg:mb-5 overflow-hidden rounded-xl">
                     <img
                       src={clinic.profile_pic_url || DEFAULT_CLINIC_IMAGE}
                       alt={clinic.clinic_name}
-                      className="w-full h-24 sm:h-32 lg:h-48 object-cover rounded-lg"
+                      className="w-full h-28 sm:h-36 lg:h-52 object-cover transition-transform duration-300 group-hover:scale-105"
                       onError={(e) => {
                         e.currentTarget.src = DEFAULT_CLINIC_IMAGE;
                       }}
                     />
                     
                     {/* Status Badge */}
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3">
+                    <div className="absolute top-3 right-3">
                       {clinic.status === 'approved' ? (
-                        <div className="bg-green-100 text-green-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium flex items-center">
-                          <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                        <div className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center shadow-lg">
+                          <Shield className="h-3 w-3 mr-1" />
                           <span className="hidden sm:inline">Verified</span>
                           <span className="sm:hidden">✓</span>
                         </div>
                       ) : (
-                        <div className="bg-yellow-100 text-yellow-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium">
+                        <div className="bg-orange-500 text-white px-2 py-1 rounded-full text-xs font-medium shadow-lg">
                           <span className="hidden sm:inline">Pending</span>
                           <span className="sm:hidden">⏳</span>
                         </div>
                       )}
                     </div>
+                    
+                    {/* Distance Badge */}
+                    {clinic.distance && (
+                      <div className="absolute top-3 left-3">
+                        <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium shadow-lg">
+                          {clinic.distance.toFixed(1)}km
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Clinic Name */}
-                  <div className="mb-3">
-                    <h3 className="font-bold text-lg sm:text-xl text-gray-900 line-clamp-2 mb-1">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-lg sm:text-xl text-gray-900 line-clamp-2 mb-2 group-hover:text-blue-600 transition-colors">
                       {clinic.clinic_name || 'Medical Clinic'}
                     </h3>
                     {clinic.description && (
-                      <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">
+                      <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
                         {clinic.description}
                       </p>
                     )}
                   </div>
                   
                   {/* Location */}
-                  <div className="mb-1.5 sm:mb-2 lg:mb-3">
-                    <p className="text-xs text-gray-600 flex items-center line-clamp-1">
-                      <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-600 flex items-center line-clamp-1">
+                      <MapPin className="h-4 w-4 mr-2 flex-shrink-0 text-gray-400" />
                       <span className="truncate">{clinic.address ? `${clinic.address}, ${clinic.city}` : clinic.city}</span>
-                      {clinic.distance && (
-                        <span className="ml-1 sm:ml-2 text-blue-600 font-medium text-xs whitespace-nowrap">
-                          ({clinic.distance.toFixed(1)}km)
-                        </span>
-                      )}
                     </p>
                   </div>
                   
                   {/* Contact Information */}
-                  <div className="space-y-2 mb-4">
-                    {/* Address */}
-                    {formatAddress(clinic) && clinic.distance && (
-                      <div className="flex items-start text-sm text-gray-600">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {clinic.distance.toFixed(1)} km away
-                      </div>
-                    )}
-                    
+                  <div className="space-y-3 mb-5">
                     {/* Phone */}
                     {clinic.phone && (
                       <div className="flex items-center text-sm text-gray-600">
-                        <Phone className="h-4 w-4 mr-2 flex-shrink-0 text-green-500" />
-                        <span>{clinic.phone}</span>
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                          <Phone className="h-4 w-4 text-green-600" />
+                        </div>
+                        <span className="font-medium">{clinic.phone}</span>
                       </div>
                     )}
                     
                     {/* Email */}
                     {clinic.email && (
                       <div className="flex items-center text-sm text-gray-600">
-                        <Mail className="h-4 w-4 mr-2 flex-shrink-0 text-purple-500" />
-                        <span className="truncate">{clinic.email}</span>
+                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                          <Mail className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <span className="truncate font-medium">{clinic.email}</span>
                       </div>
                     )}
                   </div>
                   
                   {/* Services with Pricing */}
-                  <div className="mb-4">
+                  <div className="mb-5">
                     {clinic.services_with_pricing && clinic.services_with_pricing.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-gray-700">Available Services:</p>
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold text-gray-800 flex items-center">
+                          <Stethoscope className="h-4 w-4 mr-2 text-blue-600" />
+                          Services & Pricing
+                        </p>
                         <div className="flex flex-wrap gap-2">
-                          {clinic.services_with_pricing.slice(0, 3).map((service, index) => (
-                            <div key={index} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-medium border border-green-200 flex items-center">
-                              <span>{service.service_name}</span>
-                              <span className="ml-2 font-bold">₱{service.base_price}</span>
+                          {clinic.services_with_pricing.slice(0, 2).map((service, index) => (
+                            <div key={index} className="bg-gradient-to-r from-green-50 to-green-100 text-green-800 px-3 py-2 rounded-lg text-xs font-medium border border-green-200 flex items-center shadow-sm">
+                              <span className="mr-2">{service.service_name}</span>
+                              <span className="bg-green-200 px-2 py-0.5 rounded-full font-bold text-xs">₱{service.base_price}</span>
                             </div>
                           ))}
-                          {clinic.services_with_pricing.length > 3 && (
-                            <span className="bg-gray-50 text-gray-700 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
-                              +{clinic.services_with_pricing.length - 3} more services
-                            </span>
+                          {clinic.services_with_pricing.length > 2 && (
+                            <div className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 flex items-center">
+                              +{clinic.services_with_pricing.length - 2} more services
+                            </div>
                           )}
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {(clinic.specialties || []).slice(0, 2).map((specialty, index) => (
-                          <span key={index} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium border border-blue-200">
-                            {specialty}
-                          </span>
-                        ))}
-                        {(clinic.custom_specialties || []).slice(0, 2 - (clinic.specialties || []).length).map((specialty, index) => (
-                          <span key={`custom-${index}`} className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-medium border border-purple-200">
-                            {specialty}
-                          </span>
-                        ))}
-                        {((clinic.specialties || []).length + (clinic.custom_specialties || []).length) > 2 && (
-                          <span className="bg-gray-50 text-gray-700 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
-                            +{((clinic.specialties || []).length + (clinic.custom_specialties || []).length) - 2} more
-                          </span>
-                        )}
-                        {(!clinic.specialties || clinic.specialties.length === 0) && 
-                         (!clinic.custom_specialties || clinic.custom_specialties.length === 0) && (
-                          <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
-                            General Medicine
-                          </span>
-                        )}
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-gray-800 flex items-center">
+                          <Stethoscope className="h-4 w-4 mr-2 text-blue-600" />
+                          Specialties
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {(clinic.specialties || []).slice(0, 2).map((specialty, index) => (
+                            <span key={index} className="bg-gradient-to-r from-blue-50 to-blue-100 text-blue-800 px-3 py-1 rounded-lg text-xs font-medium border border-blue-200 shadow-sm">
+                              {specialty}
+                            </span>
+                          ))}
+                          {(clinic.custom_specialties || []).slice(0, 2 - (clinic.specialties || []).length).map((specialty, index) => (
+                            <span key={`custom-${index}`} className="bg-gradient-to-r from-purple-50 to-purple-100 text-purple-800 px-3 py-1 rounded-lg text-xs font-medium border border-purple-200 shadow-sm">
+                              {specialty}
+                            </span>
+                          ))}
+                          {((clinic.specialties || []).length + (clinic.custom_specialties || []).length) > 2 && (
+                            <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-xs font-medium border border-gray-200">
+                              +{((clinic.specialties || []).length + (clinic.custom_specialties || []).length) - 2} more
+                            </span>
+                          )}
+                          {(!clinic.specialties || clinic.specialties.length === 0) && 
+                           (!clinic.custom_specialties || clinic.custom_specialties.length === 0) && (
+                            <span className="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 px-3 py-1 rounded-lg text-xs font-medium border border-gray-200">
+                              General Medicine
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
                   
                   {/* Staff Information */}
                   {(clinic.number_of_doctors || clinic.number_of_staff) && (
-                    <div className="flex items-center text-sm text-gray-500 mb-4">
-                      <Users className="h-4 w-4 mr-2" />
-                      <span>
-                        {clinic.number_of_doctors ? `${clinic.number_of_doctors} Doctor${clinic.number_of_doctors > 1 ? 's' : ''}` : ''}
-                        {clinic.number_of_doctors && clinic.number_of_staff ? ' • ' : ''}
-                        {clinic.number_of_staff ? `${clinic.number_of_staff} Staff` : ''}
-                      </span>
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 mb-4 border border-blue-100">
+                      <div className="flex items-center text-sm text-blue-800">
+                        <div className="w-7 h-7 bg-blue-200 rounded-full flex items-center justify-center mr-3">
+                          <Users className="h-4 w-4 text-blue-700" />
+                        </div>
+                        <span className="font-semibold">
+                          {clinic.number_of_doctors ? `${clinic.number_of_doctors} Doctor${clinic.number_of_doctors > 1 ? 's' : ''}` : ''}
+                          {clinic.number_of_doctors && clinic.number_of_staff ? ' • ' : ''}
+                          {clinic.number_of_staff ? `${clinic.number_of_staff} Staff` : ''}
+                        </span>
+                      </div>
                     </div>
                   )}
                   
                   {/* Price, Rating, and Distance */}
-                  <div className="flex items-center justify-between mb-2 sm:mb-3 lg:mb-4 text-xs">
-                    <div className="flex items-center text-green-600">
-                      <DollarSign className="h-3 w-3 mr-0.5 sm:mr-1" />
-                      <span className="font-medium text-xs sm:text-sm">
-                        ₱{clinic.estimatedPrice?.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-yellow-600">
-                      <Star className="h-3 w-3 mr-0.5 sm:mr-1 fill-current" />
-                      <span className="text-xs sm:text-sm">{clinic.averageRating?.toFixed(1)}</span>
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center bg-green-100 px-3 py-2 rounded-lg">
+                        <DollarSign className="h-4 w-4 mr-2 text-green-600" />
+                        <span className="font-bold text-sm text-green-800">
+                          ₱{clinic.estimatedPrice?.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center bg-yellow-100 px-3 py-2 rounded-lg">
+                        <Star className="h-4 w-4 mr-2 text-yellow-600 fill-current" />
+                        <span className="font-bold text-sm text-yellow-800">{clinic.averageRating?.toFixed(1)}</span>
+                      </div>
                     </div>
                   </div>
                   
                   {/* Action Buttons */}
-                  <div className="space-y-1 sm:space-y-2">
+                  <div className="space-y-3">
                     <Button 
                       onClick={() => {
                         setSelectedClinic(clinic);
                         setShowBookingModal(true);
                       }}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 sm:py-2 lg:py-3 text-xs sm:text-sm lg:text-base rounded-lg transition-colors shadow-md hover:shadow-lg"
+                      className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 text-sm rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                     >
-                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">Book Appointment</span>
-                      <span className="sm:hidden">Book</span>
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Book Appointment
                     </Button>
-                    <Button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedClinicForMap(clinic);
-                        setShowMapModal(true);
-                      }}
-                      variant="outline" 
-                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 font-medium py-1 sm:py-1.5 lg:py-2 text-xs rounded-lg transition-colors"
-                    >
-                      <MapPin className="h-3 w-3 mr-1" />
-                      <span className="hidden sm:inline">View Location</span>
-                      <span className="sm:hidden">Map</span>
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedClinicForMap(clinic);
+                          setShowMapModal(true);
+                        }}
+                        variant="outline" 
+                        className="border-blue-200 text-blue-600 hover:bg-blue-50 font-medium py-2 text-xs rounded-lg transition-colors"
+                      >
+                        <MapPin className="h-3 w-3 mr-1" />
+                        Map
+                      </Button>
+                      <Button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClinicClick(clinic.id);
+                        }}
+                        variant="outline" 
+                        className="border-gray-200 text-gray-600 hover:bg-gray-50 font-medium py-2 text-xs rounded-lg transition-colors"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Details
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

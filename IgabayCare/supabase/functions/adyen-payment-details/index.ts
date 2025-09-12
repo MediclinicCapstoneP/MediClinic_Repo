@@ -4,6 +4,7 @@ import {
   handleOptions,
   createErrorResponse,
   createSuccessResponse,
+  adyenFetch,
 } from '../_shared/adyen-utils.ts';
 
 interface PaymentDetailsRequest {
@@ -30,7 +31,7 @@ serve(async (req) => {
     }
 
     // Initialize Adyen client
-    const { client } = createAdyenClient();
+    const { config } = createAdyenClient();
 
     // Prepare details request
     const detailsRequest = {
@@ -38,9 +39,8 @@ serve(async (req) => {
       paymentData: requestBody.paymentData,
     };
 
-    // Call Adyen Payments/details API
-    const checkout = client.checkout;
-    const detailsResponse = await checkout.paymentsDetails(detailsRequest);
+    // Call Adyen Payments/details API using fetch
+    const detailsResponse = await adyenFetch('/payments/details', detailsRequest, config.apiKey);
 
     return createSuccessResponse(detailsResponse, 'Payment details processed successfully');
 

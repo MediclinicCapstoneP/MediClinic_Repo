@@ -54,7 +54,14 @@ This guide walks you through setting up GCash payments via Adyen for your Igabay
 4. **Configure Webhooks**
    - Go to Customer Area → Developers → Webhooks
    - Create new webhook endpoint: `https://your-project.supabase.co/functions/v1/adyen-webhooks`
-   - Enable events: `AUTHORISATION`, `PENDING`, `CANCELLED`, `REFUND`
+   - Enable these key events:
+     - `AUTHORISATION` (payment success/failure)
+     - `PENDING` (payment pending)
+     - `CANCELLATION` (payment cancelled)
+     - `REFUND` (refund processed)
+     - `CAPTURE` (payment captured)
+     - `CHARGEBACK` (dispute initiated)
+     - `MANUAL_REVIEW_ACCEPT/REJECT` (manual review results)
    - Generate and save HMAC key
 
 5. **Set Allowed Origins**

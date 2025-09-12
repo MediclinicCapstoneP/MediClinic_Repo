@@ -130,6 +130,10 @@ export default function TabLayout() {
             name="profile"
             options={{ href: null }}
           />
+          <Tabs.Screen
+            name="patient"
+            options={{ href: null }}
+          />
         </Tabs>
       </ProtectedRoute>
     );

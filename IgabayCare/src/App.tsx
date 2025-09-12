@@ -17,6 +17,7 @@ import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 import { MedicalThemeProvider } from './core/providers/MedicalThemeProvider';
 import DebugPage from './pages/DebugPage';
 import AppointmentDisplayTestPage from './pages/AppointmentDisplayTestPage';
+import PaymentDebugPage from './pages/PaymentDebugPage';
 
 // Import environment checker in development
 if (import.meta.env.DEV) {
@@ -47,6 +48,8 @@ const App: React.FC = () => {
             {import.meta.env.DEV && <Route path="/debug" element={<DebugPage />} />}
             {/* Appointment display test route - remove in production */}
             {import.meta.env.DEV && <Route path="/appointment-display-test" element={<AppointmentDisplayTestPage />} />}
+            {/* Payment debug route - remove in production */}
+            {import.meta.env.DEV && <Route path="/payment-debug" element={<PaymentDebugPage />} />}
           </Routes>
           
           {/* Voiceflow chatbot now loaded via HTML script in index.html */}

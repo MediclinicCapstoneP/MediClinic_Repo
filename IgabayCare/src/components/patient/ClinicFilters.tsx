@@ -173,23 +173,26 @@ const ClinicFilters: React.FC<ClinicFiltersProps> = ({
   };
 
   return (
-    <div className="mb-4 sm:mb-6">
+    <div className="mb-6">
       {/* Horizontal Filter Bar */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
         {/* Main Filter Row */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Filters Label with Toggle */}
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-600" />
-            <span className="text-sm font-medium text-gray-700">Filters</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-gradient-to-r from-blue-50 to-indigo-50 px-3 py-2 rounded-lg border border-blue-200">
+              <Filter className="h-4 w-4 text-blue-600 mr-2" />
+              <span className="text-sm font-semibold text-blue-800">Filters</span>
+            </div>
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium text-gray-700"
             >
+              <span>{showAdvancedFilters ? 'Hide Advanced' : 'Show Advanced'}</span>
               {showAdvancedFilters ? (
-                <ChevronUp className="h-4 w-4 text-gray-500" />
+                <ChevronUp className="h-4 w-4" />
               ) : (
-                <ChevronDown className="h-4 w-4 text-gray-500" />
+                <ChevronDown className="h-4 w-4" />
               )}
             </button>
           </div>
@@ -200,39 +203,40 @@ const ClinicFilters: React.FC<ClinicFiltersProps> = ({
             disabled={locationLoading || loading}
             variant={filters.location.useCurrentLocation ? "primary" : "outline"}
             size="sm"
-            className={`flex items-center gap-1 px-3 py-1.5 text-sm ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
               filters.location.useCurrentLocation 
-                ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-md' 
+                : 'border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
             }`}
           >
             {locationLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Navigation className="h-3 w-3" />
+              <Navigation className="h-4 w-4" />
             )}
-            Near Me
+            {filters.location.useCurrentLocation ? '📍 Near Me' : 'Use Location'}
           </Button>
 
           {/* Distance Options */}
           {filters.location.useCurrentLocation && (
-            <>
+            <div className="flex items-center gap-2 bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+              <span className="text-sm font-medium text-green-800 mr-2">Within:</span>
               {[1, 5, 10, 25, 50].map((distance) => (
                 <button
                   key={distance}
                   onClick={() => updateFilters({
                     location: { ...filters.location, radius: distance }
                   })}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-all duration-200 font-medium ${
                     filters.location.radius === distance
-                      ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                      ? 'bg-green-500 text-white shadow-md transform scale-105'
+                      : 'bg-white text-green-700 hover:bg-green-100 border border-green-300'
                   }`}
                 >
-                  {distance}+
+                  {distance}km
                 </button>
               ))}
-            </>
+            </div>
           )}
 
           {/* Specialty Tags */}
@@ -258,26 +262,29 @@ const ClinicFilters: React.FC<ClinicFiltersProps> = ({
           </div>
 
           {/* Sort Dropdown */}
-          <select
-            value={filters.sortBy}
-            onChange={(e) => updateFilters({ sortBy: e.target.value as FilterOptions['sortBy'] })}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="distance">Nearest</option>
-            <option value="price_low">Price: Low</option>
-            <option value="price_high">Price: High</option>
-            <option value="rating">Rating</option>
-            <option value="name">Name</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Sort by:</span>
+            <select
+              value={filters.sortBy}
+              onChange={(e) => updateFilters({ sortBy: e.target.value as FilterOptions['sortBy'] })}
+              className="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium text-gray-700 hover:border-gray-400 transition-colors"
+            >
+              <option value="distance">📍 Nearest</option>
+              <option value="price_low">💰 Price: Low to High</option>
+              <option value="price_high">💰 Price: High to Low</option>
+              <option value="rating">⭐ Best Rated</option>
+              <option value="name">🔤 Name A-Z</option>
+            </select>
+          </div>
 
           {/* Reset Button */}
           <Button
             variant="outline"
             size="sm"
             onClick={resetFilters}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 border-gray-300"
+            className="px-4 py-2 text-sm text-red-600 hover:text-red-800 border-red-300 hover:border-red-400 hover:bg-red-50 transition-colors font-medium"
           >
-            Reset
+            🔄 Reset All
           </Button>
         </div>
 

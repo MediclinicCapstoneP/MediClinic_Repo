@@ -13,6 +13,8 @@ import {
 } from '../../types/appointments';
 // Removed unused import
 import { enhancedPatientService } from '../../features/auth/utils/enhancedPatientService';
+import { prescriptionService } from '../../services/prescriptionService';
+import { Pill } from 'lucide-react';
 
 interface PatientHistoryProps {
   patientId: string;
@@ -27,6 +29,7 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
   const [filterFrom, setFilterFrom] = useState<string>('');
   const [filterTo, setFilterTo] = useState<string>('');
   const [searchText, setSearchText] = useState<string>('');
+  const [prescriptionCounts, setPrescriptionCounts] = useState<{ [appointmentId: string]: number }>({});
 
   const loadHistory = useCallback(async () => {
     try {
@@ -59,6 +62,9 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
         
         console.log(`✅ Found ${filteredAppointments.length} appointments for patient`);
         setHistory(filteredAppointments);
+        
+        // Load prescription counts for completed appointments
+        loadPrescriptionCounts(filteredAppointments);
       } else {
         console.log('📝 No appointments found or error occurred:', result.error);
         setHistory([]);
@@ -71,6 +77,30 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
       setLoading(false);
     }
   }, [patientId, filterStatus, filterFrom, filterTo]);
+
+  // Load prescription counts for appointments
+  const loadPrescriptionCounts = async (appointments: AppointmentWithDetails[]) => {
+    const counts: { [appointmentId: string]: number } = {};
+    
+    // Only load for completed appointments
+    const completedAppointments = appointments.filter(apt => apt.status === 'completed');
+    
+    for (const appointment of completedAppointments) {
+      try {
+        const result = await prescriptionService.getPrescriptionsByAppointment(appointment.id);
+        if (result.success && result.prescriptions) {
+          counts[appointment.id] = result.prescriptions.length;
+        } else {
+          counts[appointment.id] = 0;
+        }
+      } catch (error) {
+        console.error(`Error loading prescriptions for appointment ${appointment.id}:`, error);
+        counts[appointment.id] = 0;
+      }
+    }
+    
+    setPrescriptionCounts(counts);
+  };
 
   useEffect(() => {
     void loadHistory();
@@ -217,12 +247,15 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Priority
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Prescriptions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {displayHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
+                    <td colSpan={7} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center space-y-3">
                         <div className="text-gray-400">
                           <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -279,6 +312,22 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {priorityBadge(appt.priority)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {appt.status === 'completed' ? (
+                          prescriptionCounts[appt.id] > 0 ? (
+                            <div className="flex items-center">
+                              <div className="flex items-center justify-center w-6 h-6 bg-purple-100 text-purple-600 rounded-full text-xs font-medium mr-2">
+                                {prescriptionCounts[appt.id]}
+                              </div>
+                              <Pill size={16} className="text-purple-600" />
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-sm">No Rx</span>
+                          )
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
                       </td>
                     </tr>
                   ))

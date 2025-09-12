@@ -203,6 +203,127 @@ export class AppointmentService {
   }
 
   /**
+   * Get appointments with details for clinics (enhanced with patient info)
+   */
+  static async getClinicAppointmentsWithPatientDetails(filters: AppointmentFilters = {}): Promise<AppointmentWithDetails[]> {
+    try {
+      console.log('🔍 Fetching appointments with patient details...');
+      
+      // Always use manual patient lookup for better reliability
+      return await this.getAppointmentsWithManualPatientLookup(filters);
+    } catch (error) {
+      console.error('💥 Unexpected error fetching clinic appointments with patient details:', error);
+      // Ultimate fallback to basic appointments
+      return await this.getAppointments(filters);
+    }
+  }
+
+  /**
+   * Fallback method to manually fetch patient details for appointments
+   */
+  private static async getAppointmentsWithManualPatientLookup(filters: AppointmentFilters = {}): Promise<AppointmentWithDetails[]> {
+    try {
+      console.log('🔄 Using manual patient lookup method...');
+      
+      // First get the basic appointments
+      const appointments = await this.getAppointments(filters);
+      
+      if (!appointments || appointments.length === 0) {
+        return [];
+      }
+
+      console.log('📝 Found', appointments.length, 'appointments, fetching patient details...');
+
+      // Get unique patient IDs
+      const patientIds = [...new Set(appointments.map(apt => apt.patient_id).filter(Boolean))];
+      console.log('👥 Unique patient IDs:', patientIds);
+
+      if (patientIds.length === 0) {
+        return appointments;
+      }
+
+      // Fetch patient details for all patient IDs
+      const { data: patients, error: patientError } = await supabase
+        .from('patients')
+        .select('id, first_name, last_name, email, phone')
+        .in('id', patientIds);
+
+      if (patientError) {
+        console.error('❌ Error fetching patient details:', patientError);
+        return appointments; // Return appointments without patient details
+      }
+
+      console.log('✅ Fetched', patients?.length || 0, 'patient records');
+      console.log('👤 Sample patient data:', patients?.[0]);
+
+      // Create a map of patient ID to patient data
+      const patientMap = new Map();
+      patients?.forEach(patient => {
+        patientMap.set(patient.id, patient);
+      });
+
+      // Enhance appointments with patient data
+      const enhancedAppointments = appointments.map(appointment => ({
+        ...appointment,
+        patient: patientMap.get(appointment.patient_id) || null
+      }));
+
+      console.log('🎯 Enhanced appointments with patient data');
+      return enhancedAppointments;
+      
+    } catch (error) {
+      console.error('💥 Error in manual patient lookup:', error);
+      return await this.getAppointments(filters);
+    }
+  }
+
+  /**
+   * Simple method to populate patient names in appointments
+   */
+  static async populatePatientNames(appointments: Appointment[]): Promise<Appointment[]> {
+    if (!appointments || appointments.length === 0) {
+      return appointments;
+    }
+
+    try {
+      // Get unique patient IDs
+      const patientIds = [...new Set(appointments.map(apt => apt.patient_id).filter(Boolean))];
+      
+      if (patientIds.length === 0) {
+        return appointments;
+      }
+
+      // Fetch patient names
+      const { data: patients, error } = await supabase
+        .from('patients')
+        .select('id, first_name, last_name')
+        .in('id', patientIds);
+
+      if (error) {
+        console.error('Error fetching patient names:', error);
+        return appointments;
+      }
+
+      // Create patient name map
+      const patientNameMap = new Map();
+      patients?.forEach(patient => {
+        const fullName = [patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'Unknown Patient';
+        patientNameMap.set(patient.id, fullName);
+      });
+
+      // Populate patient names
+      return appointments.map(appointment => ({
+        ...appointment,
+        patient_name: patientNameMap.get(appointment.patient_id) || `Patient ID: ${appointment.patient_id}`
+      }));
+
+    } catch (error) {
+      console.error('Error populating patient names:', error);
+      return appointments;
+    }
+  }
+
+  /**
    * Get appointments with details
    */
   static async getAppointmentsWithDetails(filters: AppointmentFilters = {}): Promise<AppointmentWithDetails[]> {

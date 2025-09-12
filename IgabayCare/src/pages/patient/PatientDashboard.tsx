@@ -5,7 +5,8 @@ import {
   Calendar, 
   MapPin, 
   History, 
-  Home 
+  Home,
+  Pill
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { authService } from '../../features/auth/utils/authService';
@@ -13,6 +14,7 @@ import PatientHome from './PatientHome';
 import { PatientProfileComponent } from './PatientProfile';
 import { PatientAppointments } from './PatientAppointments';
 import {PatientHistory} from './PatientHistory';
+import PatientPrescriptionsPage from './PatientPrescriptions';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { SkeletonDashboard } from '../../components/ui/Skeleton';
 
@@ -68,6 +70,12 @@ const PatientDashboard: React.FC = () => {
       href: '#'
     },
     {
+      id: 'prescriptions',
+      label: 'Prescriptions',
+      icon: Pill,
+      href: '#'
+    },
+    {
       id: 'history',
       label: 'History',
       icon: History,
@@ -89,6 +97,8 @@ const PatientDashboard: React.FC = () => {
         return <PatientHome onNavigate={setActiveTab} />;
       case 'appointments':
         return <PatientAppointments onNavigate={setActiveTab} />;
+      case 'prescriptions':
+        return <PatientPrescriptionsPage />;
       case 'history':
         return (
           <PatientHistory patientId={patientId} />

@@ -4,8 +4,8 @@ import { appointmentBookingService } from '../../features/auth/utils/appointment
 import { appointmentManagementAPI } from '../../features/auth/utils/appointmentManagementAPI';
 import { supabase } from '../../supabaseClient';
 import type { AppointmentType } from '../../types/appointments';
-import { PaymentForm } from './PaymentForm';
-import { PayMongoGCashPayment } from './PayMongoGCashPayment';
+import GCashPayment from '../payment/GCashPayment'; // Using real Adyen integration
+import { adyenPaymentService } from '../../services/adyenPaymentService';
 import type { PaymentResponse } from '../../types/payment';
 import { X, ChevronLeft, ChevronRight, Clock, CheckCircle } from 'lucide-react';
 
@@ -41,7 +41,6 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const [loading, setLoading] = useState(false);
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('consultation');
   const [patientNotes, setPatientNotes] = useState('');
-  const [showPayment, setShowPayment] = useState(false);
   const [showGCashPayment, setShowGCashPayment] = useState(false);
   const [appointmentData, setAppointmentData] = useState<any>(null);
   const [patientData, setPatientData] = useState<any>(null);
@@ -49,7 +48,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
   // Services selection state
   const [servicesOptions, setServicesOptions] = useState<string[]>([]);
-  const [selectedService, setSelectedService] = useState<string>('');
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
   // -------- Calendar helpers ----------
   const generateCalendarDays = () => {
@@ -136,7 +135,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
       
-      const composedNotes = buildComposedNotes(patientNotes, selectedService);
+      const composedNotes = buildComposedNotes(patientNotes, selectedServices);
 
       const result = await appointmentBookingService.createAppointment({
         patient_id: patientId,
@@ -187,58 +186,30 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
   const handleProceedToGCashPayment = () => {
     if (!selectedDate || !selectedTime) return;
-    setAppointmentData({ appointment_id: `temp_${Date.now()}`, ...calculateAppointmentCost() });
+    const appointmentDetails = {
+      appointment_id: `temp_${Date.now()}`,
+      ...calculateAppointmentCost(),
+      selectedDate,
+      selectedTime,
+      appointmentType,
+      patientNotes: buildComposedNotes(patientNotes, selectedServices)
+    };
+    setAppointmentData(appointmentDetails);
     setShowGCashPayment(true);
   };
 
 
-  const handlePaymentComplete = async (paymentResponse: PaymentResponse) => {
-    setShowPayment(false);
-    
-    if (!selectedDate || !selectedTime) return;
-    
-    // Use the comprehensive appointment booking API with payment
-    const dateStr = selectedDate.toISOString().split('T')[0];
-    const composedNotes = buildComposedNotes(patientNotes, selectedServices);
-    const result = await appointmentManagementAPI.completeAppointmentBooking({
-      patientId,
-      clinicId: clinic.id,
-      appointmentDate: dateStr,
-      appointmentTime: selectedTime + ':00',
-      appointmentType,
-      patientNotes: composedNotes,
-      paymentMethod: 'credit_card',
-      paymentProvider: 'paymongo',
-      externalPaymentId: (paymentResponse as any).payment_id || 'manual_payment',
-      totalAmount: calculateAppointmentCost().total_amount,
-      consultationFee: calculateAppointmentCost().consultation_fee,
-      bookingFee: calculateAppointmentCost().booking_fee
-    });
 
-    if (result.success) {
-      setBookingSuccess(true);
-      onAppointmentBooked?.();
-      setTimeout(() => {
-        onClose();
-        setSelectedDate(null);
-        setSelectedTime('');
-        setPatientNotes('');
-        setBookingSuccess(false);
-      }, 2000);
-    } else {
-      alert(`Payment confirmation failed: ${result.error}`);
-    }
-  };
-
-  const handleGCashPaymentComplete = async (paymentIntentId: string) => {
+  const handleGCashPaymentComplete = async (result: any) => {
     setShowGCashPayment(false);
     
     if (!selectedDate || !selectedTime) return;
     
-    // Use the comprehensive appointment booking API with GCash payment
+    // Use the comprehensive appointment booking API with Adyen GCash payment
     const dateStr = selectedDate.toISOString().split('T')[0];
     const composedNotes = buildComposedNotes(patientNotes, selectedServices);
-    const result = await appointmentManagementAPI.completeAppointmentBooking({
+    
+    const bookingResult = await appointmentManagementAPI.completeAppointmentBooking({
       patientId,
       clinicId: clinic.id,
       appointmentDate: dateStr,
@@ -246,14 +217,14 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
       appointmentType,
       patientNotes: composedNotes,
       paymentMethod: 'gcash',
-      paymentProvider: 'paymongo',
-      externalPaymentId: paymentIntentId,
+      paymentProvider: 'adyen',
+      externalPaymentId: result.pspReference || result.paymentId || 'adyen_payment',
       totalAmount: calculateAppointmentCost().total_amount,
       consultationFee: calculateAppointmentCost().consultation_fee,
       bookingFee: calculateAppointmentCost().booking_fee
     });
 
-    if (result.success) {
+    if (bookingResult.success) {
       setBookingSuccess(true);
       onAppointmentBooked?.();
       setTimeout(() => {
@@ -264,12 +235,17 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         setBookingSuccess(false);
       }, 2000);
     } else {
-      alert(`Payment confirmation failed: ${result.error}`);
+      alert(`Payment confirmation failed: ${bookingResult.error}`);
     }
   };
 
-  const handleGCashPaymentError = (error: string) => {
-    alert(`Payment failed: ${error}`);
+  const handleGCashPaymentError = (error: any) => {
+    console.error('GCash payment error:', error);
+    alert(`Payment failed: ${error.error || error.message || 'Payment processing failed'}`);
+  };
+
+  const handleGCashPaymentCancel = () => {
+    setShowGCashPayment(false);
   };
 
   // -------- Month nav ----------
@@ -317,7 +293,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
       }
 
       // Reset selections when opening
-      setSelectedService('');
+      setSelectedServices([]);
     }
   }, [isOpen, clinic?.id]);
 
@@ -327,14 +303,19 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   // Helpers
-  const selectService = (service: string) => {
-    setSelectedService(service === selectedService ? '' : service);
+  const buildComposedNotes = (notes: string, services: string | string[]) => {
+    const serviceList = Array.isArray(services) ? services : (services ? [services] : []);
+    if (serviceList.length === 0) return notes || '';
+    const header = 'Requested services: ' + serviceList.join(', ');
+    return notes ? `${header}\n${notes}` : header;
   };
 
-  const buildComposedNotes = (notes: string, service: string) => {
-    if (!service) return notes || '';
-    const header = 'Requested service: ' + service;
-    return notes ? `${header}\n${notes}` : header;
+  const toggleServiceSelection = (service: string) => {
+    setSelectedServices(prev => 
+      prev.includes(service) 
+        ? prev.filter(s => s !== service)
+        : [...prev, service]
+    );
   };
 
   return (
@@ -648,41 +629,30 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         </div>
       </div>
       
-      {/* Payment Modal */}
-      {showPayment && appointmentData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h3 className="text-xl font-semibold mb-4">Complete Payment</h3>
-              <PaymentForm
-                clinicId={clinic.id}
-                patientId={patientId}
-                appointmentData={appointmentData}
-                onPaymentComplete={handlePaymentComplete}
-                onBack={() => setShowPayment(false)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* GCash Payment Modal */}
+      {/* Adyen GCash Payment Modal */}
       {showGCashPayment && appointmentData && patientData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h3 className="text-xl font-semibold mb-4">GCash Payment - {clinic.clinic_name}</h3>
-              <PayMongoGCashPayment
-                amount={appointmentData.total_amount}
-                description={`Medical consultation at ${clinic.clinic_name}`}
-                appointmentId={appointmentData.appointment_id}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold">Complete Payment - {clinic.clinic_name}</h3>
+                <button
+                  onClick={handleGCashPaymentCancel}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <GCashPayment
+                patientId={patientId}
                 clinicId={clinic.id}
-                patientName={`${patientData.first_name} ${patientData.last_name}`}
-                patientEmail={patientData.email || ''}
-                patientPhone={patientData.phone || ''}
+                appointmentId={appointmentData.appointment_id}
+                amount={appointmentData.total_amount}
+                currency="PHP"
                 onPaymentSuccess={handleGCashPaymentComplete}
                 onPaymentError={handleGCashPaymentError}
-                onBack={() => setShowGCashPayment(false)}
+                onPaymentCancel={handleGCashPaymentCancel}
               />
             </div>
           </div>

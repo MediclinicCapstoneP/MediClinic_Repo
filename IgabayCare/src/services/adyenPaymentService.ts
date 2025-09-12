@@ -70,11 +70,15 @@ export const adyenPaymentService = {
         reference: request.reference
       };
 
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
       // Call our backend sessions endpoint
       const response = await fetch(`${API_BASE_URL}/adyen-sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify(sessionRequest)
       });
@@ -122,10 +126,14 @@ export const adyenPaymentService = {
         merchantReference
       };
 
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const response = await fetch(`${API_BASE_URL}/adyen-payments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify(paymentRequest)
       });
@@ -238,7 +246,7 @@ export const adyenPaymentService = {
    * Private helper methods
    */
   
-  private getAllowedPaymentMethods(preferredMethod: string): string[] {
+  getAllowedPaymentMethods(preferredMethod: string): string[] {
     const methodMap: { [key: string]: string[] } = {
       'gcash': ['gcash', 'scheme'],
       'paymaya': ['paymaya', 'scheme'],
@@ -249,7 +257,7 @@ export const adyenPaymentService = {
     return methodMap[preferredMethod] || ['scheme', 'gcash', 'paymaya', 'grabpay_PH'];
   },
 
-  private mapAdyenStatusToLocal(resultCode: string): string {
+  mapAdyenStatusToLocal(resultCode: string): string {
     const statusMap: { [key: string]: string } = {
       'Authorised': 'authorized',
       'Refused': 'refused',
@@ -302,15 +310,40 @@ export function getAdyenConfiguration(session?: { id: string; sessionData: strin
     throw new Error('Adyen Client Key is not configured. Please check your environment variables.');
   }
 
-  const config = {
-    ...adyenConfiguration,
+  console.log('Adyen Configuration Debug:', {
+    environment: ADYEN_ENVIRONMENT,
+    hasClientKey: !!ADYEN_CLIENT_KEY,
+    clientKey: ADYEN_CLIENT_KEY?.substring(0, 20) + '...',
+    merchantAccount: ADYEN_MERCHANT_ACCOUNT,
+    hasSession: !!session,
+    sessionId: session?.id
+  });
+
+  // Base configuration
+  const baseConfig = {
+    environment: ADYEN_ENVIRONMENT as 'test' | 'live',
     clientKey: ADYEN_CLIENT_KEY,
-    environment: ADYEN_ENVIRONMENT
+    locale: 'en-US', // Use en-US instead of en-PH (which doesn't exist)
+    countryCode: 'PH', // Required field for Philippines
+    analytics: {
+      enabled: ADYEN_ENVIRONMENT === 'live'
+    },
+    paymentMethodsConfiguration: {
+      card: {
+        hasHolderName: true,
+        holderNameRequired: true,
+        billingAddressRequired: false
+      },
+      gcash: {
+        showImage: true
+      }
+    }
   };
 
+  // If we have session data, use Sessions flow
   if (session) {
     return {
-      ...config,
+      ...baseConfig,
       session: {
         id: session.id,
         sessionData: session.sessionData
@@ -318,5 +351,6 @@ export function getAdyenConfiguration(session?: { id: string; sessionData: strin
     };
   }
 
-  return config;
+  // Fallback configuration (shouldn't be used in sessions flow)
+  return baseConfig;
 }

@@ -1,0 +1,33 @@
+/* Adyen Checkout CSS */
+/* This file imports Adyen CSS via CDN to avoid module resolution issues */
+
+/* Import Adyen CSS from CDN */
+@import url('https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.21.0/adyen.css');
+
+/* Custom overrides for Adyen components if needed */
+.adyen-checkout {
+  font-family: inherit;
+}
+
+.adyen-checkout__payment-method {
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.adyen-checkout__button {
+  background-color: #3b82f6;
+  border-radius: 0.5rem;
+}
+
+.adyen-checkout__button:hover {
+  background-color: #2563eb;
+}
+
+/* Override any conflicting styles with your theme */
+.adyen-checkout input {
+  border-radius: 0.375rem;
+}
+
+.adyen-checkout__field {
+  margin-bottom: 1rem;
+}

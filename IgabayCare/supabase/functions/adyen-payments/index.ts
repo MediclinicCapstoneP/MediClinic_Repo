@@ -7,6 +7,7 @@ import {
   handleOptions,
   createErrorResponse,
   createSuccessResponse,
+  adyenFetch,
 } from '../_shared/adyen-utils.ts';
 
 interface PaymentRequest {
@@ -48,9 +49,8 @@ serve(async (req) => {
       }
     };
 
-    // Call Adyen Payments API
-    const checkout = client.checkout;
-    const paymentResponse = await checkout.payments(paymentRequest);
+    // Call Adyen Payments API using fetch
+    const paymentResponse = await adyenFetch('/payments', paymentRequest, config.apiKey);
 
     // Update payment record if we have merchant reference and PSP reference
     if (paymentResponse.pspReference && requestBody.merchantReference) {

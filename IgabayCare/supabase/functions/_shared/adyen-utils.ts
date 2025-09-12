@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-import { Client, Config } from 'https://esm.sh/@adyen/api-library@15.4.0';
+// Note: Using fetch API instead of Adyen API library for Edge Functions compatibility
 
 // Types
 export interface AdyenConfig {
@@ -35,8 +35,8 @@ export function createSupabaseClient() {
   return createClient(supabaseUrl, supabaseServiceKey);
 }
 
-// Initialize Adyen client
-export function createAdyenClient(): { client: Client; config: AdyenConfig } {
+// Initialize Adyen configuration for fetch API
+export function createAdyenClient(): { config: AdyenConfig; baseUrl: string } {
   const config: AdyenConfig = {
     apiKey: Deno.env.get('ADYEN_API_KEY')!,
     merchantAccount: Deno.env.get('ADYEN_MERCHANT_ACCOUNT') || 'IgabayAtiCare',
@@ -44,14 +44,32 @@ export function createAdyenClient(): { client: Client; config: AdyenConfig } {
     hmacKey: Deno.env.get('ADYEN_HMAC_KEY')!,
   };
 
-  const adyenConfig = new Config({
-    apiKey: config.apiKey,
-    environment: config.environment,
+  const baseUrl = config.environment === 'live' 
+    ? 'https://checkout-live.adyen.com/v71'
+    : 'https://checkout-test.adyen.com/v71';
+  
+  return { config, baseUrl };
+}
+
+// Helper function to make Adyen API calls
+export async function adyenFetch(endpoint: string, data: any, apiKey: string): Promise<any> {
+  const { config, baseUrl } = createAdyenClient();
+  
+  const response = await fetch(`${baseUrl}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
+    },
+    body: JSON.stringify(data),
   });
 
-  const client = new Client({ config: adyenConfig });
-  
-  return { client, config };
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new Error(`Adyen API Error: ${errorData.message || response.statusText}`);
+  }
+
+  return response.json();
 }
 
 // CORS headers

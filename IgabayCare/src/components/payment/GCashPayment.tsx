@@ -1,7 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
-import AdyenCheckout from '@adyen/adyen-web';
-import '@adyen/adyen-web/dist/adyen.css';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { AdyenCheckout } from '@adyen/adyen-web'; // Back to named import
+import '../../styles/adyen.css';
 import { adyenPaymentService, getAdyenConfiguration } from '../../services/adyenPaymentService';
+
+// Debug the import
+console.log('🔍 AdyenCheckout import debug:', {
+  AdyenCheckout,
+  type: typeof AdyenCheckout,
+  isFunction: typeof AdyenCheckout === 'function'
+});
 
 interface GCashPaymentProps {
   patientId: string;
@@ -41,13 +48,58 @@ const GCashPayment: React.FC<GCashPaymentProps> = ({
   const [session, setSession] = useState<PaymentSession | null>(null);
   const checkoutRef = useRef<HTMLDivElement>(null);
   const adyenCheckout = useRef<any>(null);
+  const [domReady, setDomReady] = useState(false);
 
   // Generate return URL (adjust this to match your app's routing)
   const returnUrl = `${window.location.origin}/payment/return`;
 
+  // Callback ref to ensure DOM element is ready
+  const setCheckoutRef = useCallback((element: HTMLDivElement | null) => {
+    checkoutRef.current = element;
+    if (element) {
+      console.log('📌 DOM element attached via callback ref');
+      setDomReady(true);
+    } else {
+      console.log('📌 DOM element detached');
+      setDomReady(false);
+    }
+  }, []);
+
+  // Initialize payment when DOM is ready and we have the required props
   useEffect(() => {
+    if (!domReady || !patientId || !clinicId || !amount) {
+      console.log('🔍 Waiting for requirements:', {
+        domReady,
+        hasPatientId: !!patientId,
+        hasClinicId: !!clinicId,
+        hasAmount: !!amount
+      });
+      return;
+    }
+
+    console.log('🔧 Environment Variables Debug:', {
+      ADYEN_ENVIRONMENT: import.meta.env.VITE_ADYEN_ENVIRONMENT,
+      ADYEN_CLIENT_KEY: import.meta.env.VITE_ADYEN_CLIENT_KEY?.substring(0, 20) + '...',
+      ADYEN_MERCHANT: import.meta.env.VITE_ADYEN_MERCHANT_ACCOUNT,
+      API_BASE_URL: import.meta.env.VITE_API_BASE_URL
+    });
+
+    console.log('🏁 All requirements met, initializing payment...');
+    
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.error('⏰ Payment initialization timeout after 30 seconds');
+        setError('Payment initialization timed out. Please try again or contact support.');
+        setLoading(false);
+      }
+    }, 30000);
+
+    // Initialize payment
     initializePayment();
-  }, [patientId, clinicId, amount]);
+
+    return () => clearTimeout(timeoutId);
+  }, [domReady, patientId, clinicId, amount]);
 
   const initializePayment = async () => {
     try {
@@ -72,11 +124,24 @@ const GCashPayment: React.FC<GCashPaymentProps> = ({
       const sessionData = sessionResult.session;
       setSession(sessionData);
 
+      console.log('🎉 Session creation successful!');
+      console.log('📊 Session data details:', {
+        sessionId: sessionData.sessionId,
+        hasSessionData: !!sessionData.sessionData,
+        sessionDataLength: sessionData.sessionData?.length || 0,
+        amount: sessionData.amount,
+        merchantAccount: sessionData.merchantAccount,
+        reference: sessionData.reference
+      });
+      console.log('📜 Full session object:', sessionData);
+      
       // Initialize Adyen Checkout with session
       const configuration = getAdyenConfiguration({
         id: sessionData.sessionId,
         sessionData: sessionData.sessionData,
       });
+
+      console.log('Adyen configuration:', configuration);
 
       // Add event handlers
       const checkoutConfiguration = {
@@ -87,21 +152,155 @@ const GCashPayment: React.FC<GCashPaymentProps> = ({
         onAdditionalDetails: handleAdditionalDetails,
       };
 
-      adyenCheckout.current = await AdyenCheckout(checkoutConfiguration);
+      console.log('Final checkout configuration:', checkoutConfiguration);
+      
+      try {
+        console.log('🔧 Starting AdyenCheckout initialization...');
+        console.log('📋 Session data:', sessionData);
+        console.log('⚙️ Configuration:', checkoutConfiguration);
+        console.log('📦 AdyenCheckout function type:', typeof AdyenCheckout);
+        
+        // Try initializing
+        console.log('🚀 Initializing AdyenCheckout with configuration...');
+        const checkoutInstance = await AdyenCheckout(checkoutConfiguration);
+        console.log('🎯 Raw checkout result:', checkoutInstance);
+        console.log('🔍 Checkout result type:', typeof checkoutInstance);
+        console.log('📝 Checkout result keys:', checkoutInstance ? Object.keys(checkoutInstance) : 'null/undefined');
+        
+        adyenCheckout.current = checkoutInstance;
+        
+        // Detailed verification
+        if (!adyenCheckout.current) {
+          throw new Error('AdyenCheckout returned null/undefined');
+        }
+        
+        // For Sessions API, we need to check for components property instead of create method
+        if (!adyenCheckout.current.components && typeof adyenCheckout.current.create !== 'function') {
+          console.error('❌ Neither components nor create method available. Available methods:', Object.keys(adyenCheckout.current));
+          throw new Error(`AdyenCheckout object is missing both components and create method. Available: ${Object.keys(adyenCheckout.current).join(', ')}`);
+        }
+        
+        console.log('✅ AdyenCheckout object structure:', {
+          hasComponents: !!adyenCheckout.current.components,
+          hasCreate: typeof adyenCheckout.current.create === 'function',
+          componentsType: typeof adyenCheckout.current.components
+        });
+        
+        console.log('✅ AdyenCheckout initialized successfully with create method');
+        
+      } catch (checkoutError) {
+        console.error('💥 Error initializing AdyenCheckout:', checkoutError);
+        console.error('📊 Error details:', {
+          name: checkoutError.name,
+          message: checkoutError.message,
+          stack: checkoutError.stack
+        });
+        console.error('⚙️ Configuration used:', JSON.stringify(checkoutConfiguration, null, 2));
+        throw new Error(`Failed to initialize Adyen: ${checkoutError.message}`);
+      }
 
-      // Mount the GCash component
-      if (checkoutRef.current) {
+      // Mount the payment components (DOM element is guaranteed to be ready)
+      if (checkoutRef.current && adyenCheckout.current) {
+        console.log('✅ Both elements ready for mounting:', {
+          checkoutRef: !!checkoutRef.current,
+          adyenCheckout: !!adyenCheckout.current
+        });
+        
         // Clear previous content
         checkoutRef.current.innerHTML = '';
 
-        // Try to mount GCash component specifically
-        const gcashComponent = adyenCheckout.current.create('gcash');
-        gcashComponent.mount(checkoutRef.current);
+        try {
+          console.log('📊 Available payment methods in session:', sessionData);
+          console.log('🔍 AdyenCheckout structure:', adyenCheckout.current);
+          
+          let component;
+          
+          // Try different ways to create components based on the API version
+          if (adyenCheckout.current.components) {
+            console.log('🔄 Using Sessions API with components property');
+            // For Sessions API, components might be pre-created
+            if (adyenCheckout.current.components.dropin) {
+              component = adyenCheckout.current.components.dropin;
+              console.log('✅ Using pre-created dropin component');
+            } else if (adyenCheckout.current.components.gcash) {
+              component = adyenCheckout.current.components.gcash;
+              console.log('✅ Using pre-created gcash component');
+            } else {
+              console.log('📝 Available components:', Object.keys(adyenCheckout.current.components));
+              // Use the first available component
+              const firstComponent = Object.keys(adyenCheckout.current.components)[0];
+              if (firstComponent) {
+                component = adyenCheckout.current.components[firstComponent];
+                console.log(`✅ Using first available component: ${firstComponent}`);
+              }
+            }
+          } 
+          
+          if (!component && typeof adyenCheckout.current.create === 'function') {
+            console.log('🔄 Using traditional create API');
+            // Traditional API
+            component = adyenCheckout.current.create('dropin');
+            console.log('✅ Created dropin component via create()');
+          }
+          
+          if (!component) {
+            throw new Error('No component could be created or found');
+          }
+          
+          console.log('🎉 Component ready:', component);
+          console.log('📋 Mounting to element:', checkoutRef.current);
+          
+          // Mount the component
+          if (typeof component.mount === 'function') {
+            component.mount(checkoutRef.current);
+            console.log('✅ Successfully mounted component');
+          } else {
+            console.error('❌ Component does not have mount method:', Object.keys(component));
+            throw new Error('Component is missing mount method');
+          }
+          
+        } catch (mountError) {
+          console.error('❌ Error in component mounting:', mountError);
+          console.error('📊 Mount error details:', {
+            error: mountError.message,
+            checkoutKeys: Object.keys(adyenCheckout.current),
+            hasComponents: !!adyenCheckout.current.components,
+            componentsKeys: adyenCheckout.current.components ? Object.keys(adyenCheckout.current.components) : 'no components'
+          });
+          throw new Error(`Failed to mount payment component: ${mountError.message}`);
+        }
+      } else {
+        const errorDetails = {
+          hasCheckoutRef: !!checkoutRef.current,
+          hasAdyenCheckout: !!adyenCheckout.current,
+          domReady: document.readyState
+        };
+        
+        console.error('❌ Missing required elements for mounting:', errorDetails);
+        throw new Error(`Missing required elements for mounting: ${JSON.stringify(errorDetails)}`);
       }
 
     } catch (error) {
       console.error('Error initializing payment:', error);
-      setError(error instanceof Error ? error.message : 'Failed to initialize payment');
+      
+      let errorMessage = 'Failed to initialize payment';
+      
+      if (error instanceof Error) {
+        // Handle specific error types
+        if (error.message.includes('CORS')) {
+          errorMessage = 'Network access blocked. This often happens in development mode. Please try refreshing or contact support.';
+        } else if (error.message.includes('AdyenCheckout')) {
+          errorMessage = 'Payment system failed to load. Please refresh the page and try again.';
+        } else if (error.message.includes('session')) {
+          errorMessage = 'Failed to create payment session. Please check your connection and try again.';
+        } else if (error.message.includes('environment')) {
+          errorMessage = 'Payment system configuration error. Please contact support.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -162,7 +361,13 @@ const GCashPayment: React.FC<GCashPaymentProps> = ({
       <div className="flex items-center justify-center p-8">
         <div className="flex items-center space-x-2">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-          <span className="text-gray-600">Initializing GCash payment...</span>
+          <div className="flex flex-col">
+            <span className="text-gray-600">Initializing GCash payment...</span>
+            <span className="text-xs text-gray-400 mt-1">
+              DOM Ready: {domReady ? 'Yes' : 'No'} | 
+              Has Data: {patientId && clinicId && amount ? 'Yes' : 'No'}
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -214,7 +419,7 @@ const GCashPayment: React.FC<GCashPaymentProps> = ({
       </div>
 
       {/* Adyen Checkout Component Container */}
-      <div ref={checkoutRef} className="adyen-checkout-container">
+      <div ref={setCheckoutRef} className="adyen-checkout-container">
         {/* Adyen components will be mounted here */}
       </div>
 

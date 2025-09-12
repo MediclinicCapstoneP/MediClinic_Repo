@@ -1,4 +1,4 @@
-import { supabase } from '../../../lib/supabase';
+import { supabase } from '../../../supabaseClient';
 import { AppointmentWithDetails, AppointmentStatus } from '../../../types/appointments';
 
 export interface DoctorStats {
@@ -73,15 +73,15 @@ class DoctorDashboardService {
         ?.filter(apt => apt.status === 'completed')
         .reduce((sum, apt) => sum + (apt.payment_amount || 0), 0) || 0;
 
-      // Get doctor rating from reviews
+      // Get doctor ratings from reviews
       const { data: reviews, error: reviewsError } = await supabase
-        .from('patient_reviews')
-        .select('rating')
+        .from('reviews')
+        .select('overall_rating')
         .eq('doctor_id', doctorId);
 
       let averageRating = 0;
       if (!reviewsError && reviews && reviews.length > 0) {
-        averageRating = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+        averageRating = reviews.reduce((sum, review) => sum + review.overall_rating, 0) / reviews.length;
       }
 
       const stats: DoctorStats = {

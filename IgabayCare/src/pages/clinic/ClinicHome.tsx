@@ -169,15 +169,6 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
       color: "text-yellow-600",
       bgColor: "bg-yellow-50",
     },
-    {
-      title: "This Month Revenue",
-      value: "₱" + stats.totalRevenue.toLocaleString(),
-      change: "+" + Math.floor(stats.totalRevenue * 0.15),
-      changeType: "positive",
-      icon: DollarSign,
-      color: "text-purple-600",
-      bgColor: "bg-purple-50",
-    },
   ] : [];
 
   if (loading) {

@@ -91,18 +91,41 @@ serve(async (req) => {
             status = notification.success === 'true' ? 'authorized' : 'refused';
             break;
           case 'PENDING':
-          case 'RECEIVED':
             status = 'pending';
             break;
           case 'CANCEL_OR_REFUND':
           case 'REFUND':
+          case 'REFUND_WITH_DATA':
             status = 'refunded';
             break;
           case 'CANCELLATION':
+          case 'TECHNICAL_CANCEL':
             status = 'cancelled';
             break;
           case 'REFUND_FAILED':
             status = 'refund_failed';
+            break;
+          case 'CAPTURE':
+            status = notification.success === 'true' ? 'captured' : 'capture_failed';
+            break;
+          case 'CAPTURE_FAILED':
+            status = 'capture_failed';
+            break;
+          case 'CHARGEBACK':
+          case 'SECOND_CHARGEBACK':
+            status = 'chargeback';
+            break;
+          case 'CHARGEBACK_REVERSED':
+            status = 'chargeback_reversed';
+            break;
+          case 'MANUAL_REVIEW_ACCEPT':
+            status = 'authorized';
+            break;
+          case 'MANUAL_REVIEW_REJECT':
+            status = 'refused';
+            break;
+          case 'NOTIFICATION_OF_FRAUD':
+            status = 'fraud_notification';
             break;
           default:
             status = mapAdyenStatusToLocal(notification.eventCode);
