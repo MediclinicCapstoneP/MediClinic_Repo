@@ -78,7 +78,8 @@ class DoctorService {
           options: {
             data: {
               role: 'doctor',
-              full_name: data.full_name,
+              first_name: data.first_name,
+              last_name: data.last_name,
               clinic_id: data.clinic_id,
               is_clinic_created: true,
               license_number: data.license_number,
@@ -177,6 +178,26 @@ class DoctorService {
 
   async updateDoctor(id: string, data: UpdateDoctorData): Promise<{ success: boolean; error?: string; doctor?: DoctorProfile }> {
     try {
+      // If no data to update, just fetch the doctor
+      if (Object.keys(data).length === 0) {
+        const { data: doctor, error } = await supabase
+          .from('doctors')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (error) {
+          console.error('Supabase error fetching doctor:', error);
+          return { success: false, error: error.message };
+        }
+
+        if (!doctor) {
+          return { success: false, error: 'Doctor not found' };
+        }
+
+        return { success: true, doctor };
+      }
+
       let updateData: any = { ...data };
       
       // If updating password, hash it
@@ -196,6 +217,10 @@ class DoctorService {
       if (error) {
         console.error('Supabase error updating doctor:', error);
         return { success: false, error: error.message };
+      }
+
+      if (!doctor) {
+        return { success: false, error: 'Doctor not found or no changes made' };
       }
 
       return { success: true, doctor };
@@ -257,6 +282,13 @@ class DoctorService {
 
       if (authError) {
         console.error('Supabase auth error during doctor login:', authError);
+        // Provide more specific error messages
+        if (authError.message.includes('Invalid login credentials')) {
+          return { success: false, error: 'Invalid email or password. Please check your credentials and try again.' };
+        }
+        if (authError.message.includes('Email not confirmed')) {
+          return { success: false, error: 'Please verify your email before signing in. Check your inbox for the confirmation email.' };
+        }
         return { success: false, error: authError.message };
       }
 
@@ -287,7 +319,10 @@ class DoctorService {
       }
 
       // Update last login
-      await this.updateDoctor(doctor.id, {});
+      await supabase
+        .from('doctors')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', doctor.id);
       
       console.log('Doctor login successful:', doctor.full_name);
       return { success: true, doctor };

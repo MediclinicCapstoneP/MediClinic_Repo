@@ -77,7 +77,7 @@ export const ClinicAppointments: React.FC = () => {
       console.log('📋 Initial appointments fetched:', appointments?.length || 0);
       
       // If we don't have patient details, try the fallback method
-      const hasPatientDetails = appointments?.some(apt => apt.patient?.first_name || apt.patient?.last_name);
+      const hasPatientDetails = appointments?.some(apt => apt.patient?.full_name);
       console.log('👤 Has patient details:', hasPatientDetails);
       
       if (!hasPatientDetails && appointments && appointments.length > 0) {
@@ -124,13 +124,21 @@ export const ClinicAppointments: React.FC = () => {
     if (appointment.patient && typeof appointment.patient === 'object') {
       console.log('✅ Found patient object:', appointment.patient);
       
+      // Use full_name directly if available
+      if (appointment.patient.full_name?.trim()) {
+        const fullName = appointment.patient.full_name.trim();
+        console.log('✅ Using patient.full_name:', fullName);
+        return fullName;
+      }
+      
+      // Construct from first_name and last_name
       const firstName = appointment.patient.first_name?.trim();
       const lastName = appointment.patient.last_name?.trim();
       
       if (firstName && lastName) {
-        const fullName = `${firstName} ${lastName}`;
-        console.log('✅ Using full name:', fullName);
-        return fullName;
+        const constructedName = `${firstName} ${lastName}`;
+        console.log('✅ Constructed from first + last name:', constructedName);
+        return constructedName;
       }
       
       if (firstName) {
@@ -143,11 +151,11 @@ export const ClinicAppointments: React.FC = () => {
         return lastName;
       }
       
-      // Patient object exists but no names
+      // Patient object exists but no name fields
       console.log('⚠️ Patient object exists but has no name fields');
     }
     
-    // Try direct patient_name field
+    // Try direct patient_name field (from appointment table)
     if (appointment.patient_name?.trim()) {
       console.log('✅ Using direct patient_name field:', appointment.patient_name);
       return appointment.patient_name.trim();
@@ -158,13 +166,14 @@ export const ClinicAppointments: React.FC = () => {
       patient_id: appointment.patient_id,
       patient_name: appointment.patient_name,
       patient_exists: !!appointment.patient,
+      patient_fields: appointment.patient ? Object.keys(appointment.patient) : [],
       all_keys: Object.keys(appointment)
     });
     
     // Return meaningful fallback with patient ID
     if (appointment.patient_id) {
       const shortId = appointment.patient_id.slice(-8);
-      const fallbackName = `Unknown Patient\nID: ${shortId}`;
+      const fallbackName = `Patient ID: ${shortId}`;
       console.log('🔄 Using fallback name:', fallbackName);
       return fallbackName;
     }

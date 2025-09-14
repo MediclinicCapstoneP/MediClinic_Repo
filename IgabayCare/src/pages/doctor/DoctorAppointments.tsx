@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -55,25 +56,61 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
   });
 
   useEffect(() => {
-    loadAppointments();
+    if (doctorId) {
+      loadAppointments();
+    } else {
+      setLoading(false);
+    }
   }, [doctorId]);
 
   const loadAppointments = async () => {
+    // Don't make API calls if doctorId is not available
+    if (!doctorId || doctorId === '') {
+      console.warn('📋 DoctorAppointments: No doctorId provided, skipping appointment loading');
+      setAppointments([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+      console.log('📋 Loading appointments for doctor:', doctorId);
       
       const result = await doctorDashboardService.getDoctorAppointments(doctorId, {
         ...(filterStatus !== 'all' && { status: filterStatus }),
         ...(filterDate && { date: filterDate })
       });
       
+      console.log('📋 Appointment loading result:', {
+        success: result.success,
+        appointmentCount: result.appointments?.length || 0,
+        error: result.error,
+        sampleAppointments: result.appointments?.slice(0, 2).map(apt => ({
+          id: apt.id.substring(0, 8),
+          patient_name: apt.patient_name,
+          patient_id: apt.patient_id?.substring(0, 8),
+          hasPatientData: !!apt.patient
+        }))
+      });
+      
       if (result.success && result.appointments) {
-        setAppointments(result.appointments);
+        // Ensure appointments are properly filtered for this doctor
+        const doctorAppointments = result.appointments.filter(apt => 
+          apt.doctor_id === doctorId
+        );
+        
+        console.log('📋 Filtered appointments for doctor:', {
+          originalCount: result.appointments.length,
+          filteredCount: doctorAppointments.length,
+          doctorId: doctorId
+        });
+        
+        setAppointments(doctorAppointments);
         
         // Load services for each appointment
         const servicesMap: Record<string, string[]> = {};
         await Promise.all(
-          result.appointments.map(async (appointment) => {
+          doctorAppointments.map(async (appointment) => {
             try {
               const services = await AppointmentServicesService.getAppointmentServicesDisplay(
                 appointment.id,
@@ -82,17 +119,28 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
               );
               servicesMap[appointment.id] = services;
             } catch (error) {
-              console.warn(`Error loading services for appointment ${appointment.id}:`, error);
+              console.warn(`⚠️ Error loading services for appointment ${appointment.id}:`, error);
               servicesMap[appointment.id] = [];
             }
           })
         );
         setAppointmentServices(servicesMap);
+        
+        console.log('✅ Successfully loaded appointments with patient names:', {
+          total: doctorAppointments.length,
+          withNames: doctorAppointments.filter(apt => 
+            apt.patient_name && 
+            apt.patient_name !== 'Unknown Patient' && 
+            !apt.patient_name.startsWith('Patient ID:')
+          ).length
+        });
       } else {
-        console.error('Error loading appointments:', result.error);
+        console.error('❌ Error loading appointments:', result.error);
+        setAppointments([]);
       }
     } catch (error) {
-      console.error('Error loading appointments:', error);
+      console.error('❌ Unexpected error loading appointments:', error);
+      setAppointments([]);
     } finally {
       setLoading(false);
     }
@@ -433,6 +481,25 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     );
   }
 
+  // Show error message if doctorId is not available
+  if (!doctorId || doctorId === '') {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-900">My Appointments</h2>
+        </div>
+        
+        <Card className="p-8 text-center">
+          <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Doctor Profile</h3>
+          <p className="text-gray-600">
+            Please wait while we load your doctor profile. If this persists, try refreshing the page or signing in again.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -513,13 +580,20 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
                         <div>
                           <div className="text-sm font-medium text-gray-900">
                             {appointment.patient_name || 
-                             (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 'Unknown Patient')}
+                             (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 
+                              appointment.patient_id ? `Patient ID: ${appointment.patient_id.substring(0, 8)}` : 'Unknown Patient')}
                           </div>
                           <div className="flex items-center gap-2 text-sm text-gray-500">
                             {appointment.patient?.email && (
                               <div className="flex items-center gap-1">
                                 <Mail className="h-3 w-3" />
                                 <span>{appointment.patient.email}</span>
+                              </div>
+                            )}
+                            {!appointment.patient?.email && appointment.patient_id && (
+                              <div className="flex items-center gap-1">
+                                <Mail className="h-3 w-3" />
+                                <span>No email provided</span>
                               </div>
                             )}
                           </div>
@@ -579,7 +653,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
                       {getStatusBadge(appointment.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getPriorityBadge(appointment.priority)}
+                      {appointment.priority && getPriorityBadge(appointment.priority)}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium">
                       {getActionButtons(appointment)}
@@ -598,7 +672,9 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         onClose={() => setShowStartAppointmentModal(false)}
         onConfirm={startAppointment}
         title="Start Appointment"
-        message={`Are you ready to start the appointment with ${selectedAppointment?.patient?.first_name} ${selectedAppointment?.patient?.last_name}?`}
+        message={`Are you ready to start the appointment with ${selectedAppointment?.patient_name || 
+                 (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
+                  selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Unknown Patient')}?`}
       />
 
       {/* Complete Appointment Dialog */}
@@ -612,7 +688,8 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="font-medium text-blue-900">
               {selectedAppointment?.patient_name || 
-               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Patient')}
+               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
+                selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Patient')}
             </h3>
             <p className="text-sm text-blue-700">
               {selectedAppointment ? APPOINTMENT_TYPES[selectedAppointment.appointment_type] : ''} - {selectedAppointment?.appointment_date}
@@ -655,7 +732,8 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           <div className="bg-orange-50 p-4 rounded-lg">
             <h3 className="font-medium text-orange-900">
               {selectedAppointment?.patient_name || 
-               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Patient')}
+               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
+                selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Patient')}
             </h3>
             <p className="text-sm text-orange-700">
               Current: {selectedAppointment?.appointment_date} at {selectedAppointment?.appointment_time}
@@ -709,7 +787,8 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           <div className="bg-purple-50 p-4 rounded-lg">
             <h3 className="font-medium text-purple-900">
               {selectedAppointment?.patient_name || 
-               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Patient')}
+               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
+                selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Patient')}
             </h3>
             <p className="text-sm text-purple-700">
               {selectedAppointment ? APPOINTMENT_TYPES[selectedAppointment.appointment_type] : ''} - {selectedAppointment?.appointment_date}
@@ -752,7 +831,8 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           <div className="bg-green-50 p-4 rounded-lg">
             <h3 className="font-medium text-green-900">
               {selectedAppointment?.patient_name || 
-               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Patient')}
+               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
+                selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Patient')}
             </h3>
             <p className="text-sm text-green-700">
               {selectedAppointment ? APPOINTMENT_TYPES[selectedAppointment.appointment_type] : ''} - {selectedAppointment?.appointment_date}
@@ -887,7 +967,8 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">
                     {selectedAppointment.patient_name || 
-                     (selectedAppointment.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Unknown Patient')}
+                     (selectedAppointment.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
+                      selectedAppointment.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Unknown Patient')}
                   </h3>
                   <p className="text-gray-600">
                     Patient ID: {selectedAppointment.patient_id}

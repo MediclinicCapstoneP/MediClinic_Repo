@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import { 
   User, Calendar, Clock, CheckCircle, Edit, Camera, 
   LogOut, Search, Filter, Plus, FileText, Stethoscope,
@@ -16,9 +17,16 @@ import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthSer
 import { prescriptionService, PrescriptionWithPatient, CreatePrescriptionData } from '../../features/auth/utils/prescriptionService';
 import { doctorDashboardService, DoctorStats, DoctorActivity } from '../../features/auth/utils/doctorDashboardService';
 import { doctorService, DoctorProfile } from '../../features/auth/utils/doctorService';
+import { doctorAppointmentService, PatientInfo } from '../../features/auth/utils/doctorAppointmentService';
+import { DoctorScheduleManager } from '../../components/doctor/DoctorScheduleManager';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { DoctorAppointments } from './DoctorAppointments';
+import { DoctorAppointmentHistory } from './DoctorAppointmentHistory';
+import { DoctorPrescriptions } from './DoctorPrescriptionsEnhanced';
+import { DoctorPatientRecords } from './DoctorPatientRecords';
+import { DoctorManageProfile } from './DoctorManageProfile';
 import { SkeletonDashboard } from '../../components/ui/Skeleton';
+import { DoctorNotificationDropdown } from '../../components/doctor/DoctorNotificationDropdown';
 
 interface Appointment {
   id: string;
@@ -35,18 +43,7 @@ interface Appointment {
   followUpDate?: string;
 }
 
-interface Patient {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  age: number;
-  gender: string;
-  lastVisit?: string;
-  medicalHistory?: string;
-  allergies?: string;
-  currentMedications?: string;
-}
+// Using PatientInfo from doctorAppointmentService instead of local interface
 
 // Using PrescriptionWithPatient from prescriptionService instead of local interface
 
@@ -58,9 +55,9 @@ export const DoctorDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('appointments');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients, setPatients] = useState<PatientInfo[]>([]);
   const [prescriptions, setPrescriptions] = useState<PrescriptionWithPatient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<PatientInfo | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
@@ -80,7 +77,8 @@ export const DoctorDashboard: React.FC = () => {
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [profileUpdateData, setProfileUpdateData] = useState({
-    full_name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     specialization: '',
@@ -95,6 +93,8 @@ export const DoctorDashboard: React.FC = () => {
         setLoading(true);
         const user = await roleBasedAuthService.getCurrentUser();
         if (!user || user.role !== 'doctor') {
+          // Clear any invalid session and redirect
+          await roleBasedAuthService.signOut();
           navigate('/doctor-signin');
           return;
         }
@@ -102,6 +102,8 @@ export const DoctorDashboard: React.FC = () => {
         await loadDoctorData(user.user.id);
       } catch (error) {
         console.error('Auth check error:', error);
+        // Clear session on auth error and redirect
+        await roleBasedAuthService.signOut();
         navigate('/doctor-signin');
       } finally {
         setLoading(false);
@@ -121,7 +123,8 @@ export const DoctorDashboard: React.FC = () => {
         
         // Set profile update data
         setProfileUpdateData({
-          full_name: doctor.full_name || '',
+          first_name: doctor.first_name || '',
+          last_name: doctor.last_name || '',
           email: doctor.email || '',
           phone: doctor.phone || '',
           specialization: doctor.specialization || '',
@@ -320,8 +323,8 @@ export const DoctorDashboard: React.FC = () => {
         // Update doctor profile state
         setDoctorProfile(prev => prev ? {
           ...prev,
-          profile_picture_url: result.url,
-          profile_picture_path: result.path
+          profile_picture_url: result.url || null,
+          profile_picture_path: result.path || null
         } : null);
         alert('Profile picture updated successfully!');
       } else {
@@ -808,8 +811,12 @@ export const DoctorDashboard: React.FC = () => {
                   <User className="h-6 w-6 text-theme-dark" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{patient.name}</h3>
-                  <p className="text-sm text-gray-600">{patient.age} years, {patient.gender}</p>
+                  <h3 className="font-medium text-gray-900">{patient.first_name} {patient.last_name}</h3>
+                  {patient.date_of_birth && (
+                    <p className="text-sm text-gray-600">
+                      {new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear()} years
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -824,21 +831,21 @@ export const DoctorDashboard: React.FC = () => {
                   <span className="text-sm text-gray-600">{patient.phone}</span>
                 </div>
 
-                {patient.lastVisit && (
+                {patient.last_visit && (
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Last visit: {patient.lastVisit}</span>
+                    <span className="text-sm text-gray-600">Last visit: {patient.last_visit}</span>
           </div>
         )}
       </div>
 
-              {patient.medicalHistory && (
+              {patient.medical_conditions && (
                 <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-blue-800">Medical History</span>
                   </div>
-                  <p className="text-sm text-blue-700">{patient.medicalHistory}</p>
+                  <p className="text-sm text-blue-700">{patient.medical_conditions}</p>
                 </div>
               )}
 
@@ -931,17 +938,35 @@ export const DoctorDashboard: React.FC = () => {
   const renderContent = () => {
     const doctorId = doctorProfile?.id || '';
     
+    // Log doctor ID for debugging
+    console.log('Doctor Dashboard - Current doctor ID:', doctorId);
+    
+    // Check if the doctor ID matches the one in the appointment
+    const matchesAppointmentDoctorId = doctorId === 'a35516af-53a9-4ed2-9329-bbe2126bb972';
+    console.log('Doctor ID matches appointment doctor_id:', matchesAppointmentDoctorId);
+    
     switch (activeTab) {
       case 'appointments':
-        return <DoctorAppointments doctorId={doctorId} />;
+        return (
+          <>
+            {/* Debug info */}
+            {import.meta.env.DEV && (
+              <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                <p>Debug - Doctor ID: {doctorId}</p>
+                <p>Matches appointment doctor_id: {matchesAppointmentDoctorId ? 'Yes' : 'No'}</p>
+              </div>
+            )}
+            <DoctorAppointments doctorId={doctorId} />
+          </>
+        );
       case 'history':
-        return renderHistory();
+        return <DoctorAppointmentHistory doctorId={doctorId} />;
       case 'prescriptions':
-        return renderPrescriptions();
+        return <DoctorPrescriptions doctorId={doctorId} />;
       case 'patients':
-        return renderPatients();
+        return <DoctorPatientRecords doctorId={doctorId} />;
       case 'profile':
-        return renderProfile();
+        return <DoctorManageProfile doctorId={doctorId} onProfileUpdate={() => loadDoctorData(currentUser?.user?.id)} />;
       default:
         return <DoctorAppointments doctorId={doctorId} />;
     }
@@ -1017,7 +1042,7 @@ export const DoctorDashboard: React.FC = () => {
             <div className="space-y-4">
           <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Patient</label>
-                <p className="text-gray-900">{selectedPatient.name}</p>
+                <p className="text-gray-900">{selectedPatient.first_name} {selectedPatient.last_name}</p>
           </div>
           
           <div>
@@ -1112,8 +1137,12 @@ export const DoctorDashboard: React.FC = () => {
                   <User className="h-8 w-8 text-theme-dark" />
                 </div>
           <div>
-                  <h3 className="text-lg font-medium text-gray-900">{selectedPatient.name}</h3>
-                  <p className="text-gray-600">{selectedPatient.age} years, {selectedPatient.gender}</p>
+                  <h3 className="text-lg font-medium text-gray-900">{selectedPatient.first_name} {selectedPatient.last_name}</h3>
+                  {selectedPatient.date_of_birth && (
+                    <p className="text-gray-600">
+                      {new Date().getFullYear() - new Date(selectedPatient.date_of_birth).getFullYear()} years
+                    </p>
+                  )}
               </div>
               </div>
 
@@ -1128,10 +1157,10 @@ export const DoctorDashboard: React.FC = () => {
             </div>
           </div>
           
-              {selectedPatient.medicalHistory && (
+              {selectedPatient.medical_conditions && (
           <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Medical History</label>
-                  <p className="text-gray-900 bg-gray-50 p-3 rounded">{selectedPatient.medicalHistory}</p>
+                  <p className="text-gray-900 bg-gray-50 p-3 rounded">{selectedPatient.medical_conditions}</p>
           </div>
               )}
 
@@ -1142,10 +1171,10 @@ export const DoctorDashboard: React.FC = () => {
                 </div>
               )}
 
-              {selectedPatient.currentMedications && (
+              {selectedPatient.medications && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Current Medications</label>
-                  <p className="text-gray-900 bg-blue-50 p-3 rounded">{selectedPatient.currentMedications}</p>
+                  <p className="text-gray-900 bg-blue-50 p-3 rounded">{selectedPatient.medications}</p>
                 </div>
               )}
 

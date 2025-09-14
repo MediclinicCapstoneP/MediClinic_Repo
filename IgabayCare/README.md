@@ -1,10 +1,12 @@
-# IgabayCare - Healthcare Platform
+# IgabayCare - Healthcare Management System
 
-![IgabayCare](https://img.shields.io/badge/Healthcare-Platform-blue.svg)
-![React](https://img.shields.io/badge/React-18.3.1-blue.svg)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.5.3-blue.svg)
-![Vite](https://img.shields.io/badge/Vite-7.0.5-purple.svg)
-![Supabase](https://img.shields.io/badge/Supabase-2.53.0-green.svg)
+<div align="center">
+  <img src="https://img.shields.io/badge/React-18.3.1-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-5.5.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-7.0.5-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Supabase-2.53.0-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-3.4.1-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
+</div>
 
 ## 📋 Table of Contents
 
@@ -41,37 +43,54 @@ IgabayCare is a comprehensive healthcare platform designed to streamline interac
 
 ## ✨ Features
 
-### 🔐 Authentication & Authorization
-- **Role-based Access Control**: Separate interfaces for patients, doctors, and clinics
-- **Secure Authentication**: Email verification and password reset functionality
-- **Profile Management**: Comprehensive user profile management for all user types
+### 👥 Multi-Role Authentication System
+- **Role-based Access Control**: Patient, Doctor, Clinic, Admin roles
+- **Secure Authentication**: Email verification and password recovery
+- **Profile Management**: Comprehensive user profiles with medical information
 
-### 📅 Appointment Management
-- **Easy Booking**: Intuitive appointment booking system
-- **Real-time Availability**: Live appointment slot availability
-- **Appointment History**: Complete history of past and upcoming appointments
-- **Cancellation & Rescheduling**: Flexible appointment management
+### 📅 Advanced Appointment Management
+- **Smart Booking**: Real-time availability checking and conflict prevention
+- **Multiple Appointment Types**: Consultation, follow-up, emergency, procedures
+- **Status Tracking**: Scheduled → Confirmed → In Progress → Completed
+- **Automated Notifications**: Email and SMS reminders
+- **Prescription Integration**: Digital prescription creation and management
 
-### 🏥 Clinic Management
-- **Clinic Dashboard**: Comprehensive dashboard for clinic administrators
-- **Doctor Management**: Add and manage doctors within clinics
-- **Service Management**: Define and update clinic services and specialties
-- **Patient Management**: View and manage patient information
+### 🏥 Comprehensive Clinic & Doctor Management
+- **Clinic Discovery**: Interactive maps with nearby healthcare providers
+- **Doctor Profiles**: Specializations, availability, ratings, and reviews
+- **Service Catalog**: Comprehensive medical services with pricing
+- **Scheduling System**: Flexible appointment slots and time management
+- **Analytics Dashboard**: Patient statistics, appointment trends, revenue tracking
 
-### 👨‍⚕️ Doctor Interface
-- **Doctor Dashboard**: Dedicated interface for healthcare professionals
-- **Appointment Management**: View and manage doctor appointments
-- **Patient Information**: Access to relevant patient details
+### 💳 Integrated Payment System
+- **Adyen Payment Gateway**: Secure, PCI-compliant payment processing
+- **Multiple Payment Methods**: 
+  - Credit/Debit Cards (Visa, Mastercard, AMEX)
+  - Digital Wallets (GCash, PayMaya, GrabPay)
+  - Bank Transfers and Online Banking
+- **Payment Tracking**: Transaction history and receipt management
+- **Refund Management**: Automated refund processing for cancellations
+
+### 📊 Analytics & Reporting
+- **Dashboard Analytics**: Patient statistics, appointment trends, revenue tracking
+- **Medical Reports**: Comprehensive health summaries and progress tracking
+- **Business Intelligence**: Clinic performance metrics and insights
+
+### 🤖 AI-Powered Features
+- **Medical Chatbot**: 24/7 health assistance and triage
+- **Symptom Checker**: Preliminary health assessments
+- **Smart Scheduling**: AI-optimized appointment recommendations
+
+### 🔔 Notification System
+- **Multi-Channel Notifications**: Email, SMS, and push notifications
+- **Customizable Alerts**: Appointment reminders, prescription refills, health checkups
+- **Real-time Updates**: Instant status changes and communications
 
 ### 🗺️ Location & Navigation
-- **Interactive Maps**: Clinic location visualization using Leaflet
-- **Nearby Clinics**: Find clinics in proximity to patient location
-- **Routing**: Integrated routing for navigation to clinics
-
-### 💊 Additional Features
-- **Prescription Management**: Handle prescriptions within the system
-- **Review System**: Patient reviews and feedback for clinics
-- **Medical Records**: Secure storage and management of medical information
+- **Interactive Maps**: Advanced clinic location visualization using Leaflet
+- **Nearby Clinics**: Geolocation-based healthcare provider discovery
+- **Routing & Navigation**: Integrated GPS navigation to clinics
+- **Location Services**: Real-time location tracking for emergency services
 
 ## 🛠️ Technology Stack
 

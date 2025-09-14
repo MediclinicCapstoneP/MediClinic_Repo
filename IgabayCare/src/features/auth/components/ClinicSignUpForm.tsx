@@ -617,7 +617,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+      <form className="space-y-6" onSubmit={handleSubmit} action="#">
                 {/* Step 1: Basic Information */}
                 {currentStep === 1 && (
                   <div className="space-y-6">

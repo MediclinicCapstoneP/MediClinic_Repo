@@ -299,19 +299,15 @@ export const PaymentFirstBookingModal: React.FC<PaymentFirstBookingModalProps> =
         payment_id: paymentId
       };
 
-      const response = await fetch('/api/appointments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(appointmentData)
-      });
+      const { data: appointment, error } = await supabase
+        .from('appointments')
+        .insert([appointmentData])
+        .select()
+        .single();
 
-      if (!response.ok) {
-        throw new Error('Failed to create appointment');
+      if (error) {
+        throw new Error(`Failed to create appointment: ${error.message}`);
       }
-
-      const appointment = await response.json();
       onBookingSuccess(appointment.id, paymentId);
       
     } catch (error) {

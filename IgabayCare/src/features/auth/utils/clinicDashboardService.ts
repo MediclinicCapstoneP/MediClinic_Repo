@@ -104,17 +104,23 @@ class ClinicDashboardService {
         return sum + (appointment.payment_amount || 0);
       }, 0) || 0;
 
-      // Get average rating from reviews
-      const { data: reviewsData, error: reviewsError } = await supabase
-        .from('reviews')
-        .select('rating')
-        .eq('clinic_id', clinicId);
+      // Get average rating from reviews (with error handling for missing table)
+      let averageRating = 0;
+      try {
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select('rating, overall_rating')
+          .eq('clinic_id', clinicId);
 
-      if (reviewsError) throw reviewsError;
-
-      const averageRating = reviewsData?.length 
-        ? reviewsData.reduce((sum, review) => sum + review.rating, 0) / reviewsData.length
-        : 0;
+        if (!reviewsError && reviewsData?.length) {
+          // Use overall_rating if available, otherwise fall back to rating column
+          const ratingsToAverage = reviewsData.map(review => review.overall_rating || review.rating);
+          averageRating = ratingsToAverage.reduce((sum, rating) => sum + rating, 0) / ratingsToAverage.length;
+        }
+      } catch (error) {
+        console.warn('Reviews table not found or inaccessible, defaulting to 0 rating:', error);
+        averageRating = 0;
+      }
 
       const stats: ClinicStats = {
         totalPatients,
@@ -209,38 +215,47 @@ class ClinicDashboardService {
         }
       });
 
-      // Get recent reviews
-      const { data: reviewsData, error: reviewsError } = await supabase
-        .from('reviews')
-        .select(`
-          id,
-          created_at,
-          rating,
-          patients (first_name, last_name)
-        `)
-        .eq('clinic_id', clinicId)
-        .order('created_at', { ascending: false })
-        .limit(3);
+      // Get recent reviews (with error handling for missing table)
+      try {
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select(`
+            id,
+            created_at,
+            rating,
+            overall_rating,
+            patients (first_name, last_name)
+          `)
+          .eq('clinic_id', clinicId)
+          .order('created_at', { ascending: false })
+          .limit(3);
 
-      if (reviewsError) throw reviewsError;
-
-      // Add review activities
-      reviewsData?.forEach(review => {
-        const patientName = review.patients 
-          ? `${review.patients.first_name} ${review.patients.last_name}`
-          : 'Anonymous';
-        
-        activities.push({
-          id: `review-${review.id}`,
-          type: 'review',
-          title: 'New Review',
-          description: `${review.rating}-star rating from ${patientName}`,
-          time: this.getRelativeTime(review.created_at),
-          icon: 'Star',
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-100'
-        });
-      });
+        if (!reviewsError && reviewsData) {
+          // Add review activities
+          reviewsData.forEach(review => {
+            const patientName = review.patients 
+              ? `${review.patients.first_name} ${review.patients.last_name}`
+              : 'Anonymous';
+            
+            // Use overall_rating if available, otherwise fall back to rating
+            const displayRating = review.overall_rating || review.rating;
+            
+            activities.push({
+              id: `review-${review.id}`,
+              type: 'review',
+              title: 'New Review',
+              description: `${displayRating}-star rating from ${patientName}`,
+              time: this.getRelativeTime(review.created_at),
+              icon: 'Star',
+              color: 'text-yellow-600',
+              bgColor: 'bg-yellow-100'
+            });
+          });
+        }
+      } catch (error) {
+        console.warn('Reviews table not found or inaccessible, skipping review activities:', error);
+        // Continue without review activities
+      }
 
       // Sort all activities by time and limit
       const sortedActivities = activities

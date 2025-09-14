@@ -53,10 +53,10 @@ export const AssignDoctor: React.FC<AssignDoctorProps> = ({
     try {
       const { data: doctors, error } = await supabase
         .from('doctors')
-        .select('id, first_name, last_name, email, specialization, status')
+        .select('id, full_name, email, specialization, status')
         .eq('clinic_id', clinicId)
         .eq('status', 'active')
-        .order('first_name');
+        .order('full_name');
 
       if (error) {
         console.error('Error fetching doctors:', error);
@@ -95,7 +95,7 @@ export const AssignDoctor: React.FC<AssignDoctorProps> = ({
         .from('appointments')
         .update({
           doctor_id: selectedDoctorId,
-          doctor_name: `${selectedDoctor.first_name} ${selectedDoctor.last_name}`,
+          doctor_name: selectedDoctor.full_name,
           doctor_specialty: selectedDoctor.specialization,
           updated_at: new Date().toISOString()
         })
@@ -229,7 +229,7 @@ export const AssignDoctor: React.FC<AssignDoctorProps> = ({
                       />
                       <div className="flex-1">
                         <p className="font-medium text-gray-900">
-                          {doctor.first_name} {doctor.last_name}
+                          {doctor.full_name}
                         </p>
                         <p className="text-sm text-gray-600">{doctor.email}</p>
                         {doctor.specialization && (

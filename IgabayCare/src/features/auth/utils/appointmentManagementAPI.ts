@@ -110,7 +110,7 @@ export const appointmentManagementAPI = {
       // 5. Get patient details for notifications
       const { data: patient } = await supabase
         .from('patients')
-        .select('first_name, last_name, email')
+        .select('full_name, email')
         .eq('id', data.patientId)
         .single();
 
@@ -136,10 +136,14 @@ export const appointmentManagementAPI = {
 
       // 8. Send confirmation email
       if (patient?.email) {
+        // Extract first and last name from full_name for email
+        const nameParts = patient.full_name?.split(' ') || [];
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
         await emailService.sendTemplatedEmail({
           type: 'appointment_confirmation',
           data: {
-            patientName: `${patient.first_name} ${patient.last_name}`,
+            patientName: patient.full_name || `${firstName} ${lastName}`,
             clinicName: clinic?.name || 'Clinic',
             appointmentDate: new Date(data.appointmentDate).toLocaleDateString('en-US', {
               weekday: 'long',
@@ -276,10 +280,14 @@ export const appointmentManagementAPI = {
 
           // Send cancellation email
           if (appointment.patient.email) {
+            // Extract first and last name from full_name
+            const nameParts = appointment.patient.full_name?.split(' ') || [];
+            const firstName = nameParts[0] || '';
+            const lastName = nameParts.slice(1).join(' ') || '';
             await emailService.sendTemplatedEmail({
               type: 'appointment_cancelled',
               data: {
-                patientName: `${appointment.patient.first_name} ${appointment.patient.last_name}`,
+                patientName: appointment.patient.full_name || `${firstName} ${lastName}`,
                 appointmentDate: new Date(appointment.appointment_date).toLocaleDateString('en-US', {
                   weekday: 'long',
                   year: 'numeric',
@@ -340,7 +348,7 @@ export const appointmentManagementAPI = {
         .select(`
           *,
           patient:patients(
-            id, first_name, last_name, email, phone, date_of_birth
+            id, full_name, email, phone, date_of_birth
           ),
           clinic:clinics(
             id, name, address, phone, email
@@ -454,7 +462,7 @@ export const appointmentManagementAPI = {
         .from('appointments')
         .select(`
           *,
-          patient:patients(first_name, last_name, email, phone),
+          patient:patients(full_name, email, phone),
           transactions(total_amount, status, payment_method)
         `, { count: 'exact' })
         .eq('clinic_id', clinicId);

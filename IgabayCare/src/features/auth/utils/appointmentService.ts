@@ -41,7 +41,7 @@ export class AppointmentService {
           const doctorQuery = appointment.doctor_id 
             ? supabase
                 .from('doctors')
-                .select('first_name, last_name, email')
+                .select('full_name, email')
                 .eq('id', appointment.doctor_id)
                 .single()
             : null;
@@ -56,7 +56,7 @@ export class AppointmentService {
 
           const googleCalendarEventId = await googleCalendarService.createAppointmentEvent({
             patientName: patient ? `${patient.first_name} ${patient.last_name}` : 'Unknown Patient',
-            doctorName: doctor ? `Dr. ${doctor.first_name} ${doctor.last_name}` : 'Unknown Doctor',
+            doctorName: doctor ? `Dr. ${doctor.full_name}` : 'Unknown Doctor',
             service: appointment.appointment_type || 'Medical Consultation',
             date: appointment.appointment_date,
             time: appointment.appointment_time,
@@ -207,14 +207,109 @@ export class AppointmentService {
    */
   static async getClinicAppointmentsWithPatientDetails(filters: AppointmentFilters = {}): Promise<AppointmentWithDetails[]> {
     try {
-      console.log('🔍 Fetching appointments with patient details...');
+      console.log('🔍 Fetching clinic appointments with patient details for filters:', filters);
       
-      // Always use manual patient lookup for better reliability
+      // Try the direct join approach first (most efficient)
+      const joinResult = await this.getAppointmentsWithDirectJoin(filters);
+      if (joinResult && joinResult.length > 0) {
+        // Check if we got meaningful patient data
+        const hasValidPatientData = joinResult.some(apt => 
+          apt.patient && (apt.patient.first_name || apt.patient.last_name)
+        );
+        
+        if (hasValidPatientData) {
+          console.log('✅ Successfully fetched appointments with direct join');
+          return joinResult;
+        }
+        
+        console.log('⚠️ Join returned appointments but no valid patient data, trying manual lookup...');
+      }
+      
+      // Fallback to manual patient lookup for better reliability
       return await this.getAppointmentsWithManualPatientLookup(filters);
     } catch (error) {
       console.error('💥 Unexpected error fetching clinic appointments with patient details:', error);
       // Ultimate fallback to basic appointments
       return await this.getAppointments(filters);
+    }
+  }
+
+  /**
+   * Direct join method to fetch appointments with patient details
+   */
+  private static async getAppointmentsWithDirectJoin(filters: AppointmentFilters = {}): Promise<AppointmentWithDetails[]> {
+    try {
+      console.log('🔗 Using direct join method for appointments with patient details...');
+      
+      let query = supabase
+        .from(this.TABLE_NAME)
+        .select(`
+          *,
+          patient:patients(
+            id, 
+            first_name, 
+            last_name, 
+            full_name,
+            email, 
+            phone
+          ),
+          clinic:clinics(
+            id, 
+            clinic_name, 
+            address, 
+            city, 
+            state
+          )
+        `)
+        .order('appointment_date', { ascending: true })
+        .order('appointment_time', { ascending: true });
+
+      // Apply filters
+      if (filters.patient_id) {
+        query = query.eq('patient_id', filters.patient_id);
+      }
+      if (filters.clinic_id) {
+        query = query.eq('clinic_id', filters.clinic_id);
+      }
+      if (filters.doctor_id) {
+        query = query.eq('doctor_id', filters.doctor_id);
+      }
+      if (filters.appointment_date) {
+        query = query.eq('appointment_date', filters.appointment_date);
+      }
+      if (filters.appointment_date_from) {
+        query = query.gte('appointment_date', filters.appointment_date_from);
+      }
+      if (filters.appointment_date_to) {
+        query = query.lte('appointment_date', filters.appointment_date_to);
+      }
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+      if (filters.appointment_type) {
+        query = query.eq('appointment_type', filters.appointment_type);
+      }
+      if (filters.priority) {
+        query = query.eq('priority', filters.priority);
+      }
+
+      const { data: appointments, error } = await query;
+
+      if (error) {
+        console.error('❌ Error in direct join query:', error);
+        throw error;
+      }
+
+      console.log('📋 Direct join query returned', appointments?.length || 0, 'appointments');
+      if (appointments && appointments.length > 0) {
+        console.log('👤 Sample patient data from join:', appointments[0].patient);
+      }
+
+      return appointments || [];
+      
+    } catch (error) {
+      console.error('💥 Error in direct join method:', error);
+      throw error;
     }
   }
 
@@ -245,7 +340,7 @@ export class AppointmentService {
       // Fetch patient details for all patient IDs
       const { data: patients, error: patientError } = await supabase
         .from('patients')
-        .select('id, first_name, last_name, email, phone')
+        .select('id, first_name, last_name, full_name, email, phone')
         .in('id', patientIds);
 
       if (patientError) {
@@ -256,10 +351,18 @@ export class AppointmentService {
       console.log('✅ Fetched', patients?.length || 0, 'patient records');
       console.log('👤 Sample patient data:', patients?.[0]);
 
-      // Create a map of patient ID to patient data
+      // Create a map of patient ID to enhanced patient data
       const patientMap = new Map();
       patients?.forEach(patient => {
-        patientMap.set(patient.id, patient);
+        // Ensure full_name is populated
+        const enhancedPatient = {
+          ...patient,
+          full_name: patient.full_name || 
+                     (patient.first_name && patient.last_name 
+                      ? `${patient.first_name} ${patient.last_name}` 
+                      : patient.first_name || patient.last_name || 'Unknown Patient')
+        };
+        patientMap.set(patient.id, enhancedPatient);
       });
 
       // Enhance appointments with patient data

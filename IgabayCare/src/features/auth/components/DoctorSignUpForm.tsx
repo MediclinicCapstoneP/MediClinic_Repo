@@ -119,7 +119,7 @@ export const DoctorSignUpForm: React.FC = () => {
             <h3 className="text-xl font-semibold text-gray-900">Doctor Registration</h3>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} action="#" className="space-y-6">
               {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                   <div className="flex items-center space-x-2">

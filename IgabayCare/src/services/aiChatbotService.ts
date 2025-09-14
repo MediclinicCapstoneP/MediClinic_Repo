@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 // OpenAI Configuration
-const OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY || 'your-openai-api-key';
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || 'your-openai-api-key';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 // Chatbot Types
