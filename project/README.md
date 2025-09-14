@@ -1,6 +1,16 @@
-# MediClinic - Healthcare Management System
+# IgabayCare Mobile - Healthcare Management App
 
-A comprehensive healthcare management system built with React Native (Expo) and Supabase, featuring role-based access control for patients, doctors, and clinics.
+<div align="center">
+  <img src="https://img.shields.io/badge/React_Native-0.79.1-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React Native" />
+  <img src="https://img.shields.io/badge/Expo-53.0.0-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo" />
+  <img src="https://img.shields.io/badge/TypeScript-5.8.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Supabase-2.57.4-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
+  <img src="https://img.shields.io/badge/React_Navigation-7.0.14-6700EB?style=for-the-badge&logo=react-router&logoColor=white" alt="React Navigation" />
+</div>
+
+---
+
+**IgabayCare Mobile** is the native mobile application companion to the IgabayCare healthcare management system. Built with React Native and Expo, it provides a seamless mobile experience for patients, doctors, and clinic administrators to manage healthcare appointments, medical records, and prescriptions on-the-go.
 
 ## Features
 
