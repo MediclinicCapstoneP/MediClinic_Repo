@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
-import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity, Search, Hospital } from 'lucide-react-native';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { useAuth } from '@/contexts/AuthContext';
+import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity, Search, Hospital, Bell } from 'lucide-react-native';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
+import { useAuth } from '../../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dimensions, Platform, View, Text } from 'react-native';
 
@@ -82,20 +82,11 @@ export default function TabLayout() {
           }}
         >
           <Tabs.Screen
-            name="patient/index"
+            name="patient"
             options={{
               title: 'Home',
               tabBarIcon: ({ color }) => (
                 <Home size={getResponsiveIconSize()} color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="clinics"
-            options={{
-              title: 'Find Clinics',
-              tabBarIcon: ({ color }) => (
-                <Search size={getResponsiveIconSize()} color={color} />
               ),
             }}
           />
@@ -109,21 +100,26 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
-            name="profile/index"
+            name="clinics"
             options={{
-              title: 'Profile',
+              title: 'Find Clinics',
               tabBarIcon: ({ color }) => (
-                <User size={getResponsiveIconSize()} color={color} />
+                <Search size={getResponsiveIconSize()} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="notifications/index"
+            options={{
+              title: 'Notifications',
+              tabBarIcon: ({ color }) => (
+                <Bell size={getResponsiveIconSize()} color={color} />
               ),
             }}
           />
           {/* Hide other role's screens */}
           <Tabs.Screen
             name="doctor"
-            options={{ href: null }}
-          />
-          <Tabs.Screen
-            name="patients"
             options={{ href: null }}
           />
         </Tabs>
@@ -167,7 +163,7 @@ export default function TabLayout() {
           <Tabs.Screen
             name="doctor/index"
             options={{
-              title: 'Dashboard',
+              title: 'Home',
               tabBarIcon: ({ color }) => (
                 <Activity size={getResponsiveIconSize()} color={color} />
               ),
@@ -183,7 +179,7 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
-            name="patients/index"
+            name="doctor/patients"
             options={{
               title: 'Patients',
               tabBarIcon: ({ color }) => (
@@ -192,11 +188,11 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
-            name="profile/index"
+            name="notifications/index"
             options={{
-              title: 'Profile',
+              title: 'Notifications',
               tabBarIcon: ({ color }) => (
-                <User size={getResponsiveIconSize()} color={color} />
+                <Bell size={getResponsiveIconSize()} color={color} />
               ),
             }}
           />

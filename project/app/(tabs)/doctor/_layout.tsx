@@ -4,8 +4,7 @@ export default function DoctorLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="appointments" />
-      <Stack.Screen name="prescriptions" />
+      <Stack.Screen name="patients" />
     </Stack>
   );
 }

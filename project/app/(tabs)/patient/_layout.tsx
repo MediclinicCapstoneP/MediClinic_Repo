@@ -5,8 +5,8 @@ export default function PatientLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="booking" />
-      <Stack.Screen name="appointments" />
       <Stack.Screen name="clinics" />
+      <Stack.Screen name="profile" />
     </Stack>
   );
 }

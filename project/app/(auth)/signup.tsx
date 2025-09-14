@@ -13,7 +13,7 @@ import {
 import { Link, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Eye, EyeOff, Mail, Lock, User, Phone, Heart, Calendar } from 'lucide-react-native';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function PatientSignupScreen() {
   const [formData, setFormData] = useState({
@@ -77,7 +77,7 @@ export default function PatientSignupScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
-        colors={['#EFF6FF', '#DBEAFE', '#BFDBFE']}
+        colors={['#eff6ff', '#ecfdf5', '#ecfeff']}
         style={styles.background}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>

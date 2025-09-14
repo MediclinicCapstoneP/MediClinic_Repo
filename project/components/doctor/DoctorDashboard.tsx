@@ -8,6 +8,7 @@ import {
   Alert,
   Dimensions
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase, AppointmentWithDetails, Doctor } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -304,14 +305,25 @@ export const DoctorDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <LinearGradient
+        colors={['#eff6ff', '#ecfdf5', '#ecfeff']}
+        style={styles.loadingContainer}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
         <Text style={styles.loadingText}>Loading dashboard...</Text>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <LinearGradient
+      colors={['#eff6ff', '#ecfdf5', '#ecfeff']}
+      style={styles.container}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.welcomeText}>Welcome back,</Text>
@@ -382,14 +394,17 @@ export const DoctorDashboard: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  scrollContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

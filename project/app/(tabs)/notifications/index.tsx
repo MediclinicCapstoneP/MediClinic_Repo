@@ -9,10 +9,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAuth } from '@/contexts/AuthContext';
-import { notificationService, Notification } from '@/lib/services/notificationService';
-import { colors } from '@/lib/constants/colors';
+import { useAuth } from '../../../contexts/AuthContext';
+import { notificationService, Notification } from '../../../lib/services/notificationService';
+import { colors } from '../../../lib/constants/colors';
 
 type NotificationFilter = 'all' | 'unread' | 'appointments' | 'system';
 
@@ -208,17 +209,26 @@ export default function NotificationsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading notifications...</Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient
+        colors={['#eff6ff', '#ecfdf5', '#ecfeff']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading notifications...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <LinearGradient
+      colors={['#eff6ff', '#ecfdf5', '#ecfeff']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
         {unreadCount > 0 && (
@@ -254,14 +264,17 @@ export default function NotificationsScreen() {
           </View>
         }
       />
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  safeArea: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

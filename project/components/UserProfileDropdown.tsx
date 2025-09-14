@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { User, Edit, LogOut, ChevronDown } from 'lucide-react-native';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { router } from 'expo-router';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -78,7 +78,15 @@ export default function UserProfileDropdown({
     if (onEditProfile) {
       onEditProfile();
     } else {
-      router.push('/(tabs)/profile');
+      // Navigate to appropriate home screen based on user role
+      if (user?.role === 'patient') {
+        router.push('/(tabs)/patient');
+      } else if (user?.role === 'doctor' || user?.role === 'clinic') {
+        router.push('/(tabs)/doctor');
+      } else {
+        // Fallback to patient home for unknown roles
+        router.push('/(tabs)/patient');
+      }
     }
   };
 

@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { UserRole } from '../lib/supabase';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

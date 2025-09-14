@@ -18,11 +18,11 @@ import {
   ChevronDown,
   MapPin,
 } from 'lucide-react-native';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/contexts/AuthContext';
-import { appointmentService, CreateAppointmentData, TimeSlot } from '@/services/appointmentService';
-import { ClinicWithDetails, AppointmentType, PaymentMethod, supabase } from '@/lib/supabase';
+import Modal from '../ui/Modal';
+import Button from '../ui/Button';
+import { useAuth } from '../../contexts/AuthContext';
+import { appointmentService } from '../../services/appointmentService';
+import { ClinicWithDetails, AppointmentType, PaymentMethod, supabase } from '../../lib/supabase';
 
 interface AppointmentBookingModalProps {
   visible: boolean;
@@ -90,7 +90,7 @@ export function AppointmentBookingModal({
   });
 
   // Time slots and payment
-  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<any[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('gcash');
   const [createdAppointmentId, setCreatedAppointmentId] = useState<string>('');
   const [transactionNumber, setTransactionNumber] = useState<string>('');
@@ -137,7 +137,7 @@ export function AppointmentBookingModal({
     setError(null);
   };
 
-  const handleTimeSelect = (timeSlot: TimeSlot) => {
+  const handleTimeSelect = (timeSlot: any) => {
     setBookingData(prev => ({
       ...prev,
       time: timeSlot.time,
@@ -165,6 +165,11 @@ export function AppointmentBookingModal({
       patientId = patients.id;
     }
 
+    if (!patientId) {
+      setError('Patient ID is required');
+      return;
+    }
+
     if (!bookingData.date || !bookingData.time) {
       setError('Please select date and time for your appointment');
       return;
@@ -174,7 +179,7 @@ export function AppointmentBookingModal({
       setLoading(true);
       setError(null);
 
-      const appointmentData: CreateAppointmentData = {
+      const appointmentData = {
         patient_id: patientId,
         clinic_id: clinic.id,
         appointment_date: bookingData.date,

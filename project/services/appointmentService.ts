@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../lib/supabase';
 import {
   Appointment,
   AppointmentWithDetails,
@@ -6,7 +6,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   ClinicWithDetails,
-} from '@/lib/supabase';
+} from '../lib/supabase';
 
 export interface CreateAppointmentData {
   patient_id: string;

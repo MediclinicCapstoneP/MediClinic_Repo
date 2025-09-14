@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   Search,
   MapPin,
@@ -26,14 +27,14 @@ import {
   Navigation,
   Filter,
 } from 'lucide-react-native';
-import { useAuth } from '@/contexts/AuthContext';
-import ClinicCard from '@/components/ClinicCard';
-import { SkeletonBox, SkeletonClinicCard, SkeletonStatCard } from '@/components/SkeletonLoader';
-import UserProfileDropdown from '@/components/UserProfileDropdown';
-import { clinicService } from '@/services/clinicService';
-import { appointmentService } from '@/services/appointmentService';
-import { ClinicWithDetails, AppointmentWithDetails } from '@/lib/supabase';
-import { AppointmentBookingModal } from '@/components/appointment/AppointmentBookingModal';
+import { useAuth } from '../../../contexts/AuthContext';
+import ClinicCard from '../../../components/ClinicCard';
+import { SkeletonBox, SkeletonClinicCard, SkeletonStatCard } from '../../../components/SkeletonLoader';
+import UserProfileDropdown from '../../../components/UserProfileDropdown';
+import { clinicService } from '../../../services/clinicService';
+import { appointmentService } from '../../../services/appointmentService';
+import { ClinicWithDetails, AppointmentWithDetails } from '../../../lib/supabase';
+import { AppointmentBookingModal } from '../../../components/appointment/AppointmentBookingModal';
 
 const quickActions = [
   { id: '1', title: 'Book Appointment', icon: Calendar, color: '#2563EB' },
@@ -163,8 +164,12 @@ export default function PatientHomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView 
+    <LinearGradient
+      colors={['#eff6ff', '#ecfdf5', '#ecfeff']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -377,9 +382,9 @@ export default function PatientHomeScreen() {
             ))}
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
 
-      {/* Appointment Booking Modal */}
+        {/* Appointment Booking Modal */}
       {selectedClinic && (
         <AppointmentBookingModal
           visible={showBookingModal}
@@ -389,16 +394,19 @@ export default function PatientHomeScreen() {
           }}
           clinic={selectedClinic}
           onBookingSuccess={handleBookingSuccess}
-        />
+        />  
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  safeArea: {
+    flex: 1,
   },
   content: {
     flex: 1,
