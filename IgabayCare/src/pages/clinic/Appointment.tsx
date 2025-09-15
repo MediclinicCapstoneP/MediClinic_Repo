@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { AppointmentService } from '../../features/auth/utils/appointmentService';
 import { AppointmentServicesService } from '../../features/auth/utils/appointmentServicesService';
 import { doctorService, DoctorProfile } from '../../features/auth/utils/doctorService';
+import { DoctorAppointmentService } from '../../services/doctorAppointmentService';
 import { SkeletonTable, Skeleton } from '../../components/ui/Skeleton';
 import {
   AppointmentWithDetails,
@@ -119,11 +120,36 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
 
     try {
       const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+      
+      // 1. Update the main appointment with doctor info
       await AppointmentService.updateAppointment(selectedAppointment.id, {
         doctor_id: selectedDoctorId,
         doctor_name: selectedDoctor?.full_name || '',
         doctor_specialty: selectedDoctor?.specialization || ''
       });
+      
+      // 2. Create doctor appointment in the doctor_appointments table
+      console.log('🎆 Creating doctor appointment for assignment...');
+      const doctorAppointmentResult = await DoctorAppointmentService.createDoctorAppointment({
+        doctor_id: selectedDoctorId,
+        appointment_id: selectedAppointment.id,
+        patient_id: selectedAppointment.patient_id,
+        clinic_id: selectedAppointment.clinic_id,
+        appointment_date: selectedAppointment.appointment_date,
+        appointment_time: selectedAppointment.appointment_time,
+        appointment_type: selectedAppointment.appointment_type,
+        duration_minutes: selectedAppointment.duration_minutes || 30,
+        payment_amount: selectedAppointment.payment_amount || 0,
+        priority: selectedAppointment.priority || 'normal'
+      });
+      
+      if (doctorAppointmentResult.success) {
+        console.log('✅ Doctor appointment created successfully!');
+      } else {
+        console.error('❌ Error creating doctor appointment:', doctorAppointmentResult.error);
+        // Still continue - the main appointment assignment worked
+      }
+      
       await loadAppointments();
       setShowAssignDoctorModal(false);
       setSelectedAppointment(null);

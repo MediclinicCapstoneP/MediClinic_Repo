@@ -71,6 +71,65 @@ export interface PrescriptionDispensingLog {
 
 export const prescriptionService = {
   /**
+   * Create a new comprehensive prescription with medications
+   */
+  async createNewPrescription(prescriptionData: any, medications: any[]): Promise<{
+    success: boolean;
+    prescription?: any;
+    error?: string;
+  }> {
+    try {
+      // First create the main prescription record
+      const { data: prescription, error: prescriptionError } = await supabase
+        .from('prescriptions')
+        .insert([prescriptionData])
+        .select()
+        .single();
+
+      if (prescriptionError) {
+        console.error('Error creating prescription:', prescriptionError);
+        return { success: false, error: prescriptionError.message };
+      }
+
+      if (!prescription) {
+        return { success: false, error: 'Failed to create prescription record' };
+      }
+
+      // Then create the medication records
+      const medicationRecords = medications.map(med => ({
+        ...med,
+        prescription_id: prescription.id,
+        status: 'active'
+      }));
+
+      const { data: medicationData, error: medicationError } = await supabase
+        .from('prescription_medications')
+        .insert(medicationRecords)
+        .select();
+
+      if (medicationError) {
+        console.error('Error creating prescription medications:', medicationError);
+        // Clean up the prescription if medications failed
+        await supabase
+          .from('prescriptions')
+          .delete()
+          .eq('id', prescription.id);
+        return { success: false, error: medicationError.message };
+      }
+
+      return { 
+        success: true, 
+        prescription: {
+          ...prescription,
+          medications: medicationData
+        }
+      };
+    } catch (error) {
+      console.error('Error in createNewPrescription:', error);
+      return { success: false, error: 'Failed to create prescription' };
+    }
+  },
+  /**
    * Get all prescriptions for the current patient
    */
   async getPatientPrescriptions(): Promise<{
@@ -96,17 +155,12 @@ export const prescriptionService = {
         return { success: false, error: 'Patient profile not found' };
       }
 
-      // Fetch prescriptions with related data
+      // Fetch prescriptions with related data - avoid relationship ambiguity
       const { data: prescriptions, error } = await supabase
         .from('prescriptions')
         .select(`
           *,
-          prescription_medications (*),
-          appointments (
-            appointment_date,
-            appointment_time,
-            clinics (clinic_name)
-          )
+          prescription_medications (*)
         `)
         .eq('patient_id', patient.id)
         .order('prescribed_date', { ascending: false });
@@ -119,12 +173,7 @@ export const prescriptionService = {
       // Transform the data to match our interface
       const formattedPrescriptions: PrescriptionWithMedications[] = prescriptions?.map(prescription => ({
         ...prescription,
-        medications: prescription.prescription_medications || [],
-        appointment: prescription.appointments ? {
-          appointment_date: prescription.appointments.appointment_date,
-          appointment_time: prescription.appointments.appointment_time,
-          clinic_name: prescription.appointments.clinics?.clinic_name
-        } : undefined
+        medications: prescription.prescription_medications || []
       })) || [];
 
       return { success: true, prescriptions: formattedPrescriptions };
@@ -513,6 +562,40 @@ export const prescriptionService = {
     } catch (error) {
       console.error('Error in getPrescriptionStats:', error);
       return { success: false, error: 'Failed to fetch prescription statistics' };
+    }
+  },
+
+  /**
+   * Update prescription status
+   */
+  async updatePrescriptionStatus(prescriptionId: string, status: 'active' | 'completed' | 'cancelled' | 'expired'): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    try {
+      const currentUser = await authService.getCurrentUser();
+      if (!currentUser) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      // Update prescription status
+      const { error } = await supabase
+        .from('prescriptions')
+        .update({ 
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', prescriptionId);
+
+      if (error) {
+        console.error('Error updating prescription status:', error);
+        return { success: false, error: 'Failed to update prescription status' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in updatePrescriptionStatus:', error);
+      return { success: false, error: 'Failed to update prescription status' };
     }
   }
 };

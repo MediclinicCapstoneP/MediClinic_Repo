@@ -86,14 +86,21 @@ export const ClinicAppointments: React.FC = () => {
         console.log('🎯 After name population:', appointments?.[0]?.patient_name);
       }
       
-      // Process appointments to ensure we have patient names
+      // Process appointments using the enhanced resolution from AppointmentService
       const processedAppointments = (appointments || []).map(appointment => ({
         ...appointment,
-        patient_display_name: getPatientDisplayName(appointment)
+        patient_display_name: AppointmentService.resolvePatientName(appointment)
       }));
       
       console.log('✅ Final processed appointments:', processedAppointments?.length || 0);
       console.log('👤 Sample patient name:', processedAppointments?.[0]?.patient_display_name);
+      console.log('🔍 Sample appointment data:', {
+        id: processedAppointments?.[0]?.id?.substring(0, 8),
+        patient_name: processedAppointments?.[0]?.patient_name,
+        patient_display_name: processedAppointments?.[0]?.patient_display_name,
+        hasPatientObject: !!processedAppointments?.[0]?.patient,
+        patientFields: processedAppointments?.[0]?.patient ? Object.keys(processedAppointments[0].patient) : []
+      });
       
       setAppointments(processedAppointments || []);
       setFilteredAppointments(processedAppointments || []);
@@ -110,76 +117,7 @@ export const ClinicAppointments: React.FC = () => {
     }
   };
   
-  // Enhanced function to get patient name with better fallbacks
-  const getPatientDisplayName = (appointment: any) => {
-    console.log('🔍 Resolving patient name for appointment:', appointment.id);
-    console.log('📋 Appointment data:', {
-      patient_id: appointment.patient_id,
-      patient_name: appointment.patient_name,
-      patient: appointment.patient,
-      hasPatientObject: !!appointment.patient
-    });
-    
-    // Try patient object first (from join)
-    if (appointment.patient && typeof appointment.patient === 'object') {
-      console.log('✅ Found patient object:', appointment.patient);
-      
-      // Use full_name directly if available
-      if (appointment.patient.full_name?.trim()) {
-        const fullName = appointment.patient.full_name.trim();
-        console.log('✅ Using patient.full_name:', fullName);
-        return fullName;
-      }
-      
-      // Construct from first_name and last_name
-      const firstName = appointment.patient.first_name?.trim();
-      const lastName = appointment.patient.last_name?.trim();
-      
-      if (firstName && lastName) {
-        const constructedName = `${firstName} ${lastName}`;
-        console.log('✅ Constructed from first + last name:', constructedName);
-        return constructedName;
-      }
-      
-      if (firstName) {
-        console.log('✅ Using first name only:', firstName);
-        return firstName;
-      }
-      
-      if (lastName) {
-        console.log('✅ Using last name only:', lastName);
-        return lastName;
-      }
-      
-      // Patient object exists but no name fields
-      console.log('⚠️ Patient object exists but has no name fields');
-    }
-    
-    // Try direct patient_name field (from appointment table)
-    if (appointment.patient_name?.trim()) {
-      console.log('✅ Using direct patient_name field:', appointment.patient_name);
-      return appointment.patient_name.trim();
-    }
-    
-    // Log what we couldn't resolve
-    console.log('❌ Could not resolve patient name, available fields:', {
-      patient_id: appointment.patient_id,
-      patient_name: appointment.patient_name,
-      patient_exists: !!appointment.patient,
-      patient_fields: appointment.patient ? Object.keys(appointment.patient) : [],
-      all_keys: Object.keys(appointment)
-    });
-    
-    // Return meaningful fallback with patient ID
-    if (appointment.patient_id) {
-      const shortId = appointment.patient_id.slice(-8);
-      const fallbackName = `Patient ID: ${shortId}`;
-      console.log('🔄 Using fallback name:', fallbackName);
-      return fallbackName;
-    }
-    
-    return 'Unknown Patient';
-  };
+  // Use the enhanced AppointmentService for patient name resolution
   
   const calculateStats = (appointments: any[]) => {
     const today = new Date().toISOString().split('T')[0];
@@ -276,7 +214,7 @@ export const ClinicAppointments: React.FC = () => {
   };
 
   const getPatientName = (appointment: any) => {
-    return appointment.patient_display_name || 'Unknown Patient';
+    return appointment.patient_display_name || AppointmentService.resolvePatientName(appointment) || 'Unknown Patient';
   };
 
   const getDoctorName = (appointment: any) => {

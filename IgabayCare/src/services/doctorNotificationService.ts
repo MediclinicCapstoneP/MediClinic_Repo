@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../supabaseClient';
 import { NotificationService, Notification, CreateNotificationParams } from './notificationService';
 
 export interface DoctorNotification extends Notification {

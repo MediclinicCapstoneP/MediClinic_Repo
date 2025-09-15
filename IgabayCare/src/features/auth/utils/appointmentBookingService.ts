@@ -13,7 +13,9 @@ interface CreateAppointmentData {
   appointment_time: string;
   appointment_type: string;
   patient_notes?: string;
+  notes?: string;
   status: string;
+  patient_name?: string;
 }
 
 export const appointmentBookingService = {
@@ -142,13 +144,55 @@ export const appointmentBookingService = {
     try {
       console.log('📅 Creating appointment:', appointmentData);
 
+      // Fetch patient name if not provided
+      let patientName = appointmentData.patient_name;
+      if (!patientName && appointmentData.patient_id) {
+        try {
+          const { data: patient, error: patientError } = await supabase
+            .from('patients')
+            .select('first_name, last_name, email')
+            .eq('id', appointmentData.patient_id)
+            .single();
+          
+          if (!patientError && patient) {
+            if (patient.first_name && patient.last_name) {
+              patientName = `${patient.first_name} ${patient.last_name}`;
+            } else if (patient.first_name) {
+              patientName = patient.first_name;
+            } else if (patient.email) {
+              patientName = patient.email.split('@')[0];
+            }
+            console.log('📋 Resolved patient name:', patientName);
+          } else {
+            console.warn('⚠️ Could not fetch patient name:', patientError?.message);
+          }
+        } catch (patientFetchError) {
+          console.warn('⚠️ Error fetching patient:', patientFetchError);
+        }
+      }
+
+      // Prepare appointment data with proper field mapping
+      const appointmentToInsert = {
+        patient_id: appointmentData.patient_id,
+        clinic_id: appointmentData.clinic_id,
+        appointment_date: appointmentData.appointment_date,
+        appointment_time: appointmentData.appointment_time,
+        appointment_type: appointmentData.appointment_type,
+        status: appointmentData.status,
+        // Map patient_notes to the correct field
+        notes: appointmentData.patient_notes || appointmentData.notes,
+        patient_notes: appointmentData.patient_notes,
+        // Add patient name
+        patient_name: patientName,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('📋 Final appointment data:', appointmentToInsert);
+
       const { data: appointment, error } = await supabase
         .from('appointments')
-        .insert([{
-          ...appointmentData,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
+        .insert([appointmentToInsert])
         .select()
         .single();
 
@@ -157,7 +201,12 @@ export const appointmentBookingService = {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Appointment created successfully:', appointment.id);
+      console.log('✅ Appointment created successfully:', {
+        id: appointment.id,
+        patient_name: appointment.patient_name,
+        notes: appointment.notes,
+        patient_notes: appointment.patient_notes
+      });
       return { success: true, appointment };
     } catch (error) {
       console.error('❌ Unexpected error creating appointment:', error);

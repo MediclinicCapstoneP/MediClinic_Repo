@@ -147,7 +147,7 @@ export const LatestReviews: React.FC<LatestReviewsProps> = ({ clinicId, limit = 
                 <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-sm font-medium">
-                      {review.patients.full_name?.charAt(0) || 'U'}{review.patients.full_name?.split(' ')[1]?.charAt(0) || 'U'}
+                      {(review.patients.first_name?.charAt(0) || 'U')}{(review.patients.last_name?.charAt(0) || 'U')}
                     </span>
                   </div>
                 </div>
@@ -166,7 +166,7 @@ export const LatestReviews: React.FC<LatestReviewsProps> = ({ clinicId, limit = 
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <h4 className="text-sm font-semibold text-gray-900">
-                      {review.patients.full_name || `${review.patients.first_name} ${review.patients.last_name}`}
+                      {`${review.patients.first_name || ''} ${review.patients.last_name || ''}`.trim() || 'Unknown Patient'}
                     </h4>
                     {review.appointments && (
                       <p className="text-xs text-gray-500">

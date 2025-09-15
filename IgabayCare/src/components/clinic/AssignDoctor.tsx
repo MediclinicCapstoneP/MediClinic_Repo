@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../supabaseClient';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { User, UserCheck, AlertCircle } from 'lucide-react';
+import { DoctorAppointmentService } from '../../services/doctorAppointmentService';
 
 interface Doctor {
   id: string;
@@ -90,6 +91,19 @@ export const AssignDoctor: React.FC<AssignDoctorProps> = ({
         return;
       }
 
+      // First, get the appointment details to create doctor appointment entry
+      const { data: appointment, error: fetchError } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', appointmentId)
+        .single();
+
+      if (fetchError || !appointment) {
+        console.error('Error fetching appointment details:', fetchError);
+        setError('Failed to fetch appointment details');
+        return;
+      }
+
       // Update appointment with doctor assignment
       const { error: updateError } = await supabase
         .from('appointments')
@@ -105,6 +119,38 @@ export const AssignDoctor: React.FC<AssignDoctorProps> = ({
         console.error('Error assigning doctor:', updateError);
         setError('Failed to assign doctor to appointment');
         return;
+      }
+
+      // Check if doctor appointment entry already exists
+      const existingCheck = await DoctorAppointmentService.isDoctorAssigned(selectedDoctorId, appointmentId);
+      
+      if (!existingCheck.assigned) {
+        // Create doctor appointment entry with patient information
+        const doctorAppointmentData = {
+          doctor_id: selectedDoctorId,
+          appointment_id: appointmentId,
+          patient_id: appointment.patient_id,
+          clinic_id: appointment.clinic_id,
+          appointment_date: appointment.appointment_date,
+          appointment_time: appointment.appointment_time,
+          appointment_type: appointment.appointment_type,
+          duration_minutes: appointment.duration_minutes || 30,
+          payment_amount: appointment.payment_amount || 0,
+          priority: appointment.priority || 'normal',
+          special_instructions: appointment.notes
+        };
+
+        const createResult = await DoctorAppointmentService.createDoctorAppointment(doctorAppointmentData);
+        
+        if (!createResult.success) {
+          console.error('Error creating doctor appointment:', createResult.error);
+          setError('Failed to create doctor appointment entry');
+          return;
+        }
+
+        console.log('✅ Doctor appointment created successfully with patient information');
+      } else {
+        console.log('✅ Doctor appointment entry already exists');
       }
 
       // Success - call the callback and close modal
@@ -138,6 +184,20 @@ export const AssignDoctor: React.FC<AssignDoctorProps> = ({
         console.error('Error unassigning doctor:', updateError);
         setError('Failed to unassign doctor from appointment');
         return;
+      }
+
+      // Also remove the doctor appointment entry if it exists
+      if (currentDoctorId) {
+        try {
+          const deleteResult = await DoctorAppointmentService.deleteDoctorAppointment(appointmentId);
+          if (deleteResult.success) {
+            console.log('✅ Doctor appointment entry removed successfully');
+          } else {
+            console.warn('⚠️ Failed to remove doctor appointment entry:', deleteResult.error);
+          }
+        } catch (deleteError) {
+          console.warn('⚠️ Error removing doctor appointment entry:', deleteError);
+        }
       }
 
       // Success - call the callback and close modal

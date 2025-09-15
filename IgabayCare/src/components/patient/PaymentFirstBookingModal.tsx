@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, CreditCard, Smartphone, Clock, MapPin, User, Calendar, ChevronDown } from 'lucide-react';
 import { adyenPaymentService, PaymentRequest, PaymentSession } from '../../services/adyenPaymentService';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../supabaseClient';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Card } from '../ui/Card';

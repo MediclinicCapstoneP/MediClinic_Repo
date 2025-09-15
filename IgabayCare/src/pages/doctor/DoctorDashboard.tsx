@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../supabaseClient';
 import { 
   User, Calendar, Clock, CheckCircle, Edit, Camera, 
   LogOut, Search, Filter, Plus, FileText, Stethoscope,

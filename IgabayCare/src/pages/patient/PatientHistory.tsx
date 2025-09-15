@@ -11,26 +11,78 @@ import {
   APPOINTMENT_PRIORITIES,
   APPOINTMENT_PRIORITY_COLORS
 } from '../../types/appointments';
-// Removed unused import
+// Import enhanced services
+import { MedicalHistoryService } from '../../services/medicalHistoryService';
+import { EnhancedHistoryService, EnhancedHistoryFilters } from '../../services/enhancedHistoryService';
+import { PatientMedicalHistory } from '../../types/history';
+import MedicalHistoryDashboard from '../../components/patient/MedicalHistoryDashboard';
+import MedicalHistoryTimeline from '../../components/patient/MedicalHistoryTimeline';
 import { enhancedPatientService } from '../../features/auth/utils/enhancedPatientService';
 import { prescriptionService } from '../../services/prescriptionService';
-import { Pill } from 'lucide-react';
+import { Pill, BarChart3, Clock } from 'lucide-react';
 
 interface PatientHistoryProps {
   patientId: string;
 }
 
-// Removed mock data - now using real database connections only
-
 export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => {
-  const [history, setHistory] = useState<AppointmentWithDetails[]>([]);
+  const [medicalHistory, setMedicalHistory] = useState<PatientMedicalHistory | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'overview' | 'timeline' | 'appointments'>('overview');
+  // Keep existing appointment history state for backward compatibility
+  const [history, setHistory] = useState<AppointmentWithDetails[]>([]);
   const [filterStatus, setFilterStatus] = useState<AppointmentStatus | 'all'>('all');
   const [filterFrom, setFilterFrom] = useState<string>('');
   const [filterTo, setFilterTo] = useState<string>('');
   const [searchText, setSearchText] = useState<string>('');
   const [prescriptionCounts, setPrescriptionCounts] = useState<{ [appointmentId: string]: number }>({});
 
+  // Enhanced comprehensive medical history loading function
+  const loadComprehensiveMedicalHistory = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔍 Loading comprehensive medical history for patient:', patientId);
+      
+      // Build filters from current state
+      const filters: EnhancedHistoryFilters = {};
+      if (filterStatus !== 'all') filters.status = filterStatus;
+      if (filterFrom) filters.dateRange = { start: filterFrom, end: filterTo || new Date().toISOString().split('T')[0] };
+      if (filterTo && !filterFrom) filters.dateRange = { start: '1900-01-01', end: filterTo };
+      
+      // Use enhanced service with better error handling and more data
+      const result = await EnhancedHistoryService.getPatientHistory(patientId, filters);
+      
+      if (result.success && result.data) {
+        setMedicalHistory(result.data);
+        // Also set the appointment history for backward compatibility
+        setHistory(result.data.appointments);
+        console.log(`✅ Loaded comprehensive medical history with ${result.data.appointments.length} appointments`);
+      } else {
+        // Fallback to original service if enhanced fails
+        console.warn('⚠️ Enhanced service failed, falling back to original service');
+        const fallbackResult = await MedicalHistoryService.getPatientMedicalHistory(patientId);
+        
+        if (fallbackResult.success && fallbackResult.data) {
+          setMedicalHistory(fallbackResult.data);
+          setHistory(fallbackResult.data.appointments);
+          console.log(`✅ Loaded fallback medical history with ${fallbackResult.data.appointments.length} appointments`);
+        } else {
+          setError(result.error || fallbackResult.error || 'Failed to load medical history');
+          console.error('❌ Error loading medical history:', result.error || fallbackResult.error);
+        }
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+      console.error('❌ Unexpected error loading medical history:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId, filterStatus, filterFrom, filterTo]);
+
+  // Keep existing function for appointments-only view
   const loadHistory = useCallback(async () => {
     try {
       setLoading(true);
@@ -103,8 +155,12 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
   };
 
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+    if (activeView === 'overview' || activeView === 'timeline') {
+      void loadComprehensiveMedicalHistory();
+    } else {
+      void loadHistory();
+    }
+  }, [loadComprehensiveMedicalHistory, loadHistory, activeView]);
 
   const filtered = history.filter((appt) => {
     if (searchText) {
@@ -157,14 +213,112 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold">History</h2>
-          <p className="text-gray-600">Your past appointments and their status.</p>
+          <h2 className="text-2xl font-bold">Medical History</h2>
+          <p className="text-gray-600">Comprehensive overview of your medical records and health information.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Status
-            </label>
+        
+        {/* View Selector */}
+        <div className="flex bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setActiveView('overview')}
+            className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeView === 'overview'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveView('timeline')}
+            className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeView === 'timeline'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Clock className="w-4 h-4 mr-2" />
+            Timeline
+          </button>
+          <button
+            onClick={() => setActiveView('appointments')}
+            className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeView === 'appointments'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Pill className="w-4 h-4 mr-2" />
+            Appointments
+          </button>
+        </div>
+      </div>
+
+      {/* Render content based on active view */}
+      {activeView === 'overview' && (
+        <div>
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <div className="text-red-500 mb-4">
+                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Medical History</h3>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <Button onClick={loadComprehensiveMedicalHistory}>Retry</Button>
+            </div>
+          ) : medicalHistory ? (
+            <MedicalHistoryDashboard 
+              summary={medicalHistory.summary}
+              loading={loading}
+            />
+          ) : null}
+        </div>
+      )}
+
+      {activeView === 'timeline' && (
+        <div>
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <div className="text-red-500 mb-4">
+                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Medical History</h3>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <Button onClick={loadComprehensiveMedicalHistory}>Retry</Button>
+            </div>
+          ) : medicalHistory ? (
+            <MedicalHistoryTimeline
+              timelineItems={EnhancedHistoryService.generateHistoryTimeline(medicalHistory)}
+              loading={loading}
+            />
+          ) : null}
+        </div>
+      )}
+
+      {activeView === 'appointments' && (
+        <div>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Appointment History</h3>
+            <p className="text-gray-600">Your past appointments and their status.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Status
+              </label>
             <select
               value={filterStatus}
               onChange={(e) =>
@@ -219,12 +373,11 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
             <Button onClick={() => void loadHistory()}>Apply</Button>
           </div>
         </div>
-      </div>
 
-      {loading ? (
-        <SkeletonTable rows={6} columns={7} />
-      ) : (
-        <Card className="overflow-hidden">
+        {loading ? (
+          <SkeletonTable rows={6} columns={7} />
+        ) : (
+          <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -336,6 +489,8 @@ export const PatientHistory: React.FC<PatientHistoryProps> = ({ patientId }) => 
             </table>
           </div>
         </Card>
+        )}
+      </div>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NotificationService, Notification } from '../services/notificationService';
+import RealTimeNotificationService, { RealTimeNotificationOptions } from '../services/realTimeNotificationService';
 
 interface UseNotificationsResult {
   notifications: Notification[];
@@ -10,6 +11,14 @@ interface UseNotificationsResult {
   markAllAsRead: () => Promise<void>;
   dismiss: (notificationId: string) => Promise<void>;
   refresh: () => Promise<void>;
+  isRealTimeConnected: boolean;
+  testNotification: () => Promise<void>;
+  connectionStatus: {
+    state: 'disconnected' | 'connecting' | 'connected' | 'error';
+    subscriptions: number;
+    retryAttempts: { [key: string]: number };
+  };
+  forceReconnect: () => Promise<void>;
 }
 
 /**
@@ -24,6 +33,10 @@ export const useNotifications = (
     autoRefresh?: boolean;
     refreshInterval?: number;
     limit?: number;
+    realTime?: boolean;
+    playSound?: boolean;
+    showBrowserNotification?: boolean;
+    vibrate?: boolean;
   }
 ): UseNotificationsResult => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -31,11 +44,21 @@ export const useNotifications = (
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unsubscribe, setUnsubscribe] = useState<(() => void) | null>(null);
+  const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState({
+    state: 'disconnected' as 'disconnected' | 'connecting' | 'connected' | 'error',
+    subscriptions: 0,
+    retryAttempts: {} as { [key: string]: number }
+  });
 
   const {
     autoRefresh = true,
     refreshInterval = 30000, // 30 seconds
-    limit = 50
+    limit = 50,
+    realTime = true,
+    playSound = true,
+    showBrowserNotification = true,
+    vibrate = true
   } = options || {};
 
   /**
@@ -150,39 +173,187 @@ export const useNotifications = (
   const refresh = useCallback(async () => {
     await fetchNotifications();
   }, [fetchNotifications]);
+  
+  /**
+   * Send a test notification
+   */
+  const testNotification = useCallback(async () => {
+    try {
+      const result = await RealTimeNotificationService.testNotification(userId, 'system');
+      if (!result.success && result.error) {
+        setError(result.error);
+      }
+    } catch (err) {
+      console.error('Error sending test notification:', err);
+      setError('Failed to send test notification');
+    }
+  }, [userId]);
 
   /**
-   * Set up real-time subscription
+   * Force reconnection of real-time notifications
+   */
+  const forceReconnect = useCallback(async () => {
+    try {
+      setError(null);
+      setIsRealTimeConnected(false);
+      
+      const result = await RealTimeNotificationService.forceReconnect();
+      if (result.success) {
+        // Re-initialize subscriptions after reconnect
+        await fetchNotifications();
+        setIsRealTimeConnected(true);
+      } else {
+        setError(result.error || 'Failed to reconnect');
+        setIsRealTimeConnected(false);
+      }
+    } catch (err) {
+      console.error('Error forcing reconnect:', err);
+      setError('Failed to force reconnect');
+      setIsRealTimeConnected(false);
+    }
+  }, [fetchNotifications]);
+
+  /**
+   * Update connection status periodically
+   */
+  useEffect(() => {
+    const updateConnectionStatus = () => {
+      const status = RealTimeNotificationService.getConnectionStatus();
+      setConnectionStatus(status);
+      setIsRealTimeConnected(status.state === 'connected');
+    };
+
+    // Update immediately
+    updateConnectionStatus();
+    
+    // Update every 5 seconds
+    const interval = setInterval(updateConnectionStatus, 5000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  /**
+   * Set up real-time subscription with error handling
    */
   useEffect(() => {
     if (!userId) return;
 
-    // Initial fetch
-    fetchNotifications();
+    let isSubscriptionActive = true;
 
-    // Set up real-time subscription
-    const { unsubscribe: unsub } = NotificationService.subscribeToNotifications(
-      userId,
-      (notification) => {
-        // Add new notification to the beginning of the list
-        setNotifications(prev => [notification, ...prev]);
-        
-        // Update unread count
-        if (!notification.is_read) {
-          setUnreadCount(prev => prev + 1);
-        }
+    // Initial fetch with error handling
+    fetchNotifications().catch(err => {
+      console.error('Initial notification fetch failed:', err);
+      if (isSubscriptionActive) {
+        setError('Failed to load notifications');
       }
-    );
+    });
 
-    setUnsubscribe(() => unsub);
+    let realtimeUnsubscribe: (() => void) | null = null;
+
+    // Set up real-time subscription if enabled
+    if (realTime) {
+      // Initialize real-time service with better error handling
+      RealTimeNotificationService.initialize()
+        .then(({ success, error }) => {
+          if (!isSubscriptionActive) return; // Component unmounted
+          
+          if (success) {
+            setIsRealTimeConnected(true);
+            setError(null); // Clear any previous errors
+          
+          // Subscribe to real-time notifications
+          const { unsubscribe: realTimeUnsub } = RealTimeNotificationService.subscribeToUserNotifications(
+            userId,
+            {
+              onNotificationReceived: (notification) => {
+                try {
+                  // Add new notification to the beginning of the list
+                  setNotifications(prev => [notification, ...prev]);
+                  
+                  // Update unread count
+                  if (!notification.is_read) {
+                    setUnreadCount(prev => prev + 1);
+                  }
+                } catch (err) {
+                  console.error('Error handling received notification:', err);
+                }
+              },
+              onNotificationUpdated: (notification) => {
+                try {
+                  setNotifications(prev => 
+                    prev.map(n => n.id === notification.id ? notification : n)
+                  );
+                  
+                  // Update unread count if read status changed
+                  if (notification.is_read) {
+                    setUnreadCount(prev => Math.max(0, prev - 1));
+                  }
+                } catch (err) {
+                  console.error('Error handling updated notification:', err);
+                }
+              },
+              onNotificationDeleted: (notificationId) => {
+                try {
+                  const deletedNotification = notifications.find(n => n.id === notificationId);
+                  setNotifications(prev => prev.filter(n => n.id !== notificationId));
+                  
+                  // Update unread count if deleted notification was unread
+                  if (deletedNotification && !deletedNotification.is_read) {
+                    setUnreadCount(prev => Math.max(0, prev - 1));
+                  }
+                } catch (err) {
+                  console.error('Error handling deleted notification:', err);
+                }
+              },
+              playSound,
+              showBrowserNotification,
+              vibrate
+            }
+          );
+          
+          realtimeUnsubscribe = realTimeUnsub;
+          } else {
+            console.warn('Failed to initialize real-time notifications:', error);
+            setIsRealTimeConnected(false);
+            // Don't set error for real-time failures, fall back to polling
+          }
+        })
+        .catch(err => {
+          console.error('Error initializing real-time notifications:', err);
+          setIsRealTimeConnected(false);
+          // Don't set error for real-time failures, fall back to polling
+        });
+    } else {
+      // Fallback to legacy subscription
+      const { unsubscribe: legacyUnsub } = NotificationService.subscribeToNotifications(
+        userId,
+        (notification) => {
+          setNotifications(prev => [notification, ...prev]);
+          
+          if (!notification.is_read) {
+            setUnreadCount(prev => prev + 1);
+          }
+        }
+      );
+      
+      realtimeUnsubscribe = legacyUnsub;
+    }
+
+    setUnsubscribe(() => realtimeUnsubscribe);
 
     // Cleanup subscription on unmount
     return () => {
-      if (unsub) {
-        unsub();
+      isSubscriptionActive = false;
+      if (realtimeUnsubscribe) {
+        try {
+          realtimeUnsubscribe();
+        } catch (err) {
+          console.error('Error during cleanup:', err);
+        }
       }
+      setIsRealTimeConnected(false);
     };
-  }, [userId, fetchNotifications]);
+  }, [userId, realTime, playSound, showBrowserNotification, vibrate]); // Removed fetchNotifications and notifications from dependencies
 
   /**
    * Set up auto-refresh interval
@@ -205,7 +376,11 @@ export const useNotifications = (
     markAsRead,
     markAllAsRead,
     dismiss,
-    refresh
+    refresh,
+    isRealTimeConnected,
+    testNotification,
+    connectionStatus,
+    forceReconnect
   };
 };
 

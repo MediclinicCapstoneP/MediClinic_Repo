@@ -38,6 +38,9 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [prescriptionsPerPage] = useState(10);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (doctorId) {
@@ -135,6 +138,39 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
   const handleViewDetails = (prescription: PrescriptionWithPatient) => {
     setSelectedPrescription(prescription);
     setShowDetailsModal(true);
+  };
+
+  const handleCompletePrescription = async (prescription: PrescriptionWithPatient) => {
+    if (!confirm('Are you sure you want to mark this prescription as completed?')) {
+      return;
+    }
+
+    try {
+      setActionLoading(prescription.id);
+      const result = await prescriptionService.updatePrescriptionStatus(prescription.id, 'completed');
+      
+      if (result.success) {
+        // Refresh prescriptions list
+        loadPrescriptions();
+        alert('Prescription marked as completed successfully.');
+      } else {
+        alert('Error completing prescription: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error completing prescription:', error);
+      alert('Error completing prescription. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReschedulePrescription = (prescription: PrescriptionWithPatient) => {
+    setSelectedPrescription(prescription);
+    setShowRescheduleModal(true);
+  };
+
+  const handleCreateNewPrescription = () => {
+    setShowCreateModal(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -235,6 +271,13 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
         </div>
         
         <div className="flex gap-2">
+          <Button 
+            onClick={handleCreateNewPrescription}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Prescription
+          </Button>
           <Button 
             onClick={() => setShowFilters(!showFilters)}
             variant="outline"
@@ -479,15 +522,40 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
                       {getStatusBadge(prescription.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <Button
-                        onClick={() => handleViewDetails(prescription)}
-                        size="sm"
-                        variant="outline"
-                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View Details
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {prescription.status === 'active' && (
+                          <Button
+                            onClick={() => handleCompletePrescription(prescription)}
+                            size="sm"
+                            variant="outline"
+                            className="text-green-600 border-green-200 hover:bg-green-50"
+                            disabled={actionLoading === prescription.id}
+                          >
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            {actionLoading === prescription.id ? 'Loading...' : 'Complete'}
+                          </Button>
+                        )}
+                        
+                        <Button
+                          onClick={() => handleReschedulePrescription(prescription)}
+                          size="sm"
+                          variant="outline"
+                          className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                        >
+                          <Calendar className="h-3 w-3 mr-1" />
+                          Reschedule
+                        </Button>
+                        
+                        <Button
+                          onClick={() => handleViewDetails(prescription)}
+                          size="sm"
+                          variant="outline"
+                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -670,6 +738,157 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
             <div className="flex justify-end pt-4 border-t">
               <Button onClick={() => setShowDetailsModal(false)} variant="outline">
                 Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Create New Prescription Modal */}
+      {showCreateModal && (
+        <Modal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          title="Create New Prescription"
+          size="lg"
+        >
+          <div className="space-y-6 p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Plus className="h-6 w-6 text-blue-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-blue-900">New Prescription</h3>
+                  <p className="text-blue-700">Create a new prescription for your patient</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-center py-8">
+              <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Prescription Creation</h3>
+              <p className="text-gray-600 mb-4">
+                The full prescription creation form will be implemented here.
+                This will include patient selection, medication search, dosage settings, and more.
+              </p>
+              <div className="space-y-3 text-left max-w-md mx-auto">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <User className="h-4 w-4" />
+                  <span>Select patient</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Pill className="h-4 w-4" />
+                  <span>Search and add medications</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Clock className="h-4 w-4" />
+                  <span>Set dosage and frequency</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <FileText className="h-4 w-4" />
+                  <span>Add instructions and notes</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+                Cancel
+              </Button>
+              <Button disabled>
+                Create Prescription (Coming Soon)
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reschedule Prescription Modal */}
+      {showRescheduleModal && selectedPrescription && (
+        <Modal
+          isOpen={showRescheduleModal}
+          onClose={() => setShowRescheduleModal(false)}
+          title="Reschedule Prescription Follow-up"
+          size="md"
+        >
+          <div className="space-y-6 p-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-6 w-6 text-orange-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-orange-900">Reschedule Follow-up</h3>
+                  <p className="text-orange-700">Schedule a follow-up for {selectedPrescription.medication_name}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Patient
+                </label>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="font-medium">
+                    {selectedPrescription.patient ? 
+                      `${selectedPrescription.patient.first_name} ${selectedPrescription.patient.last_name}` : 
+                      'Unknown Patient'}
+                  </p>
+                  <p className="text-sm text-gray-600">{selectedPrescription.patient?.email}</p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Follow-up Date
+                </label>
+                <Input
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Follow-up Time
+                </label>
+                <Input
+                  type="time"
+                  className="w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Follow-up
+                </label>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select reason</option>
+                  <option value="medication_review">Medication Review</option>
+                  <option value="progress_check">Progress Check</option>
+                  <option value="side_effects">Check for Side Effects</option>
+                  <option value="dosage_adjustment">Dosage Adjustment</option>
+                  <option value="prescription_renewal">Prescription Renewal</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Additional Notes
+                </label>
+                <textarea 
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Any additional notes for the follow-up appointment..."
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button variant="outline" onClick={() => setShowRescheduleModal(false)}>
+                Cancel
+              </Button>
+              <Button disabled>
+                Schedule Follow-up (Coming Soon)
               </Button>
             </div>
           </div>

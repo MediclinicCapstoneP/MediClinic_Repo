@@ -1,4 +1,4 @@
-import { supabase } from '../../../lib/supabase';
+import { supabase } from '../../../supabaseClient';
 import { 
   Appointment, 
   CreateAppointmentData, 
@@ -249,16 +249,24 @@ export class AppointmentService {
             id, 
             first_name, 
             last_name, 
-            full_name,
             email, 
-            phone
+            phone,
+            date_of_birth
           ),
           clinic:clinics(
             id, 
             clinic_name, 
             address, 
             city, 
-            state
+            state,
+            phone,
+            email
+          ),
+          doctor:doctors(
+            id,
+            full_name,
+            specialization,
+            email
           )
         `)
         .order('appointment_date', { ascending: true })
@@ -340,7 +348,7 @@ export class AppointmentService {
       // Fetch patient details for all patient IDs
       const { data: patients, error: patientError } = await supabase
         .from('patients')
-        .select('id, first_name, last_name, full_name, email, phone')
+        .select('id, first_name, last_name, email, phone')
         .in('id', patientIds);
 
       if (patientError) {
@@ -354,13 +362,12 @@ export class AppointmentService {
       // Create a map of patient ID to enhanced patient data
       const patientMap = new Map();
       patients?.forEach(patient => {
-        // Ensure full_name is populated
+        // Construct full_name from first_name and last_name since full_name column doesn't exist
         const enhancedPatient = {
           ...patient,
-          full_name: patient.full_name || 
-                     (patient.first_name && patient.last_name 
-                      ? `${patient.first_name} ${patient.last_name}` 
-                      : patient.first_name || patient.last_name || 'Unknown Patient')
+          full_name: patient.first_name && patient.last_name 
+                     ? `${patient.first_name} ${patient.last_name}` 
+                     : patient.first_name || patient.last_name || 'Unknown Patient'
         };
         patientMap.set(patient.id, enhancedPatient);
       });
@@ -381,6 +388,77 @@ export class AppointmentService {
   }
 
   /**
+   * Comprehensive patient name resolution function
+   */
+  static resolvePatientName(appointment: any): string {
+    console.log('🔍 Resolving patient name for appointment:', appointment.id?.substring(0, 8));
+    
+    // Priority 1: Use patient_name from appointment table (if properly populated)
+    if (appointment.patient_name && 
+        appointment.patient_name.trim() && 
+        !appointment.patient_name.startsWith('Patient ID:') &&
+        appointment.patient_name !== 'Unknown Patient') {
+      console.log('✅ Using appointment.patient_name:', appointment.patient_name);
+      return appointment.patient_name.trim();
+    }
+
+    // Priority 2: Use patient object from join (if available)
+    if (appointment.patient && typeof appointment.patient === 'object') {
+      console.log('🔍 Found patient object:', appointment.patient);
+      
+      // Try full_name from patient object
+      if (appointment.patient.full_name?.trim()) {
+        const fullName = appointment.patient.full_name.trim();
+        console.log('✅ Using patient.full_name:', fullName);
+        return fullName;
+      }
+      
+      // Try constructing from first_name and last_name
+      const firstName = appointment.patient.first_name?.trim();
+      const lastName = appointment.patient.last_name?.trim();
+      
+      if (firstName && lastName) {
+        const constructedName = `${firstName} ${lastName}`;
+        console.log('✅ Constructed name from first + last:', constructedName);
+        return constructedName;
+      }
+      
+      if (firstName) {
+        console.log('✅ Using first name only:', firstName);
+        return firstName;
+      }
+      
+      if (lastName) {
+        console.log('✅ Using last name only:', lastName);
+        return lastName;
+      }
+      
+      // Try email local part if available
+      if (appointment.patient.email) {
+        const emailLocal = appointment.patient.email.split('@')[0];
+        const emailName = `User (${emailLocal})`;
+        console.log('📞 Using email-based name:', emailName);
+        return emailName;
+      }
+    }
+    
+    // Priority 3: Try to use patient_id to create a meaningful fallback
+    if (appointment.patient_id) {
+      // For UUIDs, take the last 8 characters for readability
+      const shortId = appointment.patient_id.length > 8 ? 
+        appointment.patient_id.slice(-8) : 
+        appointment.patient_id;
+      const fallbackName = `Patient (${shortId})`;
+      console.log('🆔 Using patient ID fallback:', fallbackName);
+      return fallbackName;
+    }
+    
+    // Ultimate fallback
+    console.log('⚠️ Using ultimate fallback: Unknown Patient');
+    return 'Unknown Patient';
+  }
+
+  /**
    * Simple method to populate patient names in appointments
    */
   static async populatePatientNames(appointments: Appointment[]): Promise<Appointment[]> {
@@ -396,10 +474,10 @@ export class AppointmentService {
         return appointments;
       }
 
-      // Fetch patient names
+      // Fetch comprehensive patient data
       const { data: patients, error } = await supabase
         .from('patients')
-        .select('id, first_name, last_name')
+        .select('id, first_name, last_name, email')
         .in('id', patientIds);
 
       if (error) {
@@ -407,18 +485,30 @@ export class AppointmentService {
         return appointments;
       }
 
-      // Create patient name map
-      const patientNameMap = new Map();
+      // Create patient data map
+      const patientMap = new Map();
       patients?.forEach(patient => {
-        const fullName = [patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'Unknown Patient';
-        patientNameMap.set(patient.id, fullName);
+        // Create enhanced patient object
+        const enhancedPatient = {
+          ...patient,
+          // Construct full_name from first_name and last_name since full_name column doesn't exist
+          full_name: patient.first_name && patient.last_name 
+                     ? `${patient.first_name} ${patient.last_name}`.trim()
+                     : patient.first_name || patient.last_name || null
+        };
+        patientMap.set(patient.id, enhancedPatient);
       });
 
-      // Populate patient names
-      return appointments.map(appointment => ({
-        ...appointment,
-        patient_name: patientNameMap.get(appointment.patient_id) || `Patient ID: ${appointment.patient_id}`
-      }));
+      // Enhance appointments with patient data and resolve names
+      return appointments.map(appointment => {
+        const patient = patientMap.get(appointment.patient_id);
+        const enhancedAppointment = {
+          ...appointment,
+          patient: patient,
+          patient_name: patient ? this.resolvePatientName({ ...appointment, patient }) : this.resolvePatientName(appointment)
+        };
+        return enhancedAppointment;
+      });
 
     } catch (error) {
       console.error('Error populating patient names:', error);
@@ -546,50 +636,13 @@ export class AppointmentService {
       // Create a copy of the data to avoid mutating the original
       const updateData = { ...data };
       
-      // Try the update with all fields first
-      let { data: appointment, error } = await supabase
+      const { data: appointment, error } = await supabase
         .from(this.TABLE_NAME)
         .update(updateData)
         .eq('id', id)
         .select()
         .single();
-
-      // If we get a column not found error, try without problematic fields
-      if (error && error.code === 'PGRST204') {
-        console.warn('Column not found error, attempting update without problematic fields:', error.message);
-        
-        // Remove fields that might not exist in the database
-        const safeModeData = { ...updateData };
-        
-        // List of fields that might be missing in older database schemas
-        const potentiallyMissingFields = [
-          'doctor_specialty', 'priority', 'duration_minutes', 'patient_notes',
-          'confirmation_sent', 'confirmation_sent_at', 'reminder_sent', 'reminder_sent_at',
-          'cancelled_at', 'cancelled_by', 'cancellation_reason'
-        ];
-        
-        potentiallyMissingFields.forEach(field => {
-          if (field in safeModeData) {
-            delete safeModeData[field as keyof UpdateAppointmentData];
-          }
-        });
-        
-        // Try the update again with safe mode data
-        const safeUpdate = await supabase
-          .from(this.TABLE_NAME)
-          .update(safeModeData)
-          .eq('id', id)
-          .select()
-          .single();
-          
-        appointment = safeUpdate.data;
-        error = safeUpdate.error;
-        
-        if (!error) {
-          console.warn('Update succeeded in safe mode. Consider running database schema updates.');
-        }
-      }
-
+    
       if (error) {
         console.error('Error updating appointment:', error);
         throw error;

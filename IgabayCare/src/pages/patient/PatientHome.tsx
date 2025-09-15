@@ -7,6 +7,7 @@ import { clinicService, type ClinicProfile } from '../../features/auth/utils/cli
 import { AppointmentService } from '../../features/auth/utils/appointmentService';
 import { patientService } from '../../features/auth/utils/patientService';
 import { authService } from '../../features/auth/utils/authService';
+import { doctorService, type DoctorProfile } from '../../features/auth/utils/doctorService';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import { PaymentForm } from '../../components/patient/PaymentForm';
 import { PayMongoGCashPayment } from '../../components/patient/PayMongoGCashPayment';
@@ -72,6 +73,9 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('consultation');
   const [patientNotes, setPatientNotes] = useState('');
   const [paymentDone, setPaymentDone] = useState(false);
+  const [doctors, setDoctors] = useState<DoctorProfile[]>([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [currentPatient, setCurrentPatient] = useState<PatientData | null>(null);
@@ -417,10 +421,40 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
     }
   }, [selectedClinic?.id, step, appointmentType, convertToAppointmentType, getServiceOptions]);
 
+  // Fetch doctors for selected clinic
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      if (selectedClinic && step === 'book') {
+        setLoadingDoctors(true);
+        try {
+          const result = await doctorService.getDoctorsByClinicId(selectedClinic.id);
+          if (result.success && result.doctors) {
+            setDoctors(result.doctors);
+            // If no doctor selected and doctors available, select the first one
+            if (result.doctors.length > 0 && !selectedDoctorId) {
+              setSelectedDoctorId(result.doctors[0].id);
+            }
+          } else {
+            setDoctors([]);
+            setSelectedDoctorId('');
+          }
+        } catch (error) {
+          console.error('Error fetching doctors:', error);
+          setDoctors([]);
+          setSelectedDoctorId('');
+        } finally {
+          setLoadingDoctors(false);
+        }
+      }
+    };
+
+    fetchDoctors();
+  }, [selectedClinic?.id, step]);
+
   // Handle appointment booking
   const handleBookAppointment = async () => {
-    if (!currentPatient || !selectedClinic || !date || !time) {
-      setBookingError('Please complete all required fields');
+    if (!currentPatient || !selectedClinic || !date || !time || !selectedDoctorId) {
+      setBookingError('Please complete all required fields, including doctor selection');
       return;
     }
 
@@ -436,10 +470,12 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
       const appointmentData: CreateAppointmentData = {
         patient_id: currentPatient.id,
         clinic_id: selectedClinic.id,
+        doctor_id: selectedDoctorId,
         appointment_date: date,
         appointment_time: time + ':00', // Add seconds
         appointment_type: appointmentType,
-        // priority: 'normal', // Removed due to missing column in database
+        patient_notes: patientNotes,
+        // priority: 'normal', // Can be added once schema is updated
       };
 
       console.log('Creating appointment with data:', appointmentData);
@@ -1053,11 +1089,36 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
               rows={3}
             />
           </div>
+
+          {/* Doctor Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Doctor *
+              {loadingDoctors && <span className="ml-2 text-blue-600">Loading doctors...</span>}
+            </label>
+            {doctors.length > 0 ? (
+              <select
+                value={selectedDoctorId}
+                onChange={(e) => setSelectedDoctorId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Choose a doctor</option>
+                {doctors.map((doctor) => (
+                  <option key={doctor.id} value={doctor.id}>
+                    Dr. {doctor.full_name} - {doctor.specialization}
+                  </option>
+                ))}
+              </select>
+            ) : !loadingDoctors ? (
+              <p className="text-sm text-gray-500">No doctors available for this clinic.</p>
+            ) : null}
+          </div>
           
           <div className="flex space-x-3 pt-4">
-            <Button 
+            <Button
               onClick={() => setStep('gcash-payment')}
-              disabled={!date || !time || bookingLoading}
+              disabled={!date || !time || !selectedDoctorId || bookingLoading}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               {bookingLoading ? (
@@ -1069,8 +1130,8 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
                 'Pay with GCash'
               )}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setStep('clinic-details')}
               disabled={bookingLoading}
             >

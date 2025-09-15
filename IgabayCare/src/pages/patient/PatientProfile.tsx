@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Calendar, Phone, Mail, MapPin, Heart, Pill, AlertTriangle, Save, Trash2, Edit, Loader2, AlertCircle, Bell } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -7,6 +7,7 @@ import { ProfilePicture } from '../../components/ui/ProfilePicture';
 import { authService } from '../../features/auth/utils/authService';
 import { patientService, type PatientProfile } from '../../features/auth/utils/patientService';
 import NotificationPreferences from '../../components/patient/NotificationPreferences';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
 
 export const PatientProfileComponent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'personal' | 'medical' | 'notifications' | 'settings'>('personal');
@@ -36,20 +37,42 @@ export const PatientProfileComponent: React.FC = () => {
 
   const [originalData, setOriginalData] = useState<PatientProfile | null>(null);
 
+  // Helper function to sanitize data for database
+  // Moved above handleSave to prevent temporal dead zone
+  const sanitizeDataForDatabase = useCallback((data: PatientProfile) => {
+    return {
+      ...data,
+      phone: data.phone || undefined,
+      address: data.address || undefined,
+      emergency_contact: data.emergency_contact || undefined,
+      blood_type: data.blood_type || undefined,
+      allergies: data.allergies || undefined,
+      medications: data.medications || undefined,
+      medical_conditions: data.medical_conditions || undefined,
+      profile_pic_url: data.profile_pic_url || undefined,
+    };
+  }, []);
+
   // Fetch patient data from Supabase
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchPatientData = async () => {
       try {
         setIsLoading(true);
         setError(null);
         
         const currentUser = await authService.getCurrentUser();
+        if (!isMounted) return;
+        
         if (!currentUser) {
           setError('No authenticated user found');
           return;
         }
 
         const patientResult = await patientService.getPatientByUserId(currentUser.id);
+        if (!isMounted) return;
+        
         if (patientResult.success && patientResult.patient) {
           // Convert null values to empty strings for React inputs
           const sanitizedPatient = {
@@ -69,17 +92,24 @@ export const PatientProfileComponent: React.FC = () => {
           setError(patientResult.error || 'Patient profile not found');
         }
       } catch (err) {
+        if (!isMounted) return;
         console.error('Error fetching patient data:', err);
         setError('Failed to load patient data');
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchPatientData();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []); 
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
       setError(null);
@@ -106,48 +136,34 @@ export const PatientProfileComponent: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [patientData]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     if (originalData) {
       setPatientData(originalData);
     }
     setIsEditing(false);
     setError(null);
-  };
+  }, [originalData]);
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = useCallback((field: string, value: any) => {
     setPatientData(prev => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
-  const handleProfilePictureUpdate = (url: string) => {
+  const handleProfilePictureUpdate = useCallback((url: string) => {
     setPatientData(prev => ({
       ...prev,
       profile_pic_url: url,
     }));
-  };
+  }, []);
 
-  const handleProfilePictureDelete = () => {
+  const handleProfilePictureDelete = useCallback(() => {
     setPatientData(prev => ({
       ...prev,
-      profile_pic_url: url,
+      profile_pic_url: null,
     }));
-  };
+  }, []);
 
-  // Helper function to sanitize data for database
-  const sanitizeDataForDatabase = (data: PatientProfile) => {
-    return {
-      ...data,
-      phone: data.phone || undefined,
-      address: data.address || undefined,
-      emergency_contact: data.emergency_contact || undefined,
-      blood_type: data.blood_type || undefined,
-      allergies: data.allergies || undefined,
-      medications: data.medications || undefined,
-      medical_conditions: data.medical_conditions || undefined,
-      profile_pic_url: data.profile_pic_url || undefined,
-    };
-  };
 
   const handleDeleteAccount = async () => {
     if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
@@ -206,7 +222,8 @@ export const PatientProfileComponent: React.FC = () => {
   }
 
   return (
-    <div className="p-3 sm:p-6">
+    <ErrorBoundary>
+      <div className="p-3 sm:p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Patient Profile</h1>
@@ -516,5 +533,6 @@ export const PatientProfileComponent: React.FC = () => {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 };

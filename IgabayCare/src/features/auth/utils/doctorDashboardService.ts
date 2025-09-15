@@ -43,14 +43,14 @@ class DoctorDashboardService {
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      // Get appointments for the doctor
+      // Get appointments for the doctor - now doctor_id should be properly populated
       const { data: appointments, error: appointmentsError } = await supabase
         .from('appointments')
         .select('*')
         .eq('doctor_id', doctorId);
 
       if (appointmentsError) {
-        console.error('Error fetching doctor appointments:', appointmentsError);
+        console.error('Error fetching doctor appointments for stats:', appointmentsError);
         return {
           success: false,
           error: appointmentsError.message
@@ -125,7 +125,7 @@ class DoctorDashboardService {
       // For now, we'll generate activities based on recent appointments and prescriptions
       const activities: DoctorActivity[] = [];
 
-      // Get recent completed appointments
+      // Get recent completed appointments - now with improved patient name resolution
       const { data: recentAppointments, error: appointmentsError } = await supabase
         .from('appointments')
         .select(`
@@ -135,7 +135,8 @@ class DoctorDashboardService {
           status,
           updated_at,
           patient_name,
-          appointment_type
+          appointment_type,
+          patient:patients(first_name, last_name)
         `)
         .eq('doctor_id', doctorId)
         .order('updated_at', { ascending: false })
@@ -144,12 +145,18 @@ class DoctorDashboardService {
       if (!appointmentsError && recentAppointments) {
         for (const appointment of recentAppointments) {
           if (appointment.status === 'completed') {
+            // Determine patient name with improved logic
+            let patientName = appointment.patient_name || 'patient';
+            if (appointment.patient && appointment.patient.first_name && appointment.patient.last_name) {
+              patientName = `${appointment.patient.first_name} ${appointment.patient.last_name}`;
+            }
+            
             activities.push({
               id: `apt_${appointment.id}`,
               type: 'appointment_completed',
-              description: `Completed ${appointment.appointment_type} appointment with ${appointment.patient_name || 'patient'}`,
+              description: `Completed ${appointment.appointment_type} appointment with ${patientName}`,
               timestamp: appointment.updated_at,
-              patient_name: appointment.patient_name,
+              patient_name: patientName,
               appointment_id: appointment.id
             });
           }
@@ -216,7 +223,7 @@ class DoctorDashboardService {
   }
 
   /**
-   * Get doctor's assigned appointments from Supabase
+   * Get doctor's assigned appointments using EXACTLY the same logic as clinic appointments
    */
   async getDoctorAppointments(doctorId: string, filters?: {
     status?: AppointmentStatus;
@@ -230,111 +237,37 @@ class DoctorDashboardService {
     try {
       console.log('🔍 Fetching appointments for doctor ID:', doctorId);
       
-      // First, let's try a comprehensive query that handles patient names properly
-      let query = supabase
-        .from('appointments')
-        .select(`
-          *,
-          patient:patients(id, first_name, last_name, email, phone),
-          clinic:clinics(id, clinic_name, address, city, state)
-        `)
-        .eq('doctor_id', doctorId)
-        .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true });
-
-      // Apply filters
-      if (filters?.status) {
-        query = query.eq('status', filters.status);
-        console.log('📋 Filtering by status:', filters.status);
-      }
-
-      if (filters?.date) {
-        query = query.eq('appointment_date', filters.date);
-        console.log('📅 Filtering by date:', filters.date);
-      }
-
-      if (filters?.limit) {
-        query = query.limit(filters.limit);
-        console.log('🔢 Limiting results to:', filters.limit);
-      }
-
-      let { data: appointments, error } = await query;
+      // Use EXACTLY the same method as clinic appointments (line 50 in Appointment.tsx)
+      const { AppointmentService } = await import('./appointmentService');
       
-      console.log('📊 Primary query results:', { 
-        appointmentsFound: appointments?.length || 0,
-        error: error?.message || 'none',
-        sampleAppointment: appointments && appointments.length > 0 ? {
-          id: appointments[0].id.substring(0, 8),
-          patient_id: appointments[0].patient_id?.substring(0, 8),
-          patient_name: appointments[0].patient_name || 'not set',
-          hasPatientData: !!appointments[0].patient
-        } : 'none'
-      });
-
-      // If the primary query fails, use fallback strategy
-      if (error) {
-        console.warn('⚠️ Primary query failed, using fallback strategy:', error.message);
-        
-        let fallbackQuery = supabase
-          .from('appointments')
-          .select('*')
-          .eq('doctor_id', doctorId)
-          .order('appointment_date', { ascending: true })
-          .order('appointment_time', { ascending: true });
-
-        // Apply same filters to fallback query
-        if (filters?.status) {
-          fallbackQuery = fallbackQuery.eq('status', filters.status);
-        }
-        if (filters?.date) {
-          fallbackQuery = fallbackQuery.eq('appointment_date', filters.date);
-        }
-        if (filters?.limit) {
-          fallbackQuery = fallbackQuery.limit(filters.limit);
-        }
-
-        const fallbackResult = await fallbackQuery;
-        const basicAppointments = fallbackResult.data;
-        error = fallbackResult.error;
-        
-        console.log('🔄 Fallback query results:', { 
-          appointmentsFound: basicAppointments?.length || 0,
-          error: fallbackResult.error?.message || 'none'
-        });
-
-        if (error) {
-          console.error('❌ Both primary and fallback queries failed:', error);
-          return {
-            success: false,
-            error: error.message
-          };
-        }
-
-        // Manually fetch and enhance appointments with patient/clinic data
-        if (basicAppointments && basicAppointments.length > 0) {
-          appointments = await this.enhanceAppointmentsWithDetails(basicAppointments);
-        } else {
-          appointments = [];
-        }
-      }
-
-      // Ensure all appointments have proper patient names
-      if (appointments && appointments.length > 0) {
-        appointments = await this.ensurePatientNamesPopulated(appointments);
-        
-        console.log('✅ Final appointments with patient names:', {
-          total: appointments.length,
-          withPatientNames: appointments.filter(apt => apt.patient_name && apt.patient_name !== 'Unknown Patient').length,
-          sampleNames: appointments.slice(0, 3).map(apt => apt.patient_name)
-        });
-      }
+      // Build filters EXACTLY like clinic appointments do (lines 44-48 in Appointment.tsx)
+      const appointmentFilters = {
+        doctor_id: doctorId,
+        ...(filters?.status && filters.status !== 'all' && { status: filters.status }),
+        ...(filters?.date && { appointment_date: filters.date })
+      };
+      
+      console.log('📋 Using appointment filters:', appointmentFilters);
+      
+      // Use EXACTLY the same method call as clinic appointments
+      const appointmentsData = await AppointmentService.getAppointmentsWithDetails(appointmentFilters);
+      
+      console.log('🎯 Fetched appointments:', appointmentsData?.length || 0);
+      console.log('👤 Sample patient data:', appointmentsData?.[0]?.patient);
+      
+      // Apply limit filter if specified (not done in clinic, but needed for dashboard)
+      const finalAppointments = filters?.limit 
+        ? appointmentsData.slice(0, filters.limit)
+        : appointmentsData;
+      
+      console.log('✅ Final appointments for doctor:', finalAppointments?.length || 0);
 
       return {
         success: true,
-        appointments: appointments || []
+        appointments: finalAppointments || []
       };
     } catch (error) {
-      console.error('❌ Unexpected error fetching doctor appointments:', error);
+      console.error('❌ Error fetching doctor appointments:', error);
       return {
         success: false,
         error: 'Failed to fetch appointments: ' + (error as Error).message
@@ -342,153 +275,6 @@ class DoctorDashboardService {
     }
   }
 
-  /**
-   * Enhance appointments with patient and clinic details
-   */
-  private async enhanceAppointmentsWithDetails(appointments: any[]): Promise<any[]> {
-    try {
-      // Get unique patient IDs and clinic IDs
-      const patientIds = [...new Set(appointments.map(apt => apt.patient_id).filter(Boolean))];
-      const clinicIds = [...new Set(appointments.map(apt => apt.clinic_id).filter(Boolean))];
-
-      console.log('🔍 Enhancing appointments:', {
-        appointmentCount: appointments.length,
-        uniquePatients: patientIds.length,
-        uniqueClinics: clinicIds.length
-      });
-
-      // Fetch patient details
-      let patients: any[] = [];
-      if (patientIds.length > 0) {
-        const { data: patientData, error: patientError } = await supabase
-          .from('patients')
-          .select('id, first_name, last_name, email, phone')
-          .in('id', patientIds);
-        
-        if (!patientError && patientData) {
-          patients = patientData;
-          console.log('👥 Fetched patient data:', patients.length);
-        } else {
-          console.warn('⚠️ Error fetching patient data:', patientError?.message);
-        }
-      }
-
-      // Fetch clinic details
-      let clinics: any[] = [];
-      if (clinicIds.length > 0) {
-        const { data: clinicData, error: clinicError } = await supabase
-          .from('clinics')
-          .select('id, clinic_name, address, city, state')
-          .in('id', clinicIds);
-        
-        if (!clinicError && clinicData) {
-          clinics = clinicData;
-          console.log('🏥 Fetched clinic data:', clinics.length);
-        } else {
-          console.warn('⚠️ Error fetching clinic data:', clinicError?.message);
-        }
-      }
-
-      // Create lookup maps
-      const patientMap = new Map();
-      const clinicMap = new Map();
-      
-      patients.forEach((patient: any) => {
-        patientMap.set(patient.id, patient);
-      });
-      
-      clinics.forEach((clinic: any) => {
-        clinicMap.set(clinic.id, clinic);
-      });
-
-      // Enhance appointments with patient and clinic details
-      return appointments.map(appointment => ({
-        ...appointment,
-        patient: patientMap.get(appointment.patient_id) || null,
-        clinic: clinicMap.get(appointment.clinic_id) || null
-      }));
-    } catch (error) {
-      console.error('❌ Error enhancing appointments:', error);
-      return appointments; // Return original appointments if enhancement fails
-    }
-  }
-
-  /**
-   * Ensure all appointments have proper patient names populated
-   */
-  private async ensurePatientNamesPopulated(appointments: any[]): Promise<any[]> {
-    try {
-      const appointmentsNeedingNames = appointments.filter(apt => 
-        !apt.patient_name && apt.patient_id
-      );
-
-      if (appointmentsNeedingNames.length > 0) {
-        console.log('🔧 Found appointments needing patient names:', appointmentsNeedingNames.length);
-        
-        // If we don't have patient objects, fetch them
-        const needPatientData = appointmentsNeedingNames.filter(apt => !apt.patient);
-        
-        if (needPatientData.length > 0) {
-          const patientIds = [...new Set(needPatientData.map(apt => apt.patient_id))];
-          const { data: patientData, error } = await supabase
-            .from('patients')
-            .select('id, first_name, last_name')
-            .in('id', patientIds);
-          
-          if (!error && patientData) {
-            const patientMap = new Map();
-            patientData.forEach((patient: any) => {
-              patientMap.set(patient.id, patient);
-            });
-            
-            // Update appointments with patient data
-            appointments = appointments.map(apt => {
-              if (!apt.patient && apt.patient_id && patientMap.has(apt.patient_id)) {
-                return {
-                  ...apt,
-                  patient: patientMap.get(apt.patient_id)
-                };
-              }
-              return apt;
-            });
-          }
-        }
-      }
-
-      // Now populate patient names
-      return appointments.map(appointment => {
-        // If patient_name is already set, keep it
-        if (appointment.patient_name && appointment.patient_name !== 'null' && appointment.patient_name !== 'undefined') {
-          return appointment;
-        }
-        
-        // If we have patient data, use it
-        if (appointment.patient && appointment.patient.first_name && appointment.patient.last_name) {
-          return {
-            ...appointment,
-            patient_name: `${appointment.patient.first_name} ${appointment.patient.last_name}`
-          };
-        }
-        
-        // If we only have patient_id, create a descriptive fallback
-        if (appointment.patient_id) {
-          return {
-            ...appointment,
-            patient_name: `Patient (${appointment.patient_id.substring(0, 8)}...)`
-          };
-        }
-        
-        // Last resort
-        return {
-          ...appointment,
-          patient_name: 'Unknown Patient'
-        };
-      });
-    } catch (error) {
-      console.error('❌ Error ensuring patient names:', error);
-      return appointments;
-    }
-  }
 
   /**
    * Update appointment status
@@ -798,13 +584,13 @@ class DoctorDashboardService {
       }
 
       // Transform the data to match the expected profile format
-      // Based on actual database schema: doctors table has first_name and last_name, not full_name
+      // Based on your actual database schema: doctors table has full_name, not separate first_name/last_name
       const profile = {
         id: doctor.id,
         user_id: doctor.user_id,
-        first_name: doctor.first_name || '',
-        last_name: doctor.last_name || '',
-        full_name: `${doctor.first_name || ''} ${doctor.last_name || ''}`.trim(),
+        first_name: doctor.full_name?.split(' ')[0] || '',
+        last_name: doctor.full_name?.split(' ').slice(1).join(' ') || '',
+        full_name: doctor.full_name || '',
         email: doctor.email,
         phone: doctor.phone,
         profile_pic_url: doctor.profile_picture_url,

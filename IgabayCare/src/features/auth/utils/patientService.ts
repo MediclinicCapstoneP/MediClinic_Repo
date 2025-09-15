@@ -77,25 +77,6 @@ export const patientService = {
     userId: string
   ): Promise<{ success: boolean; error?: string; patient?: PatientProfile }> {
     try {
-      console.log("Fetching patient for user ID:", userId);
-
-      // First check if user is authenticated
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-      if (authError) {
-        console.error("Auth error:", authError);
-        return { success: false, error: "Authentication error" };
-      }
-
-      if (!user) {
-        console.error("No authenticated user found");
-        return { success: false, error: "No authenticated user found" };
-      }
-
-      console.log("Authenticated user:", user.id);
-
       const { data: patient, error } = await supabase
         .from("patients")
         .select("*")
@@ -105,14 +86,11 @@ export const patientService = {
       if (error) {
         if (error.code === "PGRST116") {
           // No patient found for this user
-          console.log("No patient found for user:", userId);
           return { success: true, patient: undefined };
         }
-        console.error("Error fetching patient:", error);
         return { success: false, error: error.message };
       }
 
-      console.log("Patient found:", patient);
       return { success: true, patient };
     } catch (error) {
       console.error("Unexpected error fetching patient:", error);

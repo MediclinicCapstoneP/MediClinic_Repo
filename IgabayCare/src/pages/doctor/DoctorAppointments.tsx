@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../supabaseClient';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -7,12 +7,21 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Input } from '../../components/ui/Input';
 import { AppointmentService } from '../../features/auth/utils/appointmentService';
 import { doctorDashboardService } from '../../features/auth/utils/doctorDashboardService';
-import { prescriptionService, CreatePrescriptionData } from '../../features/auth/utils/prescriptionService';
+import { DoctorAppointmentService, DoctorAppointment } from '../../services/doctorAppointmentService';
 import { AppointmentServicesService } from '../../features/auth/utils/appointmentServicesService';
-import { SkeletonTable, Skeleton } from '../../components/ui/Skeleton';
+import { prescriptionService } from '../../services/prescriptionService';
+import { AppointmentCompletionService } from '../../services/appointmentCompletionService';
+import { EnhancedAppointmentCompletionModal } from '../../components/doctor/EnhancedAppointmentCompletionModal';
+import { AppointmentHistoryService } from '../../services/appointmentHistoryService';
+import { SkeletonTable, Skeleton, SkeletonAppointmentCard } from '../../components/ui/Skeleton';
+import { DoctorAppointmentDebug } from '../../components/debug/DoctorAppointmentDebug';
+import { DatabaseConnectionTest } from '../../components/debug/DatabaseConnectionTest';
+import { ComprehensiveAppointmentValidator } from '../../components/debug/ComprehensiveAppointmentValidator';
+import { DoctorAppointmentDiagnostic } from '../../components/debug/DoctorAppointmentDiagnostic';
+import { SimpleAppointmentTest } from '../../components/debug/SimpleAppointmentTest';
 import { 
   Calendar, Clock, User, Stethoscope, FileText, Pill, Edit3,
-  CheckCircle, AlertCircle, Eye, Plus, X, Save, Phone, Mail
+  CheckCircle, AlertCircle, Eye, Plus, X, Save, Phone, Mail, MapPin
 } from 'lucide-react';
 import { 
   AppointmentWithDetails, 
@@ -29,11 +38,12 @@ interface DoctorAppointmentsProps {
 }
 
 export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId }) => {
-  const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([]);
+  const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithDetails | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<DoctorAppointment | null>(null);
   const [showStartAppointmentModal, setShowStartAppointmentModal] = useState(false);
   const [showCompleteAppointmentModal, setShowCompleteAppointmentModal] = useState(false);
+  const [completionLoading, setCompletionLoading] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showConsultationModal, setShowConsultationModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
@@ -64,9 +74,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
   }, [doctorId]);
 
   const loadAppointments = async () => {
-    // Don't make API calls if doctorId is not available
     if (!doctorId || doctorId === '') {
-      console.warn('📋 DoctorAppointments: No doctorId provided, skipping appointment loading');
       setAppointments([]);
       setLoading(false);
       return;
@@ -74,46 +82,30 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
 
     try {
       setLoading(true);
-      console.log('📋 Loading appointments for doctor:', doctorId);
-      
-      const result = await doctorDashboardService.getDoctorAppointments(doctorId, {
+      console.log('🎆 NEW: Using DoctorAppointmentService for doctor:', doctorId);
+
+      // Use the new DoctorAppointmentService
+      const result = await DoctorAppointmentService.getDoctorAppointments(doctorId, {
         ...(filterStatus !== 'all' && { status: filterStatus }),
         ...(filterDate && { date: filterDate })
       });
-      
-      console.log('📋 Appointment loading result:', {
+
+      console.log('🎆 NEW SERVICE RESULT:', {
         success: result.success,
         appointmentCount: result.appointments?.length || 0,
-        error: result.error,
-        sampleAppointments: result.appointments?.slice(0, 2).map(apt => ({
-          id: apt.id.substring(0, 8),
-          patient_name: apt.patient_name,
-          patient_id: apt.patient_id?.substring(0, 8),
-          hasPatientData: !!apt.patient
-        }))
+        error: result.error
       });
-      
+
       if (result.success && result.appointments) {
-        // Ensure appointments are properly filtered for this doctor
-        const doctorAppointments = result.appointments.filter(apt => 
-          apt.doctor_id === doctorId
-        );
-        
-        console.log('📋 Filtered appointments for doctor:', {
-          originalCount: result.appointments.length,
-          filteredCount: doctorAppointments.length,
-          doctorId: doctorId
-        });
-        
-        setAppointments(doctorAppointments);
-        
-        // Load services for each appointment
+        setAppointments(result.appointments);
+
+        // Load services for each appointment using appointment_id
         const servicesMap: Record<string, string[]> = {};
         await Promise.all(
-          doctorAppointments.map(async (appointment) => {
+          result.appointments.map(async (appointment) => {
             try {
               const services = await AppointmentServicesService.getAppointmentServicesDisplay(
-                appointment.id,
+                appointment.appointment_id, // Use appointment_id from doctor_appointments table
                 appointment.appointment_type,
                 appointment.clinic_id
               );
@@ -125,28 +117,21 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           })
         );
         setAppointmentServices(servicesMap);
-        
-        console.log('✅ Successfully loaded appointments with patient names:', {
-          total: doctorAppointments.length,
-          withNames: doctorAppointments.filter(apt => 
-            apt.patient_name && 
-            apt.patient_name !== 'Unknown Patient' && 
-            !apt.patient_name.startsWith('Patient ID:')
-          ).length
-        });
+
+        console.log('✅ Successfully loaded doctor appointments:', result.appointments.length);
       } else {
-        console.error('❌ Error loading appointments:', result.error);
+        console.error('❌ Error loading doctor appointments:', result.error);
         setAppointments([]);
       }
     } catch (error) {
-      console.error('❌ Unexpected error loading appointments:', error);
+      console.error('❌ Unexpected error loading doctor appointments:', error);
       setAppointments([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStartAppointment = (appointment: AppointmentWithDetails) => {
+  const handleStartAppointment = (appointment: DoctorAppointment) => {
     setSelectedAppointment(appointment);
     setShowStartAppointmentModal(true);
   };
@@ -155,7 +140,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     if (!selectedAppointment) return;
 
     try {
-      const result = await doctorDashboardService.updateAppointmentStatus(selectedAppointment.id, 'in_progress');
+      const result = await DoctorAppointmentService.updateDoctorAppointmentStatus(selectedAppointment.id, 'in_progress');
       if (result.success) {
         await loadAppointments();
         setShowStartAppointmentModal(false);
@@ -169,7 +154,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     }
   };
 
-  const handleCompleteAppointment = (appointment: AppointmentWithDetails) => {
+  const handleCompleteAppointment = (appointment: DoctorAppointment) => {
     setSelectedAppointment(appointment);
     setConsultationNotes(appointment.doctor_notes || '');
     setShowCompleteAppointmentModal(true);
@@ -179,26 +164,63 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     if (!selectedAppointment) return;
 
     try {
-      const result = await doctorDashboardService.updateAppointmentStatus(
-        selectedAppointment.id, 
-        'completed', 
+      setCompletionLoading(true);
+      
+      // Update appointment status to completed with notes
+      const result = await DoctorAppointmentService.updateDoctorAppointmentStatus(
+        selectedAppointment.id,
+        'completed',
         consultationNotes
       );
+
       if (result.success) {
+        // Create appointment history entry
+        try {
+          const historyData = {
+            appointment_id: selectedAppointment.appointment_id || selectedAppointment.id,
+            patient_id: selectedAppointment.patient_id,
+            doctor_id: doctorId,
+            clinic_id: selectedAppointment.clinic_id,
+            appointment_date: selectedAppointment.appointment_date,
+            appointment_time: selectedAppointment.appointment_time,
+            appointment_type: selectedAppointment.appointment_type,
+            consultation_notes: consultationNotes,
+            prescription_given: selectedAppointment.prescription_given || false,
+            doctor_name: `Dr. ${doctorId}`, // Will be updated with actual doctor name from database
+            clinic_name: selectedAppointment.clinic?.clinic_name || 'Unknown Clinic',
+            payment_amount: selectedAppointment.payment_amount,
+            payment_status: selectedAppointment.payment_status
+          };
+
+          const historyResult = await AppointmentHistoryService.createAppointmentHistory(historyData);
+          
+          if (historyResult.success) {
+            console.log('✅ Appointment history created successfully');
+          } else {
+            console.warn('⚠️ Failed to create appointment history:', historyResult.error);
+          }
+        } catch (historyError) {
+          console.error('❌ Error creating appointment history:', historyError);
+        }
+
         await loadAppointments();
         setShowCompleteAppointmentModal(false);
         setSelectedAppointment(null);
         setConsultationNotes('');
+        
+        alert('Appointment completed successfully and saved to history!');
       } else {
         alert(`Error completing appointment: ${result.error}`);
       }
     } catch (error) {
       console.error('Error completing appointment:', error);
       alert('Failed to complete appointment');
+    } finally {
+      setCompletionLoading(false);
     }
   };
 
-  const handleReschedule = (appointment: AppointmentWithDetails) => {
+  const handleReschedule = (appointment: DoctorAppointment) => {
     setSelectedAppointment(appointment);
     setNewDate(appointment.appointment_date);
     setNewTime(appointment.appointment_time);
@@ -209,10 +231,10 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     if (!selectedAppointment || !newDate || !newTime) return;
 
     try {
-      const result = await doctorDashboardService.rescheduleAppointment(
+      // Update the doctor appointment status to rescheduled
+      const result = await DoctorAppointmentService.updateDoctorAppointmentStatus(
         selectedAppointment.id,
-        newDate,
-        newTime
+        'rescheduled'
       );
       if (result.success) {
         await loadAppointments();
@@ -220,6 +242,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         setSelectedAppointment(null);
         setNewDate('');
         setNewTime('');
+        alert('Appointment rescheduled successfully!');
       } else {
         alert(`Error rescheduling appointment: ${result.error}`);
       }
@@ -229,7 +252,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     }
   };
 
-  const handleAddConsultation = (appointment: AppointmentWithDetails) => {
+  const handleAddConsultation = (appointment: DoctorAppointment) => {
     setSelectedAppointment(appointment);
     setConsultationNotes(appointment.doctor_notes || '');
     setShowConsultationModal(true);
@@ -239,9 +262,9 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     if (!selectedAppointment) return;
 
     try {
-      const result = await doctorDashboardService.updateAppointmentStatus(
+      // Use DoctorAppointmentService to add consultation notes to doctor_appointments table
+      const result = await DoctorAppointmentService.addConsultationNotes(
         selectedAppointment.id,
-        selectedAppointment.status,
         consultationNotes
       );
       if (result.success) {
@@ -259,7 +282,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     }
   };
 
-  const handleCreatePrescription = (appointment: AppointmentWithDetails) => {
+  const handleCreatePrescription = (appointment: DoctorAppointment) => {
     setSelectedAppointment(appointment);
     setPrescriptionData({
       medications: [''],
@@ -302,47 +325,185 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
   };
 
   const createPrescription = async () => {
-    if (!selectedAppointment) return;
+    if (!selectedAppointment) {
+      alert('⚠️ No appointment selected. Please select an appointment first.');
+      return;
+    }
+
+    // Comprehensive validation
+    const validationErrors = [];
+    
+    // Check required appointment data
+    if (!selectedAppointment.patient_id) {
+      validationErrors.push('Missing patient information');
+    }
+    if (!selectedAppointment.clinic_id) {
+      validationErrors.push('Missing clinic information');
+    }
+    if (!doctorId) {
+      validationErrors.push('Doctor not identified');
+    }
 
     try {
-      const prescriptionsToCreate: CreatePrescriptionData[] = prescriptionData.medications
-        .filter((med, index) => med.trim() && prescriptionData.dosages[index]?.trim())
-        .map((medication, index) => ({
-          patient_id: selectedAppointment.patient_id,
-          doctor_id: doctorId,
-          clinic_id: selectedAppointment.clinic_id,
-          medication_name: medication.trim(),
-          dosage: prescriptionData.dosages[index]?.trim() || '',
-          frequency: prescriptionData.frequencies[index]?.trim() || 'As needed',
-          duration: prescriptionData.durations[index]?.trim() || '',
-          instructions: prescriptionData.instructions[index]?.trim() || '',
-          prescribed_date: new Date().toISOString().split('T')[0],
-          refills_remaining: prescriptionData.refills[index] || 0,
-          status: 'active'
-        }));
+      // Validate that we have at least one medication with name and dosage
+      const validMedications = prescriptionData.medications
+        .map((med, index) => {
+          const medicationName = med.trim();
+          const strength = prescriptionData.dosages[index]?.trim() || '';
+          const frequency = prescriptionData.frequencies[index]?.trim() || 'As needed';
+          const duration = prescriptionData.durations[index]?.trim() || '7 days';
+          
+          return {
+            medication_name: medicationName,
+            strength: strength,
+            dosage: strength,
+            frequency: frequency,
+            duration: duration,
+            special_instructions: prescriptionData.instructions[index]?.trim() || '',
+            quantity_prescribed: 30,
+            refills_allowed: prescriptionData.refills[index] || 0,
+            timing: '',
+            form: 'tablet',
+            generic_name: '',
+            refills_used: 0,
+            status: 'active'
+          };
+        })
+        .filter((med, index) => {
+          if (!med.medication_name || !med.strength) {
+            if (med.medication_name || med.strength) {
+              validationErrors.push(`Medication ${index + 1}: Both name and strength are required`);
+            }
+            return false;
+          }
+          return true;
+        });
 
-      if (prescriptionsToCreate.length === 0) {
-        alert('Please add at least one medication with dosage');
+      if (validMedications.length === 0) {
+        validationErrors.push('At least one complete medication entry is required');
+      }
+
+      // Show validation errors if any
+      if (validationErrors.length > 0) {
+        const errorMessage = '⚠️ Prescription Validation Errors:\n\n' + 
+          validationErrors.map((error, index) => `${index + 1}. ${error}`).join('\n') +
+          '\n\nPlease fix these issues before creating the prescription.';
+        alert(errorMessage);
         return;
       }
 
-      const result = await prescriptionService.createMultiplePrescriptions(prescriptionsToCreate);
+      // Get doctor and patient information
+      console.log('🔍 Doctor ID available:', doctorId);
+      console.log('🔍 Selected appointment doctor info:', {
+        doctor_name: selectedAppointment.doctor_name,
+        doctor_id: selectedAppointment.doctor_id
+      });
+      
+      const doctorName = selectedAppointment.doctor_name || `Dr. ${doctorId || 'Unknown'}`;
+      
+      // Calculate prescription expiry date (30 days from now)
+      const validUntil = new Date();
+      validUntil.setDate(validUntil.getDate() + 30);
+
+      // Create the main prescription record using the correct column names
+      const enhancedPrescription = {
+        appointment_id: selectedAppointment.appointment_id || selectedAppointment.id, // Try both fields
+        patient_id: selectedAppointment.patient_id,
+        clinic_id: selectedAppointment.clinic_id,
+        doctor_id: doctorId,
+        prescription_number: `RX-${Date.now().toString().substring(5)}`,
+        prescribing_doctor_name: doctorName, // Correct column name per schema
+        doctor_specialty: selectedAppointment.doctor_specialty || 'General Practitioner',
+        diagnosis: consultationNotes || selectedAppointment.doctor_notes || 'General consultation',
+        prescribed_date: new Date().toISOString().split('T')[0],
+        valid_until: validUntil.toISOString().split('T')[0],
+        status: 'active',
+        general_instructions: 'Take medications as prescribed. Complete the full course even if symptoms improve. Contact your doctor if you experience any adverse effects or if symptoms persist or worsen.'
+      };
+
+      console.log('📊 Creating prescription with data:');
+      console.log('Prescription:', JSON.stringify(enhancedPrescription, null, 2));
+      console.log('Medications:', JSON.stringify(validMedications, null, 2));
+      console.log('Doctor ID:', doctorId);
+      console.log('Appointment details:', {
+        appointment_id: selectedAppointment.appointment_id,
+        patient_id: selectedAppointment.patient_id,
+        clinic_id: selectedAppointment.clinic_id
+      });
+      
+      // Validate required fields before API call
+      const requiredFields = {
+        patient_id: selectedAppointment.patient_id,
+        clinic_id: selectedAppointment.clinic_id,
+        doctor_id: doctorId,
+        prescription_number: enhancedPrescription.prescription_number,
+        prescribing_doctor_name: enhancedPrescription.prescribing_doctor_name
+      };
+      
+      console.log('🔍 Required fields validation:', requiredFields);
+      
+      const missingFields = Object.entries(requiredFields)
+        .filter(([key, value]) => !value)
+        .map(([key]) => key);
+        
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
+      // Create the enhanced prescription with medications
+      const result = await prescriptionService.createNewPrescription(enhancedPrescription, validMedications);
+      
+      console.log('Prescription service result:', result);
       
       if (result.success) {
+        console.log('✅ Prescription created successfully:', result.prescription);
+        
+        // Show success message with prescription number
+        const prescriptionNumber = result.prescription?.prescription_number || 'N/A';
+        alert(`Prescription created successfully!\n\nPrescription #: ${prescriptionNumber}\nMedications: ${validMedications.length}\n\nThe patient can now view this prescription in their patient portal.`);
+        
+        // Reload appointments and close modal
         await loadAppointments();
         setShowPrescriptionModal(false);
         setSelectedAppointment(null);
-        alert('Prescription created successfully!');
+        
+        // Reset prescription form data
+        setPrescriptionData({
+          medications: [''],
+          dosages: [''],
+          frequencies: [''],
+          durations: [''],
+          instructions: [''],
+          refills: [0]
+        });
+        
       } else {
-        alert(`Failed to create prescription: ${result.error}`);
+        console.error('❌ Failed to create prescription:', result.error);
+        
+        // Provide more helpful error messages
+        let userMessage = 'Failed to create prescription.';
+        if (result.error) {
+          if (result.error.includes('patient_id')) {
+            userMessage = 'Patient information is missing. Please try refreshing the page.';
+          } else if (result.error.includes('doctor_id')) {
+            userMessage = 'Doctor information is missing. Please try signing in again.';
+          } else if (result.error.includes('clinic_id')) {
+            userMessage = 'Clinic information is missing. Please contact support.';
+          } else {
+            userMessage = `Error: ${result.error}`;
+          }
+        }
+        
+        alert(`${userMessage}\n\nDebug Info:\nDoctor ID: ${doctorId}\nPatient ID: ${selectedAppointment.patient_id}\nClinic ID: ${selectedAppointment.clinic_id}`);
       }
+      
     } catch (error) {
-      console.error('Error creating prescription:', error);
-      alert('Failed to create prescription');
+      console.error('❌ Unexpected error creating prescription:', error);
+      alert(`Failed to create prescription: ${error instanceof Error ? error.message : 'Unknown error occurred'}\n\nPlease check the console for more details and try again.`);
     }
   };
 
-  const handleViewPatient = (appointment: AppointmentWithDetails) => {
+  const handleViewPatient = (appointment: DoctorAppointment) => {
     setSelectedAppointment(appointment);
     setShowPatientDetailsModal(true);
   };
@@ -386,78 +547,108 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
     );
   };
 
-  const getActionButtons = (appointment: AppointmentWithDetails) => {
-    return (
-      <div className="flex flex-wrap gap-2">
-        {/* View Patient Details */}
-        <Button
-          onClick={() => handleViewPatient(appointment)}
-          size="sm"
-          variant="outline"
-          className="text-blue-600 border-blue-200 hover:bg-blue-50"
-        >
-          <Eye className="h-3 w-3 mr-1" />
-          View
-        </Button>
-
-        {/* Start Appointment (for confirmed appointments) */}
-        {appointment.status === 'confirmed' && (
+  const getActionButtons = (appointment: DoctorAppointment) => {
+    const getPrimaryAction = () => {
+      if (appointment.status === 'confirmed') {
+        return (
           <Button
             onClick={() => handleStartAppointment(appointment)}
             size="sm"
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="bg-green-600 hover:bg-green-700 text-white shadow-sm transition-all"
           >
             <CheckCircle className="h-3 w-3 mr-1" />
             Start
           </Button>
-        )}
-
-        {/* Complete Appointment (for in-progress appointments) */}
-        {appointment.status === 'in_progress' && (
+        );
+      }
+      
+      if (appointment.status === 'in_progress') {
+        return (
           <Button
             onClick={() => handleCompleteAppointment(appointment)}
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
           >
             <CheckCircle className="h-3 w-3 mr-1" />
             Complete
           </Button>
-        )}
+        );
+      }
+      
+      return null;
+    };
 
-        {/* Consultation Notes (for any appointment) */}
+    const getSecondaryActions = () => {
+      const actions = [];
+      
+      // View Patient Details - Always available
+      actions.push(
         <Button
+          key="view"
+          onClick={() => handleViewPatient(appointment)}
+          size="sm"
+          variant="outline"
+          className="text-blue-600 border-blue-200 hover:bg-blue-50 transition-all"
+        >
+          <Eye className="h-3 w-3 mr-1" />
+          <span className="hidden sm:inline">View</span>
+        </Button>
+      );
+      
+      // Notes - Always available
+      actions.push(
+        <Button
+          key="notes"
           onClick={() => handleAddConsultation(appointment)}
           size="sm"
           variant="outline"
-          className="text-purple-600 border-purple-200 hover:bg-purple-50"
+          className="text-purple-600 border-purple-200 hover:bg-purple-50 transition-all"
         >
           <FileText className="h-3 w-3 mr-1" />
-          Notes
+          <span className="hidden sm:inline">Notes</span>
         </Button>
-
-        {/* Create Prescription */}
+      );
+      
+      // Prescription - Always available
+      actions.push(
         <Button
+          key="prescription"
           onClick={() => handleCreatePrescription(appointment)}
           size="sm"
           variant="outline"
-          className="text-green-600 border-green-200 hover:bg-green-50"
+          className="text-green-600 border-green-200 hover:bg-green-50 transition-all"
         >
           <Pill className="h-3 w-3 mr-1" />
-          Rx
+          <span className="hidden sm:inline">Rx</span>
         </Button>
-
-        {/* Reschedule (for non-completed appointments) */}
-        {appointment.status !== 'completed' && appointment.status !== 'cancelled' && (
+      );
+      
+      // Reschedule - Only for non-completed/cancelled appointments
+      if (appointment.status !== 'completed' && appointment.status !== 'cancelled') {
+        actions.push(
           <Button
+            key="reschedule"
             onClick={() => handleReschedule(appointment)}
             size="sm"
             variant="outline"
-            className="text-orange-600 border-orange-200 hover:bg-orange-50"
+            className="text-orange-600 border-orange-200 hover:bg-orange-50 transition-all"
           >
             <Edit3 className="h-3 w-3 mr-1" />
-            Reschedule
+            <span className="hidden sm:inline lg:hidden xl:inline">Reschedule</span>
           </Button>
-        )}
+        );
+      }
+      
+      return actions;
+    };
+
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {/* Primary Action First */}
+        {getPrimaryAction()}
+        
+        {/* Secondary Actions */}
+        {getSecondaryActions()}
       </div>
     );
   };
@@ -465,8 +656,22 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
   if (loading) {
     return (
       <div className="space-y-6">
+        {/* Status Display Skeleton */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Skeleton width={180} height={16} className="mb-2" />
+              <Skeleton width={250} height={12} />
+            </div>
+            <div className="text-right space-y-1">
+              <Skeleton width={120} height={12} />
+              <Skeleton width={140} height={12} />
+            </div>
+          </div>
+        </div>
+        
         {/* Header Skeleton */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <Skeleton width={200} height={32} />
           <div className="flex gap-4">
             <Skeleton width={120} height={40} />
@@ -475,8 +680,17 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           </div>
         </div>
         
-        {/* Table Skeleton */}
-        <SkeletonTable rows={8} columns={7} />
+        {/* Desktop Table Skeleton */}
+        <div className="hidden lg:block">
+          <SkeletonTable rows={6} columns={6} />
+        </div>
+        
+        {/* Mobile Cards Skeleton */}
+        <div className="lg:hidden space-y-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <SkeletonAppointmentCard key={index} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -501,7 +715,66 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
   }
 
   return (
-    <div className="space-y-6">
+      <div className="space-y-6">
+        {/* Debug Components - DISABLED FOR EMERGENCY FIX */}
+        {/*
+          <SimpleAppointmentTest doctorId={doctorId} />
+          <DoctorAppointmentDiagnostic doctorId={doctorId} />
+          <ComprehensiveAppointmentValidator doctorId={doctorId} />
+          <DatabaseConnectionTest />
+          {doctorId && <DoctorAppointmentDebug doctorId={doctorId} />}
+        */}
+        
+        {/* Status Display */}
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-blue-900">Doctor Appointment Status</h3>
+              <p className="text-xs text-blue-700 mt-1">
+                Doctor ID: {doctorId} | Appointments Found: {appointments.length}
+              </p>
+            </div>
+            <div className="text-right space-y-1">
+              <p className="text-xs text-blue-600">
+                With Patient Names: {appointments.filter(apt => 
+                  apt.patient_name && 
+                  apt.patient_name !== 'Unknown Patient' && 
+                  !apt.patient_name.includes('Patient ID:') &&
+                  !apt.patient_name.includes('Patient (')
+                ).length}
+              </p>
+              <p className="text-xs text-blue-600">
+                Status Filter: {filterStatus} | Date Filter: {filterDate || 'None'}
+              </p>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    console.log('🧪 Direct prescription modal test');
+                    if (appointments.length > 0) {
+                      setSelectedAppointment(appointments[0]);
+                      setPrescriptionData({
+                        medications: ['Test Medication'],
+                        dosages: ['500mg'],
+                        frequencies: ['Twice daily'],
+                        durations: ['7 days'],
+                        instructions: ['Take with food'],
+                        refills: [0]
+                      });
+                      setShowPrescriptionModal(true);
+                    } else {
+                      alert('No appointments available for prescription test');
+                    }
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1"
+                >
+                  Test Prescription Modal
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">My Appointments</h2>
@@ -530,141 +803,248 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           <Button onClick={loadAppointments} variant="outline">
             Refresh
           </Button>
+          
+          {/* Debug Prescription Button */}
+          <Button 
+            onClick={() => {
+              console.log('🧪 Prescription Debug Info:');
+              console.log('Doctor ID:', doctorId);
+              console.log('Appointments:', appointments.length);
+              console.log('Selected appointment:', selectedAppointment?.id);
+              console.log('Prescription service available:', !!prescriptionService);
+              
+              // Test opening prescription modal with first appointment
+              if (appointments.length > 0) {
+                console.log('Testing prescription modal with first appointment');
+                handleCreatePrescription(appointments[0]);
+              } else {
+                alert(`Debug Info:\nDoctor ID: ${doctorId}\nAppointments: ${appointments.length}\nPrescription Service: ${!!prescriptionService ? 'Available' : 'Missing'}\n\nNo appointments available to test prescription creation.`);
+              }
+            }}
+            variant="outline"
+            className="text-purple-600"
+          >
+            Test Rx
+          </Button>
         </div>
       </div>
 
-      {/* Appointments Table */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Patient
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date & Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Clinic
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Priority
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {appointments.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                    No appointments found
-                  </td>
-                </tr>
-              ) : (
-                appointments.map((appointment) => (
-                  <tr key={appointment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <User className="h-5 w-5 text-blue-600" />
+      {/* Appointments List - Responsive Design */}
+      <div className="space-y-4">
+        {/* Desktop Table View */}
+        <div className="hidden lg:block">
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Patient
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date & Time
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Clinic
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {appointments.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                        <div className="flex flex-col items-center justify-center">
+                          <Calendar className="h-12 w-12 text-gray-300 mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No appointments found</h3>
+                          <p className="text-sm text-gray-500">You don't have any appointments matching the current filters.</p>
                         </div>
-                        <div>
+                      </td>
+                    </tr>
+                  ) : (
+                    appointments.map((appointment) => (
+                      <tr key={appointment.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <User className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">
+                                {appointment.patient_name || 
+                                 (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 'Unknown Patient')}
+                              </div>
+                              <div className="text-sm text-gray-500 truncate">
+                                {appointment.patient?.email || 'No email'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {appointment.patient_name || 
-                             (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 
-                              appointment.patient_id ? `Patient ID: ${appointment.patient_id.substring(0, 8)}` : 'Unknown Patient')}
+                            {formatDate(appointment.appointment_date)}
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            {appointment.patient?.email && (
-                              <div className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                <span>{appointment.patient.email}</span>
-                              </div>
-                            )}
-                            {!appointment.patient?.email && appointment.patient_id && (
-                              <div className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                <span>No email provided</span>
-                              </div>
-                            )}
+                          <div className="text-sm text-gray-500">
+                            {formatTime(appointment.appointment_time)} • {appointment.duration_minutes}min
                           </div>
-                          {appointment.patient?.phone && (
-                            <div className="flex items-center gap-1 text-sm text-gray-500">
-                              <Phone className="h-3 w-3" />
-                              <span>{appointment.patient.phone}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <Stethoscope className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                            <span className="text-sm font-medium text-gray-900">
+                              {APPOINTMENT_TYPES[appointment.appointment_type]}
+                            </span>
+                          </div>
+                          {appointment.payment_amount && (
+                            <div className="text-xs text-green-600 mt-1 font-medium">
+                              ₱{appointment.payment_amount.toLocaleString()}
                             </div>
                           )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatDate(appointment.appointment_date)}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {formatTime(appointment.appointment_time)}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {appointment.duration_minutes} min
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Stethoscope className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900">
-                            {APPOINTMENT_TYPES[appointment.appointment_type]}
-                          </span>
-                        </div>
-                        {appointmentServices[appointment.id] && appointmentServices[appointment.id].length > 0 && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            {AppointmentServicesService.formatServicesDisplay(appointmentServices[appointment.id])}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            {appointment.clinic?.clinic_name || 'Unknown Clinic'}
                           </div>
-                        )}
-                        {appointment.payment_amount && (
-                          <div className="text-xs text-green-600 mt-1 font-medium">
-                            ₱{appointment.payment_amount.toLocaleString()}
+                          <div className="text-sm text-gray-500 truncate">
+                            {appointment.clinic?.address}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {appointment.clinic?.clinic_name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {appointment.clinic?.address}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(appointment.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {appointment.priority && getPriorityBadge(appointment.priority)}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium">
-                      {getActionButtons(appointment)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                            {getStatusBadge(appointment.status)}
+                            {appointment.priority && getPriorityBadge(appointment.priority)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {getActionButtons(appointment)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
-      </Card>
+
+        {/* Mobile Card View */}
+        <div className="lg:hidden space-y-4">
+          {appointments.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Calendar className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No appointments found</h3>
+              <p className="text-sm text-gray-500">You don't have any appointments matching the current filters.</p>
+            </Card>
+          ) : (
+            appointments.map((appointment) => (
+              <Card key={appointment.id} className="hover:shadow-md transition-shadow">
+                <div className="p-4 space-y-4">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <User className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-base font-medium text-gray-900 truncate">
+                          {appointment.patient_name || 
+                           (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 'Unknown Patient')}
+                        </h3>
+                        <p className="text-sm text-gray-500 truncate">
+                          {appointment.patient?.email || 'No email provided'}
+                        </p>
+                        {appointment.patient?.phone && (
+                          <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                            <Phone className="h-3 w-3" />
+                            <span>{appointment.patient.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {getStatusBadge(appointment.status)}
+                      {appointment.priority && getPriorityBadge(appointment.priority)}
+                    </div>
+                  </div>
+
+                  {/* Appointment Details */}
+                  <div className="grid grid-cols-2 gap-4 py-3 border-t border-gray-100">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                        <Calendar className="h-4 w-4" />
+                        <span>Date & Time</span>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {formatDate(appointment.appointment_date)}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {formatTime(appointment.appointment_time)} • {appointment.duration_minutes}min
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                        <Stethoscope className="h-4 w-4" />
+                        <span>Type</span>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {APPOINTMENT_TYPES[appointment.appointment_type]}
+                      </div>
+                      {appointment.payment_amount && (
+                        <div className="text-sm text-green-600 font-medium">
+                          ₱{appointment.payment_amount.toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Clinic Info */}
+                  {appointment.clinic && (
+                    <div className="py-3 border-t border-gray-100">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                        <MapPin className="h-4 w-4" />
+                        <span>Clinic</span>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {appointment.clinic.clinic_name}
+                      </div>
+                      {appointment.clinic.address && (
+                        <div className="text-sm text-gray-600">
+                          {appointment.clinic.address}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Services */}
+                  {appointmentServices[appointment.id] && appointmentServices[appointment.id].length > 0 && (
+                    <div className="py-3 border-t border-gray-100">
+                      <div className="text-sm text-gray-500 mb-1">Services</div>
+                      <div className="text-sm text-gray-700">
+                        {AppointmentServicesService.formatServicesDisplay(appointmentServices[appointment.id])}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="pt-3 border-t border-gray-100">
+                    <div className="flex flex-wrap gap-2">
+                      {getActionButtons(appointment)}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+      </div>
 
       {/* Start Appointment Dialog */}
       <ConfirmDialog
@@ -673,8 +1053,7 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         onConfirm={startAppointment}
         title="Start Appointment"
         message={`Are you ready to start the appointment with ${selectedAppointment?.patient_name || 
-                 (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
-                  selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Unknown Patient')}?`}
+                 (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Unknown Patient')}?`}
       />
 
       {/* Complete Appointment Dialog */}
@@ -684,36 +1063,54 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         title="Complete Appointment"
         size="md"
       >
-        <div className="space-y-4">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="font-medium text-blue-900">
-              {selectedAppointment?.patient_name || 
-               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
-                selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Patient')}
-            </h3>
-            <p className="text-sm text-blue-700">
-              {selectedAppointment ? APPOINTMENT_TYPES[selectedAppointment.appointment_type] : ''} - {selectedAppointment?.appointment_date}
-            </p>
+        <div className="space-y-6">
+          {/* Patient Info Header */}
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-xl border border-green-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <User className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  {selectedAppointment?.patient_name || 
+                   (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Unknown Patient')}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {selectedAppointment ? APPOINTMENT_TYPES[selectedAppointment.appointment_type] : ''} • {selectedAppointment?.appointment_date}
+                </p>
+              </div>
+            </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Consultation Notes (Optional)
+          {/* Consultation Notes */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Consultation Notes
+              <span className="text-gray-400 font-normal ml-1">(Optional)</span>
             </label>
             <textarea
               value={consultationNotes}
               onChange={(e) => setConsultationNotes(e.target.value)}
-              placeholder="Enter consultation notes, diagnosis, treatment plan, etc."
-              rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter consultation summary, diagnosis, treatment recommendations, follow-up instructions..."
+              rows={5}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none text-sm"
             />
+            <p className="text-xs text-gray-500">These notes will be saved with the appointment record.</p>
           </div>
           
-          <div className="flex justify-end gap-3 pt-4">
-            <Button onClick={() => setShowCompleteAppointmentModal(false)} variant="outline">
+          {/* Action Buttons */}
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-gray-100">
+            <Button 
+              onClick={() => setShowCompleteAppointmentModal(false)} 
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={completeAppointment}>
+            <Button 
+              onClick={completeAppointment}
+              className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
+            >
               <CheckCircle className="h-4 w-4 mr-2" />
               Mark as Completed
             </Button>
@@ -827,125 +1224,174 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         title="Create Prescription"
         size="xl"
       >
-        <div className="space-y-6 max-h-[70vh] overflow-y-auto">
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="font-medium text-green-900">
-              {selectedAppointment?.patient_name || 
-               (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
-                selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Patient')}
-            </h3>
-            <p className="text-sm text-green-700">
-              {selectedAppointment ? APPOINTMENT_TYPES[selectedAppointment.appointment_type] : ''} - {selectedAppointment?.appointment_date}
-            </p>
+        <div className="space-y-6">
+          {/* Patient Info Header */}
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-xl border border-purple-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                <Pill className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  {selectedAppointment?.patient_name || 
+                   (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 
+                    selectedAppointment?.patient_id ? `Patient ID: ${selectedAppointment.patient_id.substring(0, 8)}` : 'Patient')}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {selectedAppointment ? APPOINTMENT_TYPES[selectedAppointment.appointment_type] : ''} • {selectedAppointment?.appointment_date}
+                </p>
+              </div>
+            </div>
           </div>
           
+          {/* Medications Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-lg font-medium text-gray-900">Medications</h4>
-              <Button onClick={addPrescriptionField} variant="outline" size="sm">
+              <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Pill className="h-5 w-5 text-purple-600" />
+                Medications
+              </h4>
+              <Button onClick={addPrescriptionField} variant="outline" size="sm" className="text-purple-600 border-purple-200 hover:bg-purple-50">
                 <Plus className="h-4 w-4 mr-1" />
                 Add Medication
               </Button>
             </div>
             
-            {prescriptionData.medications.map((_, index) => (
-              <div key={index} className="p-4 border rounded-lg space-y-3">
-                <div className="flex items-center justify-between">
-                  <h5 className="font-medium text-gray-700">Medication {index + 1}</h5>
-                  {prescriptionData.medications.length > 1 && (
-                    <Button 
-                      onClick={() => removePrescriptionField(index)}
-                      variant="outline" 
-                      size="sm"
-                      className="text-red-600 border-red-200 hover:bg-red-50"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+            {/* Scrollable medications container */}
+            <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+            
+              {prescriptionData.medications.map((_, index) => (
+                <div key={index} className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4 hover:shadow-sm transition-shadow">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-medium text-purple-600">
+                        {index + 1}
+                      </div>
+                      <h5 className="font-semibold text-gray-800">Medication {index + 1}</h5>
+                    </div>
+                    {prescriptionData.medications.length > 1 && (
+                      <Button 
+                        onClick={() => removePrescriptionField(index)}
+                        variant="outline" 
+                        size="sm"
+                        className="text-red-600 border-red-200 hover:bg-red-50 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Primary Information - Always full width on mobile */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Medication Name *
+                      </label>
+                      <Input
+                        placeholder="e.g., Amoxicillin, Paracetamol"
+                        value={prescriptionData.medications[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'medications', e.target.value)}
+                        className="rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Dosage/Strength *
+                      </label>
+                      <Input
+                        placeholder="e.g., 500mg, 250ml"
+                        value={prescriptionData.dosages[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'dosages', e.target.value)}
+                        className="rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Secondary Information */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Frequency
+                      </label>
+                      <Input
+                        placeholder="e.g., Twice daily, Every 8 hours"
+                        value={prescriptionData.frequencies[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'frequencies', e.target.value)}
+                        className="rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Duration
+                      </label>
+                      <Input
+                        placeholder="e.g., 7 days, 2 weeks"
+                        value={prescriptionData.durations[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'durations', e.target.value)}
+                        className="rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Additional Information */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Special Instructions
+                      </label>
+                      <Input
+                        placeholder="e.g., Take with meals, Before bedtime"
+                        value={prescriptionData.instructions[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'instructions', e.target.value)}
+                        className="rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Refills Allowed
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="12"
+                        placeholder="0"
+                        value={prescriptionData.refills[index]}
+                        onChange={(e) => updatePrescriptionField(index, 'refills', parseInt(e.target.value) || 0)}
+                        className="rounded-lg"
+                      />
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Medication Name *
-                    </label>
-                    <Input
-                      placeholder="e.g., Amoxicillin"
-                      value={prescriptionData.medications[index]}
-                      onChange={(e) => updatePrescriptionField(index, 'medications', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Dosage *
-                    </label>
-                    <Input
-                      placeholder="e.g., 500mg"
-                      value={prescriptionData.dosages[index]}
-                      onChange={(e) => updatePrescriptionField(index, 'dosages', e.target.value)}
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Frequency
-                    </label>
-                    <Input
-                      placeholder="e.g., Twice daily"
-                      value={prescriptionData.frequencies[index]}
-                      onChange={(e) => updatePrescriptionField(index, 'frequencies', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Duration
-                    </label>
-                    <Input
-                      placeholder="e.g., 7 days"
-                      value={prescriptionData.durations[index]}
-                      onChange={(e) => updatePrescriptionField(index, 'durations', e.target.value)}
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Instructions
-                    </label>
-                    <Input
-                      placeholder="e.g., Take with meals"
-                      value={prescriptionData.instructions[index]}
-                      onChange={(e) => updatePrescriptionField(index, 'instructions', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Refills
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="12"
-                      value={prescriptionData.refills[index]}
-                      onChange={(e) => updatePrescriptionField(index, 'refills', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button onClick={() => setShowPrescriptionModal(false)} variant="outline">
-              Cancel
-            </Button>
-            <Button onClick={createPrescription}>
-              <Pill className="h-4 w-4 mr-2" />
-              Create Prescription
-            </Button>
+          {/* Action Buttons */}
+          <div className="bg-gray-50 -mx-6 -mb-6 px-6 py-4 rounded-b-xl border-t border-gray-200">
+            <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-4">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">{prescriptionData.medications.filter(med => med.trim()).length}</span> 
+                medication{prescriptionData.medications.filter(med => med.trim()).length !== 1 ? 's' : ''} added
+              </div>
+              
+              <div className="flex flex-col-reverse sm:flex-row gap-3 w-full sm:w-auto">
+                <Button 
+                  onClick={() => setShowPrescriptionModal(false)} 
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={createPrescription}
+                  disabled={prescriptionData.medications.filter(med => med.trim()).length === 0}
+                  className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white disabled:bg-gray-300"
+                >
+                  <Pill className="h-4 w-4 mr-2" />
+                  Create Prescription
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </Modal>
@@ -1052,6 +1498,15 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           </div>
         </div>
       </Modal>
+
+      {/* Enhanced Appointment Completion Modal */}
+      <EnhancedAppointmentCompletionModal
+        isOpen={showCompleteAppointmentModal}
+        onClose={() => setShowCompleteAppointmentModal(false)}
+        onComplete={completeAppointment}
+        appointment={selectedAppointment}
+        loading={completionLoading}
+      />
     </div>
   );
 };

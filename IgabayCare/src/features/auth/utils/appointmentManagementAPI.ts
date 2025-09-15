@@ -55,6 +55,7 @@ export const appointmentManagementAPI = {
         appointment_time: data.appointmentTime,
         appointment_type: data.appointmentType,
         patient_notes: data.patientNotes,
+        notes: data.patientNotes, // Also map to notes field
         status: 'confirmed' // Confirmed since payment is already made
       });
 
@@ -103,14 +104,14 @@ export const appointmentManagementAPI = {
       // 4. Get clinic details for notifications
       const { data: clinic } = await supabase
         .from('clinics')
-        .select('name, address')
+        .select('clinic_name, address')
         .eq('id', data.clinicId)
         .single();
 
       // 5. Get patient details for notifications
       const { data: patient } = await supabase
         .from('patients')
-        .select('full_name, email')
+        .select('first_name, last_name, email')
         .eq('id', data.patientId)
         .single();
 
@@ -118,7 +119,7 @@ export const appointmentManagementAPI = {
       await enhancedNotificationService.createAppointmentBookingNotification(
         data.patientId,
         appointment.id,
-        clinic?.name || 'Clinic',
+        clinic?.clinic_name || 'Clinic',
         data.appointmentDate,
         data.appointmentTime,
         data.totalAmount,
@@ -131,20 +132,20 @@ export const appointmentManagementAPI = {
         appointmentId: appointment.id,
         patientId: data.patientId,
         appointmentDateTime,
-        clinicName: clinic?.name || 'Clinic'
+        clinicName: clinic?.clinic_name || 'Clinic'
       });
 
       // 8. Send confirmation email
       if (patient?.email) {
-        // Extract first and last name from full_name for email
-        const nameParts = patient.full_name?.split(' ') || [];
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.slice(1).join(' ') || '';
+        // Use first_name and last_name from patient data
+        const firstName = patient?.first_name || '';
+        const lastName = patient?.last_name || '';
+        const fullName = `${firstName} ${lastName}`.trim();
         await emailService.sendTemplatedEmail({
           type: 'appointment_confirmation',
           data: {
-            patientName: patient.full_name || `${firstName} ${lastName}`,
-            clinicName: clinic?.name || 'Clinic',
+            patientName: fullName || 'Patient',
+            clinicName: clinic?.clinic_name || 'Clinic',
             appointmentDate: new Date(data.appointmentDate).toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',

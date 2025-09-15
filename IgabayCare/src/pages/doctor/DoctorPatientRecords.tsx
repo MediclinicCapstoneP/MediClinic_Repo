@@ -1,53 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
-import { SkeletonTable, Skeleton } from '../../components/ui/Skeleton';
-import { doctorDashboardService } from '../../features/auth/utils/doctorDashboardService';
-import { prescriptionService } from '../../features/auth/utils/prescriptionService';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { doctorPatientRecordsService, type PatientRecord as EnhancedPatientRecord, type PatientStats as EnhancedPatientStats } from '../../services/doctorPatientRecordsService';
 import { 
-  User, Search, Filter, Eye, Calendar, Phone, Mail, MapPin,
-  AlertTriangle, Heart, Activity, FileText, Pill, Clock,
-  Users, TrendingUp, RefreshCw, Download, Edit, Plus
+  User, Search, Filter, Eye, Calendar, Phone, MapPin,
+  AlertTriangle, Heart, Activity,
+  Users, TrendingUp, RefreshCw
 } from 'lucide-react';
 
 interface DoctorPatientRecordsProps {
   doctorId: string;
 }
 
-interface PatientRecord {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone?: string;
-  date_of_birth?: string;
-  address?: string;
-  emergency_contact?: string;
-  blood_type?: string;
-  allergies?: string;
-  medications?: string;
-  medical_conditions?: string;
-  profile_pic_url?: string;
-  created_at: string;
-  updated_at: string;
-  // Computed fields
-  age?: number;
-  lastAppointment?: string;
-  nextAppointment?: string;
-  totalAppointments?: number;
-  activePrescriptions?: number;
-}
-
-interface PatientStats {
-  totalPatients: number;
-  activePatients: number;
-  newPatientsThisMonth: number;
-  averageAge: number;
-  mostCommonBloodType: string;
-  patientsWithAllergies: number;
-}
+// Use enhanced interfaces from the service
+type PatientRecord = EnhancedPatientRecord;
+type PatientStats = EnhancedPatientStats;
 
 export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doctorId }) => {
   const [patients, setPatients] = useState<PatientRecord[]>([]);
@@ -62,6 +32,10 @@ export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doct
   const [patientsPerPage] = useState(12);
   const [patientAppointments, setPatientAppointments] = useState<any[]>([]);
   const [patientPrescriptions, setPatientPrescriptions] = useState<any[]>([]);
+  const [bloodTypeFilter, setBloodTypeFilter] = useState('');
+  const [ageRangeFilter, setAgeRangeFilter] = useState({ min: 0, max: 100 });
+  const [allergiesFilter, setAllergiesFilter] = useState<boolean | undefined>(undefined);
+  const [appointmentStatusFilter, setAppointmentStatusFilter] = useState<'active' | 'inactive' | undefined>(undefined);
 
   useEffect(() => {
     if (doctorId) {
@@ -84,84 +58,27 @@ export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doct
     try {
       setLoading(true);
       
-      // Get all appointments for the doctor to find unique patients
-      const appointmentsResult = await doctorDashboardService.getDoctorAppointments(doctorId);
+      // Use the enhanced service to get patients with comprehensive data
+      const filters = {
+        searchQuery,
+        ...(bloodTypeFilter && { bloodType: bloodTypeFilter }),
+        ...(allergiesFilter !== undefined && { hasAllergies: allergiesFilter }),
+        ...(appointmentStatusFilter && { appointmentStatus: appointmentStatusFilter }),
+        ...(ageRangeFilter.min > 0 || ageRangeFilter.max < 100 ? { ageRange: ageRangeFilter } : {})
+      };
       
-      if (appointmentsResult.success && appointmentsResult.appointments) {
-        // Extract unique patients from appointments
-        const uniquePatientIds = new Set<string>();
-        const patientData = new Map<string, any>();
+      const patientsResult = await doctorPatientRecordsService.getDoctorPatients(doctorId, filters);
+      
+      if (patientsResult.success && patientsResult.patients) {
+        setPatients(patientsResult.patients);
         
-        appointmentsResult.appointments.forEach(appointment => {
-          if (appointment.patient_id && appointment.patient) {
-            uniquePatientIds.add(appointment.patient_id);
-            
-            if (!patientData.has(appointment.patient_id)) {
-              // Calculate age if date_of_birth is available
-              let age = undefined;
-              if (appointment.patient.date_of_birth) {
-                const birthDate = new Date(appointment.patient.date_of_birth);
-                const today = new Date();
-                age = today.getFullYear() - birthDate.getFullYear();
-                const monthDiff = today.getMonth() - birthDate.getMonth();
-                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                  age--;
-                }
-              }
-
-              patientData.set(appointment.patient_id, {
-                ...appointment.patient,
-                age,
-                totalAppointments: 0,
-                lastAppointment: null,
-                nextAppointment: null
-              });
-            }
-          }
-        });
-
-        // Calculate appointment statistics for each patient
-        appointmentsResult.appointments.forEach(appointment => {
-          if (appointment.patient_id && patientData.has(appointment.patient_id)) {
-            const patient = patientData.get(appointment.patient_id);
-            patient.totalAppointments++;
-            
-            const appointmentDate = new Date(appointment.appointment_date);
-            const today = new Date();
-            
-            if (appointmentDate < today) {
-              if (!patient.lastAppointment || appointmentDate > new Date(patient.lastAppointment)) {
-                patient.lastAppointment = appointment.appointment_date;
-              }
-            } else if (appointmentDate >= today) {
-              if (!patient.nextAppointment || appointmentDate < new Date(patient.nextAppointment)) {
-                patient.nextAppointment = appointment.appointment_date;
-              }
-            }
-          }
-        });
-
-        // Get prescription counts for each patient
-        for (const patientId of uniquePatientIds) {
-          try {
-            const prescriptionsResult = await prescriptionService.getPrescriptionsByPatient(patientId);
-            if (prescriptionsResult.success && prescriptionsResult.prescriptions) {
-              const activePrescriptions = prescriptionsResult.prescriptions.filter(p => p.status === 'active').length;
-              const patient = patientData.get(patientId);
-              if (patient) {
-                patient.activePrescriptions = activePrescriptions;
-              }
-            }
-          } catch (error) {
-            console.warn(`Error loading prescriptions for patient ${patientId}:`, error);
-          }
+        // Calculate stats using the enhanced service
+        const statsResult = await doctorPatientRecordsService.calculatePatientStats(doctorId);
+        if (statsResult.success && statsResult.stats) {
+          setStats(statsResult.stats);
         }
-
-        const patientRecords = Array.from(patientData.values());
-        setPatients(patientRecords);
-        calculateStats(patientRecords);
       } else {
-        console.error('Error loading appointments:', appointmentsResult.error);
+        console.error('Error loading patients:', patientsResult.error);
       }
     } catch (error) {
       console.error('Error loading patient records:', error);
@@ -170,52 +87,8 @@ export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doct
     }
   };
 
-  const calculateStats = (patientList: PatientRecord[]) => {
-    const total = patientList.length;
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    const newPatientsThisMonth = patientList.filter(p => 
-      new Date(p.created_at) >= startOfMonth
-    ).length;
-
-    // Calculate active patients (those with appointments in the last 6 months)
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    const activePatients = patientList.filter(p => 
-      p.lastAppointment && new Date(p.lastAppointment) >= sixMonthsAgo
-    ).length;
-
-    // Calculate average age
-    const patientsWithAge = patientList.filter(p => p.age !== undefined);
-    const averageAge = patientsWithAge.length > 0 
-      ? patientsWithAge.reduce((sum, p) => sum + (p.age || 0), 0) / patientsWithAge.length
-      : 0;
-
-    // Find most common blood type
-    const bloodTypes: { [key: string]: number } = {};
-    patientList.forEach(p => {
-      if (p.blood_type && p.blood_type !== 'None') {
-        bloodTypes[p.blood_type] = (bloodTypes[p.blood_type] || 0) + 1;
-      }
-    });
-    const mostCommonBloodType = Object.keys(bloodTypes).reduce((a, b) => 
-      bloodTypes[a] > bloodTypes[b] ? a : b, 'O+');
-
-    // Count patients with allergies
-    const patientsWithAllergies = patientList.filter(p => 
-      p.allergies && p.allergies !== 'None' && p.allergies.trim() !== ''
-    ).length;
-
-    setStats({
-      totalPatients: total,
-      activePatients,
-      newPatientsThisMonth,
-      averageAge: Math.round(averageAge),
-      mostCommonBloodType,
-      patientsWithAllergies
-    });
-  };
+  // Stats are now calculated by the service, so this function is no longer needed
+  // const calculateStats = ... (removed)
 
   const filterPatients = () => {
     let filtered = [...patients];
@@ -237,15 +110,14 @@ export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doct
   const handleViewDetails = async (patient: PatientRecord) => {
     setSelectedPatient(patient);
     
-    // Load patient's appointments and prescriptions
+    // Load patient's appointments and prescriptions using the enhanced service
     try {
-      const appointmentsResult = await doctorDashboardService.getDoctorAppointments(doctorId, {});
+      const appointmentsResult = await doctorPatientRecordsService.getPatientAppointments(patient.id, doctorId);
       if (appointmentsResult.success && appointmentsResult.appointments) {
-        const patientAppointments = appointmentsResult.appointments.filter(apt => apt.patient_id === patient.id);
-        setPatientAppointments(patientAppointments);
+        setPatientAppointments(appointmentsResult.appointments);
       }
 
-      const prescriptionsResult = await prescriptionService.getPrescriptionsByPatient(patient.id);
+      const prescriptionsResult = await doctorPatientRecordsService.getPatientPrescriptions(patient.id, doctorId);
       if (prescriptionsResult.success && prescriptionsResult.prescriptions) {
         setPatientPrescriptions(prescriptionsResult.prescriptions);
       }
@@ -267,8 +139,14 @@ export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doct
 
   const clearFilters = () => {
     setSearchQuery('');
+    setBloodTypeFilter('');
+    setAgeRangeFilter({ min: 0, max: 100 });
+    setAllergiesFilter(undefined);
+    setAppointmentStatusFilter(undefined);
     setShowFilters(false);
+    loadPatientRecords();
   };
+
 
   // Pagination
   const indexOfLastPatient = currentPage * patientsPerPage;
@@ -430,12 +308,13 @@ export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doct
         </div>
       )}
 
-      {/* Search Filter */}
+      {/* Enhanced Search and Filters */}
       {showFilters && (
         <Card>
-          <CardContent className="p-4">
-            <div className="flex gap-4 items-center">
-              <div className="relative flex-1">
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {/* Search Bar */}
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   type="text"
@@ -445,9 +324,88 @@ export const DoctorPatientRecords: React.FC<DoctorPatientRecordsProps> = ({ doct
                   className="pl-10"
                 />
               </div>
-              <Button onClick={clearFilters} variant="outline" size="sm">
-                Clear
-              </Button>
+
+              {/* Advanced Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Blood Type Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Blood Type</label>
+                  <select
+                    value={bloodTypeFilter}
+                    onChange={(e) => setBloodTypeFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All Blood Types</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+
+                {/* Age Range Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Age Range</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      placeholder="Min"
+                      value={ageRangeFilter.min || ''}
+                      onChange={(e) => setAgeRangeFilter(prev => ({ ...prev, min: parseInt(e.target.value) || 0 }))}
+                      className="w-20"
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Max"
+                      value={ageRangeFilter.max === 100 ? '' : ageRangeFilter.max}
+                      onChange={(e) => setAgeRangeFilter(prev => ({ ...prev, max: parseInt(e.target.value) || 100 }))}
+                      className="w-20"
+                    />
+                  </div>
+                </div>
+
+                {/* Allergies Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Allergies</label>
+                  <select
+                    value={allergiesFilter === undefined ? '' : allergiesFilter.toString()}
+                    onChange={(e) => setAllergiesFilter(e.target.value === '' ? undefined : e.target.value === 'true')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All Patients</option>
+                    <option value="true">With Allergies</option>
+                    <option value="false">No Allergies</option>
+                  </select>
+                </div>
+
+                {/* Activity Status Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Activity Status</label>
+                  <select
+                    value={appointmentStatusFilter || ''}
+                    onChange={(e) => setAppointmentStatusFilter(e.target.value as 'active' | 'inactive' | undefined)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All Patients</option>
+                    <option value="active">Active (Recent Appointments)</option>
+                    <option value="inactive">Inactive (No Recent Appointments)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Filter Actions */}
+              <div className="flex gap-2 pt-2">
+                <Button onClick={loadPatientRecords} variant="primary" size="sm">
+                  Apply Filters
+                </Button>
+                <Button onClick={clearFilters} variant="outline" size="sm">
+                  Clear All
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

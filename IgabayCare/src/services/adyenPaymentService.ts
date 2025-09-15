@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../supabaseClient';
 
 // Adyen Configuration from environment variables
 const ADYEN_ENVIRONMENT = import.meta.env.VITE_ADYEN_ENVIRONMENT || 'test';

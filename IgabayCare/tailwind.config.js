@@ -126,6 +126,7 @@ export default {
         'breathing': 'breathing 4s ease-in-out infinite',
         'vitals': 'vitals 2s ease-in-out infinite',
         'medical-scan': 'medicalScan 3s ease-in-out infinite',
+        'shimmer': 'shimmer 2s infinite linear',
       },
       keyframes: {
         slideUp: {
@@ -182,6 +183,10 @@ export default {
           '0%': { transform: 'translateX(-100%)', opacity: '0' },
           '50%': { opacity: '1' },
           '100%': { transform: 'translateX(100%)', opacity: '0' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
       },
       boxShadow: {

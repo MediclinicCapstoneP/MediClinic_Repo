@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
 import { appointmentBookingService } from '../../features/auth/utils/appointmentBookingService';
 import { appointmentManagementAPI } from '../../features/auth/utils/appointmentManagementAPI';
+import { AppointmentNotificationService } from '../../services/appointmentNotificationService';
 import { supabase } from '../../supabaseClient';
 import type { AppointmentType } from '../../types/appointments';
 import GCashPayment from '../payment/GCashPayment'; // Using real Adyen integration
@@ -147,8 +148,28 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         status: 'scheduled'
       });
 
-      if (result.success) {
-        // Create notification
+      if (result.success && result.appointment) {
+        // Get patient details for notification
+        const { data: patient } = await supabase
+          .from('patients')
+          .select('first_name, last_name')
+          .eq('id', patientId)
+          .single();
+
+        const patientName = patient ? `${patient.first_name} ${patient.last_name}` : 'Patient';
+
+        // Send notification to clinic about new appointment
+        await AppointmentNotificationService.notifyClinicOfNewAppointment({
+          appointmentId: result.appointment.id,
+          patientId: patientId,
+          clinicId: clinic.id,
+          appointmentDate: dateStr,
+          appointmentTime: selectedTime,
+          patientName: patientName,
+          clinicName: clinic.clinic_name
+        });
+
+        // Create patient notification (existing functionality)
         await appointmentBookingService.createAppointmentNotification(
           patientId,
           clinic.clinic_name,

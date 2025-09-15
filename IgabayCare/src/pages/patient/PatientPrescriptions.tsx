@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Tooltip } from '../../components/ui/Tooltip';
 import { prescriptionService, type PrescriptionWithMedications } from '../../services/prescriptionService';
 import { authService } from '../../features/auth/utils/authService';
 import { patientService } from '../../features/auth/utils/patientService';
@@ -23,7 +24,8 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowLeft,
-  Home
+  Home,
+  HelpCircle
 } from 'lucide-react';
 
 const PRESCRIPTION_STATUS_COLORS = {
@@ -204,6 +206,27 @@ const PatientPrescriptionsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Helpful Information Banner */}
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <h3 className="font-medium text-blue-900 mb-1">Understanding Your Medications</h3>
+                <p className="text-blue-800">
+                  This page shows all medications prescribed by your doctors. 
+                  <strong className="text-blue-900"> "Currently Taking"</strong> means you should continue taking these medications. 
+                  If you have questions or experience side effects, contact your doctor immediately.
+                  <span className="inline-flex items-center gap-1 ml-2">
+                    <HelpCircle size={12} className="text-blue-600" />
+                    <span className="text-xs">Hover over help icons for explanations</span>
+                  </span>
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Header with navigation and patient info */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div className="flex items-center gap-4">
@@ -218,11 +241,11 @@ const PatientPrescriptionsPage: React.FC = () => {
               <Home size={16} className="sm:hidden" />
             </Button>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Prescriptions</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Medications</h1>
               <p className="text-gray-600">
                 {patientInfo ? 
-                  `${patientInfo.first_name} ${patientInfo.last_name} - View and manage your prescribed medications` :
-                  'View and manage your prescribed medications'
+                  `${patientInfo.first_name} ${patientInfo.last_name} - Track your medications and instructions from your doctor` :
+                  'Track your medications and instructions from your doctor'
                 }
               </p>
             </div>
@@ -244,31 +267,31 @@ const PatientPrescriptionsPage: React.FC = () => {
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-gray-600">{stats.total}</div>
-              <div className="text-sm text-gray-600">Total</div>
+              <div className="text-sm text-gray-600">All Medications</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-              <div className="text-sm text-gray-600">Active</div>
+              <div className="text-sm text-gray-600">Currently Taking</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
-              <div className="text-sm text-gray-600">Completed</div>
+              <div className="text-sm text-gray-600">Treatment Done</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
-              <div className="text-sm text-gray-600">Expired</div>
+              <div className="text-sm text-gray-600">No Longer Valid</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-purple-600">{stats.recentCount}</div>
-              <div className="text-sm text-gray-600">Recent</div>
+              <div className="text-sm text-gray-600">New This Month</div>
             </CardContent>
           </Card>
         </div>
@@ -282,7 +305,7 @@ const PatientPrescriptionsPage: React.FC = () => {
                 <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by medication, doctor, or diagnosis..."
+                  placeholder="Search your medications by name, doctor, or condition..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -310,17 +333,17 @@ const PatientPrescriptionsPage: React.FC = () => {
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Medication Status</label>
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="completed">Completed</option>
-                      <option value="expired">Expired</option>
-                      <option value="cancelled">Cancelled</option>
+                      <option value="all">All Medications</option>
+                      <option value="active">Currently Taking</option>
+                      <option value="completed">Treatment Completed</option>
+                      <option value="expired">No Longer Valid</option>
+                      <option value="cancelled">Cancelled by Doctor</option>
                     </select>
                   </div>
                   <div>
@@ -368,12 +391,12 @@ const PatientPrescriptionsPage: React.FC = () => {
             <CardContent className="p-12 text-center">
               <Pill size={48} className="mx-auto text-gray-300 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {prescriptions.length === 0 ? 'No prescriptions found' : 'No prescriptions match your filters'}
+                {prescriptions.length === 0 ? 'No medications found' : 'No medications match your search'}
               </h3>
               <p className="text-gray-600">
                 {prescriptions.length === 0
-                  ? 'Your prescriptions from completed appointments will appear here.'
-                  : 'Try adjusting your search or filter criteria.'
+                  ? 'Your medications from doctor visits will appear here once prescribed.'
+                  : 'Try adjusting your search terms or filter options.'
                 }
               </p>
               {prescriptions.length === 0 && (
@@ -396,18 +419,22 @@ const PatientPrescriptionsPage: React.FC = () => {
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="text-lg font-semibold text-gray-900">
-                              RX #{prescription.prescription_number}
+                              Prescription #{prescription.prescription_number}
                             </h3>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
                               PRESCRIPTION_STATUS_COLORS[prescription.status]
                             }`}>
                               {PRESCRIPTION_STATUS_ICONS[prescription.status]}
-                              {prescription.status.toUpperCase()}
+                              {prescription.status === 'active' ? 'CURRENTLY TAKING' :
+                               prescription.status === 'completed' ? 'TREATMENT DONE' :
+                               prescription.status === 'expired' ? 'NO LONGER VALID' :
+                               prescription.status === 'cancelled' ? 'CANCELLED' :
+                               prescription.status.toUpperCase()}
                             </span>
                             {isExpired(prescription) && prescription.status === 'active' && (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border-red-200 flex items-center gap-1 animate-pulse">
                                 <AlertTriangle size={12} />
-                                EXPIRED
+                                ⚠️ EXPIRED - CONTACT DOCTOR
                               </span>
                             )}
                           </div>
@@ -431,8 +458,9 @@ const PatientPrescriptionsPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <Stethoscope size={16} className="text-blue-600" />
                           <div>
+                            <div className="text-sm text-gray-600">Prescribed by</div>
                             <div className="font-medium text-gray-900">
-                              {prescription.prescribing_doctor_name}
+                              Dr. {prescription.prescribing_doctor_name}
                             </div>
                             {prescription.doctor_specialty && (
                               <div className="text-sm text-gray-600">
@@ -445,8 +473,8 @@ const PatientPrescriptionsPage: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <FileText size={16} className="text-green-600" />
                             <div>
-                              <div className="font-medium text-gray-900">Diagnosis</div>
-                              <div className="text-sm text-gray-600">{prescription.diagnosis}</div>
+                              <div className="text-sm text-gray-600">For condition</div>
+                              <div className="font-medium text-gray-900">{prescription.diagnosis}</div>
                             </div>
                           </div>
                         )}
@@ -456,7 +484,7 @@ const PatientPrescriptionsPage: React.FC = () => {
                       <div className="space-y-3">
                         <h4 className="font-medium text-gray-900 flex items-center gap-2">
                           <Pill size={16} className="text-purple-600" />
-                          Prescribed Medications ({prescription.medications.length})
+                          Your Medications ({prescription.medications.length})
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {prescription.medications.slice(0, 4).map((medication) => (
@@ -468,18 +496,43 @@ const PatientPrescriptionsPage: React.FC = () => {
                                 {medication.medication_name}
                               </div>
                               <div className="text-sm text-gray-600 space-y-1">
-                                <div><strong>Strength:</strong> {medication.strength}</div>
-                                <div><strong>Dosage:</strong> {medication.dosage}</div>
-                                <div><strong>Frequency:</strong> {medication.frequency}</div>
-                                <div><strong>Duration:</strong> {medication.duration}</div>
+                                <div>
+                                  <strong>Strength:</strong> {medication.strength}
+                                  <Tooltip content="The amount of active medicine in each pill/dose">
+                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                  </Tooltip>
+                                </div>
+                                <div>
+                                  <strong>How much to take:</strong> {medication.dosage}
+                                  <Tooltip content="The number of pills or amount of medicine to take each time">
+                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                  </Tooltip>
+                                </div>
+                                <div>
+                                  <strong>How often:</strong> {medication.frequency}
+                                  <Tooltip content="How many times per day you should take this medicine">
+                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                  </Tooltip>
+                                </div>
+                                <div>
+                                  <strong>For how long:</strong> {medication.duration}
+                                  <Tooltip content="The total time period you need to take this medicine">
+                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                  </Tooltip>
+                                </div>
                                 {medication.timing && (
-                                  <div><strong>Timing:</strong> {medication.timing}</div>
+                                  <div>
+                                    <strong>When to take:</strong> {medication.timing}
+                                    <Tooltip content="The best time of day to take this medicine (e.g., with food, before meals)">
+                                      <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                    </Tooltip>
+                                  </div>
                                 )}
                               </div>
                               {medication.special_instructions && (
                                 <div className="mt-2 p-2 bg-yellow-50 rounded text-xs text-yellow-800">
                                   <Info size={12} className="inline mr-1" />
-                                  {medication.special_instructions}
+                                  <strong>Important:</strong> {medication.special_instructions}
                                 </div>
                               )}
                             </div>
@@ -499,7 +552,7 @@ const PatientPrescriptionsPage: React.FC = () => {
                         <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                           <h5 className="font-medium text-blue-900 mb-1 flex items-center gap-2">
                             <Info size={16} />
-                            General Instructions
+                            Additional Instructions from Your Doctor
                           </h5>
                           <p className="text-blue-800 text-sm">{prescription.general_instructions}</p>
                         </div>
@@ -514,7 +567,7 @@ const PatientPrescriptionsPage: React.FC = () => {
                         onClick={() => setSelectedPrescription(prescription)}
                       >
                         <Eye size={16} className="mr-2" />
-                        View Details
+                        View Full Details
                       </Button>
                     </div>
                   </div>
@@ -530,7 +583,7 @@ const PatientPrescriptionsPage: React.FC = () => {
             <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
                 <h3 className="text-xl font-semibold">
-                  Prescription Details - RX #{selectedPrescription.prescription_number}
+                  My Medication Details - Prescription #{selectedPrescription.prescription_number}
                 </h3>
                 <button
                   onClick={() => setSelectedPrescription(null)}
@@ -544,7 +597,7 @@ const PatientPrescriptionsPage: React.FC = () => {
                 {/* Prescription info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">Prescription Information</h4>
+                    <h4 className="font-semibold text-gray-900 mb-3">Prescription Summary</h4>
                     <div className="space-y-2 text-sm">
                       <div><strong>Prescription Number:</strong> {selectedPrescription.prescription_number}</div>
                       <div><strong>Date Prescribed:</strong> {formatDate(selectedPrescription.prescribed_date)}</div>
@@ -562,9 +615,9 @@ const PatientPrescriptionsPage: React.FC = () => {
                   </div>
                   
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">Doctor Information</h4>
+                    <h4 className="font-semibold text-gray-900 mb-3">Your Doctor</h4>
                     <div className="space-y-2 text-sm">
-                      <div><strong>Doctor:</strong> {selectedPrescription.prescribing_doctor_name}</div>
+                      <div><strong>Prescribed by:</strong> Dr. {selectedPrescription.prescribing_doctor_name}</div>
                       {selectedPrescription.doctor_specialty && (
                         <div><strong>Specialty:</strong> {selectedPrescription.doctor_specialty}</div>
                       )}
@@ -572,7 +625,7 @@ const PatientPrescriptionsPage: React.FC = () => {
                         <div><strong>License:</strong> {selectedPrescription.prescribing_doctor_license}</div>
                       )}
                       {selectedPrescription.diagnosis && (
-                        <div><strong>Diagnosis:</strong> {selectedPrescription.diagnosis}</div>
+                        <div><strong>For condition:</strong> {selectedPrescription.diagnosis}</div>
                       )}
                     </div>
                   </div>
@@ -580,7 +633,7 @@ const PatientPrescriptionsPage: React.FC = () => {
 
                 {/* Medications */}
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Prescribed Medications</h4>
+                  <h4 className="font-semibold text-gray-900 mb-3">Your Medications</h4>
                   <div className="space-y-4">
                     {selectedPrescription.medications.map((medication, index) => (
                       <div key={medication.id} className="p-4 border border-gray-200 rounded-lg">
@@ -600,10 +653,10 @@ const PatientPrescriptionsPage: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                           <div className="space-y-1">
                             <div><strong>Strength:</strong> {medication.strength}</div>
-                            <div><strong>Dosage:</strong> {medication.dosage}</div>
-                            <div><strong>Frequency:</strong> {medication.frequency}</div>
-                            <div><strong>Duration:</strong> {medication.duration}</div>
-                            {medication.timing && <div><strong>Timing:</strong> {medication.timing}</div>}
+                            <div><strong>How much to take:</strong> {medication.dosage}</div>
+                            <div><strong>How often:</strong> {medication.frequency}</div>
+                            <div><strong>For how long:</strong> {medication.duration}</div>
+                            {medication.timing && <div><strong>When to take:</strong> {medication.timing}</div>}
                           </div>
                           
                           <div className="space-y-1">
@@ -644,25 +697,25 @@ const PatientPrescriptionsPage: React.FC = () => {
                 {/* Instructions and notes */}
                 {(selectedPrescription.general_instructions || selectedPrescription.dietary_restrictions || selectedPrescription.follow_up_instructions || selectedPrescription.clinical_notes) && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">Additional Information</h4>
+                    <h4 className="font-semibold text-gray-900 mb-3">Additional Instructions from Your Doctor</h4>
                     <div className="space-y-3">
                       {selectedPrescription.general_instructions && (
                         <div className="p-3 bg-blue-50 rounded-lg">
-                          <strong className="text-blue-900">General Instructions:</strong>
+                          <strong className="text-blue-900">Important Instructions:</strong>
                           <p className="text-blue-800 mt-1">{selectedPrescription.general_instructions}</p>
                         </div>
                       )}
                       
                       {selectedPrescription.dietary_restrictions && (
                         <div className="p-3 bg-orange-50 rounded-lg">
-                          <strong className="text-orange-900">Dietary Restrictions:</strong>
+                          <strong className="text-orange-900">Foods to Avoid:</strong>
                           <p className="text-orange-800 mt-1">{selectedPrescription.dietary_restrictions}</p>
                         </div>
                       )}
                       
                       {selectedPrescription.follow_up_instructions && (
                         <div className="p-3 bg-green-50 rounded-lg">
-                          <strong className="text-green-900">Follow-up Instructions:</strong>
+                          <strong className="text-green-900">Next Steps:</strong>
                           <p className="text-green-800 mt-1">{selectedPrescription.follow_up_instructions}</p>
                         </div>
                       )}
@@ -692,7 +745,7 @@ const PatientPrescriptionsPage: React.FC = () => {
                     }}
                   >
                     <Download size={16} className="mr-2" />
-                    Download PDF
+                    Save to Phone
                   </Button>
                 </div>
               </div>

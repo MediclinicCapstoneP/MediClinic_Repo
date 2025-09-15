@@ -6,7 +6,7 @@ import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
 import { AppointmentService } from '../../features/auth/utils/appointmentService';
 import { CreateAppointmentData, AppointmentType } from '../../types/appointments';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../supabaseClient';
 import { PaymentForm } from './PaymentForm';
 import { PaymentResponse } from '../../types/payment';
 
