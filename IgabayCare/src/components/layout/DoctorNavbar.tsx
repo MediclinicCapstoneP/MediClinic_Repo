@@ -96,8 +96,8 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
   return (
     <>
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
-        <div className="px-4 lg:px-6 py-3">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="h-16 flex items-center justify-between">
             {/* Left side - Logo and title */}
             <div className="flex items-center space-x-4 min-w-0">
               <div className="flex items-center space-x-3">

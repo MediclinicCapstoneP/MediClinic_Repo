@@ -15,6 +15,8 @@ import DoctorSignUpPage from './features/auth/pages/DoctorSignUpPage';
 import DoctorSignInPage from './features/auth/pages/DoctorSignInPage';
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 import { MedicalThemeProvider } from './core/providers/MedicalThemeProvider';
+import FloatingGroqChat from './components/ui/FloatingGroqChat';
+import ChatPage from './pages/ChatPage';
 import DebugPage from './pages/DebugPage';
 import AppointmentDisplayTestPage from './pages/AppointmentDisplayTestPage';
 import PaymentDebugPage from './pages/PaymentDebugPage';
@@ -52,9 +54,10 @@ const App: React.FC = () => {
             {import.meta.env.DEV && <Route path="/appointment-display-test" element={<AppointmentDisplayTestPage />} />}
             {/* Payment debug route - remove in production */}
             {import.meta.env.DEV && <Route path="/payment-debug" element={<PaymentDebugPage />} />}
+            {import.meta.env.DEV && <Route path="/chat" element={<ChatPage />} />}
           </Routes>
           
-          {/* Voiceflow chatbot now loaded via HTML script in index.html */}
+          <FloatingGroqChat />
         </div>
       </Router>
     </MedicalThemeProvider>
