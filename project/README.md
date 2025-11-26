@@ -20,6 +20,12 @@
 - **Automatic Role Detection**: Users are automatically routed to appropriate dashboards based on their role
 - **Protected Routes**: All sensitive routes are protected with role-based access control
 
+### AI-Powered Chatbot
+- **Groq AI Integration**: Fast inference using Llama3 model
+- **Healthcare Assistant**: Provides medical information and guidance
+- **Edge Functions**: Serverless API for chat processing
+- **Real-time Messaging**: Interactive chat interface with typing indicators
+
 ### User Roles
 
 #### Patient Features
@@ -45,7 +51,7 @@ npm install @supabase/supabase-js @react-native-async-storage/async-storage
 
 ### 2. Environment Configuration
 
-Create a `.env` file in the project root with your Supabase credentials:
+Create a `.env` file in the project root with your credentials:
 
 ```env
 # Supabase Configuration
@@ -58,6 +64,9 @@ EXPO_PUBLIC_PAYMONGO_SECRET_KEY=your_paymongo_secret_key
 
 # App Configuration
 EXPO_PUBLIC_APP_ENV=development
+
+# Groq API Key for AI Chatbot
+VITE_GROQ_API_KEY=your_groq_api_key
 ```
 
 ### 3. Database Setup
@@ -107,12 +116,16 @@ app/
 │   ├── patient/           # Patient-specific screens
 │   ├── doctor/            # Doctor/clinic screens
 │   └── profile/           # Profile management
+├── api/                   # Edge functions
+│   └── chatbot/           # AI chatbot API endpoint
+├── chat.tsx               # Chatbot screen
 ├── index.tsx              # Splash screen with auth state detection
 └── _layout.tsx            # Root layout with AuthProvider
 
 components/
 ├── AuthNavigator.tsx      # Handles automatic role-based navigation
-└── ProtectedRoute.tsx     # Route protection component
+├── ProtectedRoute.tsx     # Route protection component
+└── ChatBot.tsx            # AI-powered healthcare chatbot component
 
 contexts/
 └── AuthContext.tsx        # Authentication state management

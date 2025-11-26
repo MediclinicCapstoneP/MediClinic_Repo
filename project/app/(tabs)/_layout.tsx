@@ -117,6 +117,15 @@ export default function TabLayout() {
               ),
             }}
           />
+          <Tabs.Screen
+            name="chat"
+            options={{
+              title: 'Assistant',
+              tabBarIcon: ({ color }) => (
+                <Stethoscope size={getResponsiveIconSize()} color={color} />
+              ),
+            }}
+          />
           {/* Hide other role's screens */}
           <Tabs.Screen
             name="doctor"
@@ -205,6 +214,15 @@ export default function TabLayout() {
               title: 'Profile',
               tabBarIcon: ({ color }) => (
                 <User size={getResponsiveIconSize()} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="chat"
+            options={{
+              title: 'Assistant',
+              tabBarIcon: ({ color }) => (
+                <Stethoscope size={getResponsiveIconSize()} color={color} />
               ),
             }}
           />
