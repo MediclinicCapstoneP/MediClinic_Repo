@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity, Search, Hospital, Bell } from 'lucide-react-native';
+import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity, Search, Hospital, Bell, MessageCircle } from 'lucide-react-native';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

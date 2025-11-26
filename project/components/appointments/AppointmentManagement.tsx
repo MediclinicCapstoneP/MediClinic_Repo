@@ -41,7 +41,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
           patient:patients(*),
           clinic:clinics(*),
           doctor:doctors(*),
-          payment:payments(*)
+          transaction:transactions(*)
         `);
 
       // Apply role-based filtering
@@ -153,6 +153,21 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
     Alert.alert('Coming Soon', 'Reschedule functionality will be available soon');
   };
 
+  const getFilterIcon = (filter: AppointmentFilter): string => {
+    switch (filter) {
+      case 'all':
+        return 'apps';
+      case 'upcoming':
+        return 'time';
+      case 'completed':
+        return 'checkmark-circle';
+      case 'cancelled':
+        return 'close-circle';
+      default:
+        return 'apps';
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -193,29 +208,41 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
   };
 
   const renderFilterButtons = () => (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      style={styles.filterContainer}
-    >
-      {(['all', 'upcoming', 'completed', 'cancelled'] as AppointmentFilter[]).map((filterOption) => (
-        <TouchableOpacity
-          key={filterOption}
-          style={[
-            styles.filterButton,
-            filter === filterOption && styles.activeFilterButton
-          ]}
-          onPress={() => setFilter(filterOption)}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filter === filterOption && styles.activeFilterButtonText
-          ]}>
-            {filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <View style={styles.filterContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterScrollContent}
+      >
+        {(['all', 'upcoming', 'completed', 'cancelled'] as AppointmentFilter[]).map((filterOption) => {
+          const isActive = filter === filterOption;
+          return (
+            <TouchableOpacity
+              key={filterOption}
+              style={[
+                styles.filterButton,
+                isActive && styles.activeFilterButton
+              ]}
+              onPress={() => setFilter(filterOption)}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name={getFilterIcon(filterOption)} 
+                size={12} 
+                color={isActive ? 'white' : '#6B7280'} 
+                style={styles.filterIcon}
+              />
+              <Text style={[
+                styles.filterButtonText,
+                isActive && styles.activeFilterButtonText
+              ]}>
+                {filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 
   const renderAppointmentCard = (appointment: AppointmentWithDetails) => (
@@ -335,6 +362,9 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerTitle}>APPOINTMENTS</Text>
+      </View>
       {renderFilterButtons()}
       
       <ScrollView
@@ -366,6 +396,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  headerContainer: {
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    letterSpacing: -0.5,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -378,22 +421,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   filterContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
+    backgroundColor: '#F9FAFB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterScrollContent: {
+    paddingRight: 12,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 6,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minWidth: 80,
   },
   activeFilterButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  filterIcon: {
+    marginRight: 4,
   },
   filterButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6B7280',
     fontWeight: '500',
   },

@@ -308,7 +308,7 @@ class AppointmentService {
       // Get clinic doctors
       const { data: doctors, error: doctorsError } = await supabase
         .from('doctors')
-        .select('id, full_name, consultation_fee')
+        .select('id, full_name')
         .eq('clinic_id', clinicId)
         .eq('status', 'active');
 
@@ -622,7 +622,7 @@ class AppointmentService {
         available: !isConflict,
         doctor_id: availableDoctor?.id,
         doctor_name: availableDoctor?.full_name,
-        consultation_fee: availableDoctor?.consultation_fee || defaultFee,
+        consultation_fee: defaultFee,
       });
     }
 
