@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Tooltip } from '../../components/ui/Tooltip';
+import { TooltipProvider } from '@radix-ui/react-tooltip';
 import { prescriptionService, type PrescriptionWithMedications } from '../../services/prescriptionService';
 import { authService } from '../../features/auth/utils/authService';
 import { patientService } from '../../features/auth/utils/patientService';
@@ -204,11 +204,26 @@ const PatientPrescriptionsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Helpful Information Banner */}
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-4">
+    <Tooltip.Provider>
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Helpful Information Banner */}
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <h3 className="font-medium text-blue-900 mb-1">Understanding Your Medications</h3>
+                  <p className="text-blue-800">
+                    This page shows all medications prescribed by your doctors. 
+                    <strong className="text-blue-900"> "Currently Taking"</strong> means you should continue taking these medications. 
+                    If you have questions or experience side effects, contact your doctor immediately.
+                    <span className="inline-flex items-center gap-1 ml-2">
+                      <HelpCircle size={12} className="text-blue-600" />
+                      <span className="text-xs">Hover over help icons for explanations</span>
+                    </span>
+                  </p>
+                </div>
             <div className="flex items-start gap-3">
               <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
