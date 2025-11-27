@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { AppointmentService } from '../../features/auth/utils/appointmentService';
+import { appointmentBookingService } from '../../features/auth/utils/appointmentBookingService';
+import { appointmentManagementAPI } from '../../features/auth/utils/appointmentManagementAPI';
+import { AppointmentNotificationService } from '../../services/appointmentNotificationService';
 import { supabase } from '../../supabaseClient';
-import type { CreateAppointmentData, AppointmentType } from '../../types/appointments';
-import { PaymentForm } from './PaymentForm';
-import { PayMongoGCashPayment } from './PayMongoGCashPayment';
+import type { AppointmentType } from '../../types/appointments';
+import GCashPayment from '../payment/GCashPayment'; // Using real Adyen integration
+import { adyenPaymentService } from '../../services/adyenPaymentService';
 import type { PaymentResponse } from '../../types/payment';
-import { X, ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Clock, CheckCircle } from 'lucide-react';
 
 interface AppointmentBookingModalProps {
   isOpen: boolean;
@@ -38,14 +40,16 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(false);
-  const [bookingLoading, setBookingLoading] = useState(false);
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('consultation');
   const [patientNotes, setPatientNotes] = useState('');
-  const [showPayment, setShowPayment] = useState(false);
   const [showGCashPayment, setShowGCashPayment] = useState(false);
   const [appointmentData, setAppointmentData] = useState<any>(null);
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [patientData, setPatientData] = useState<any>(null);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+
+  // Services selection state
+  const [servicesOptions, setServicesOptions] = useState<string[]>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
   // -------- Calendar helpers ----------
   const generateCalendarDays = () => {
@@ -94,43 +98,6 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   };
 
   // -------- Time slots ----------
-  const generateTimeSlots = async (date: Date): Promise<TimeSlot[]> => {
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      console.error("Invalid date passed to generateTimeSlots:", date);
-      return [];
-    }
-
-    try {
-      const dateStr = date.toISOString().split('T')[0];
-      const { data: existingAppointments } = await supabase
-        .from('appointments')
-        .select('appointment_time')
-        .eq('clinic_id', clinic.id)
-        .eq('appointment_date', dateStr)
-        .in('status', ['scheduled', 'confirmed']);
-
-      const bookedTimes = new Set(
-        existingAppointments?.map(apt => apt.appointment_time.substring(0, 5)) || []
-      );
-
-      const slots = [
-        '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-        '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
-      ];
-
-      return slots.map(time => ({
-        time,
-        available: !bookedTimes.has(time),
-        formatted: new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
-          hour: 'numeric', minute: '2-digit', hour12: true
-        })
-      }));
-    } catch (error) {
-      console.error('Error generating time slots:', error);
-      return [];
-    }
-  };
-
   const loadTimeSlots = async (date: Date) => {
     if (!(date instanceof Date) || isNaN(date.getTime())) {
       console.error("Invalid date in loadTimeSlots:", date);
@@ -140,9 +107,11 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
     setLoading(true);
     try {
-      const slots = await generateTimeSlots(date);
+      const dateStr = date.toISOString().split('T')[0];
+      const slots = await appointmentBookingService.getAvailableTimeSlots(clinic.id, dateStr);
       setAvailableTimeSlots(slots);
-    } catch {
+    } catch (error) {
+      console.error('Error loading time slots:', error);
       setAvailableTimeSlots([]);
     } finally {
       setLoading(false);
@@ -163,61 +132,70 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const handleBookAppointment = async () => {
     if (!selectedDate || !selectedTime) return;
 
-    setBookingLoading(true);
+    setLoading(true);
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
-      const appointmentData: CreateAppointmentData = {
+      
+      const composedNotes = buildComposedNotes(patientNotes, selectedServices);
+
+      const result = await appointmentBookingService.createAppointment({
         patient_id: patientId,
         clinic_id: clinic.id,
         appointment_date: dateStr,
         appointment_time: selectedTime + ':00',
         appointment_type: appointmentType,
+        patient_notes: composedNotes,
         status: 'scheduled'
-      };
+      });
 
-      const result = await AppointmentService.createAppointment(appointmentData);
-      if (result) {
-        await createAppointmentNotification(patientId, clinic.clinic_name, selectedDate, selectedTime);
+      if (result.success && result.appointment) {
+        // Get patient details for notification
+        const { data: patient } = await supabase
+          .from('patients')
+          .select('first_name, last_name')
+          .eq('id', patientId)
+          .single();
+
+        const patientName = patient ? `${patient.first_name} ${patient.last_name}` : 'Patient';
+
+        // Send notification to clinic about new appointment
+        await AppointmentNotificationService.notifyClinicOfNewAppointment({
+          appointmentId: result.appointment.id,
+          patientId: patientId,
+          clinicId: clinic.id,
+          appointmentDate: dateStr,
+          appointmentTime: selectedTime,
+          patientName: patientName,
+          clinicName: clinic.clinic_name
+        });
+
+        // Create patient notification (existing functionality)
+        await appointmentBookingService.createAppointmentNotification(
+          patientId,
+          clinic.clinic_name,
+          dateStr,
+          selectedTime
+        );
+
+        setBookingSuccess(true);
         onAppointmentBooked?.();
-        onClose();
-        setSelectedDate(null);
-        setSelectedTime('');
-        setPatientNotes('');
+        
+        // Reset form after short delay to show success
+        setTimeout(() => {
+          onClose();
+          setSelectedDate(null);
+          setSelectedTime('');
+          setPatientNotes('');
+          setBookingSuccess(false);
+        }, 2000);
       } else {
-        alert('Failed to book appointment. Please try again.');
+        alert(`Failed to book appointment: ${result.error}`);
       }
     } catch (error) {
       console.error('Error booking appointment:', error);
       alert('Failed to book appointment. Please try again.');
     } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  const createAppointmentNotification = async (
-    patientId: string,
-    clinicName: string,
-    appointmentDate: Date,
-    appointmentTime: string
-  ) => {
-    try {
-      const formattedDate = appointmentDate.toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
-      const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
-        hour: 'numeric', minute: '2-digit', hour12: true
-      });
-
-      await supabase.from('notifications').insert([{
-        user_id: patientId,
-        user_type: 'patient',
-        title: 'Appointment Confirmed',
-        message: `Your appointment at ${clinicName} is scheduled for ${formattedDate} at ${formattedTime}`,
-        type: 'appointment_confirmation',
-        is_read: false
-      }]);
-    } catch (error) {
-      console.error('Error creating notification:', error);
+      setLoading(false);
     }
   };
 
@@ -229,30 +207,66 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
   const handleProceedToGCashPayment = () => {
     if (!selectedDate || !selectedTime) return;
-    setAppointmentData({ appointment_id: `temp_${Date.now()}`, ...calculateAppointmentCost() });
+    const appointmentDetails = {
+      appointment_id: `temp_${Date.now()}`,
+      ...calculateAppointmentCost(),
+      selectedDate,
+      selectedTime,
+      appointmentType,
+      patientNotes: buildComposedNotes(patientNotes, selectedServices)
+    };
+    setAppointmentData(appointmentDetails);
     setShowGCashPayment(true);
   };
 
-  const handleProceedToPayment = () => {
-    if (!selectedDate || !selectedTime) return;
-    setAppointmentData({ appointment_id: `temp_${Date.now()}`, ...calculateAppointmentCost() });
-    setShowPayment(true);
-  };
 
-  const handlePaymentComplete = (paymentResponse: PaymentResponse) => {
-    setPaymentCompleted(true);
-    setShowPayment(false);
-    handleBookAppointment();
-  };
 
-  const handleGCashPaymentComplete = (paymentIntentId: string) => {
-    setPaymentCompleted(true);
+  const handleGCashPaymentComplete = async (result: any) => {
     setShowGCashPayment(false);
-    handleBookAppointment();
+    
+    if (!selectedDate || !selectedTime) return;
+    
+    // Use the comprehensive appointment booking API with Adyen GCash payment
+    const dateStr = selectedDate.toISOString().split('T')[0];
+    const composedNotes = buildComposedNotes(patientNotes, selectedServices);
+    
+    const bookingResult = await appointmentManagementAPI.completeAppointmentBooking({
+      patientId,
+      clinicId: clinic.id,
+      appointmentDate: dateStr,
+      appointmentTime: selectedTime + ':00',
+      appointmentType,
+      patientNotes: composedNotes,
+      paymentMethod: 'gcash',
+      paymentProvider: 'adyen',
+      externalPaymentId: result.pspReference || result.paymentId || 'adyen_payment',
+      totalAmount: calculateAppointmentCost().total_amount,
+      consultationFee: calculateAppointmentCost().consultation_fee,
+      bookingFee: calculateAppointmentCost().booking_fee
+    });
+
+    if (bookingResult.success) {
+      setBookingSuccess(true);
+      onAppointmentBooked?.();
+      setTimeout(() => {
+        onClose();
+        setSelectedDate(null);
+        setSelectedTime('');
+        setPatientNotes('');
+        setBookingSuccess(false);
+      }, 2000);
+    } else {
+      alert(`Payment confirmation failed: ${bookingResult.error}`);
+    }
   };
 
-  const handleGCashPaymentError = (error: string) => {
-    alert(`Payment failed: ${error}`);
+  const handleGCashPaymentError = (error: any) => {
+    console.error('GCash payment error:', error);
+    alert(`Payment failed: ${error.error || error.message || 'Payment processing failed'}`);
+  };
+
+  const handleGCashPaymentCancel = () => {
+    setShowGCashPayment(false);
   };
 
   // -------- Month nav ----------
@@ -271,6 +285,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
   useEffect(() => {
     if (isOpen) {
+      // Load patient data for payment modal
       supabase.auth.getUser().then(({ data: user }) => {
         if (user?.user) {
           supabase.from('patients').select('*').eq('user_id', user.user.id).single().then(({ data: patient }) => {
@@ -278,35 +293,83 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
           });
         }
       });
+
+      // Load clinic services to offer as selectable options
+      if (clinic?.id) {
+        supabase
+          .from('clinics')
+          .select('services, custom_services')
+          .eq('id', clinic.id)
+          .single()
+          .then(({ data }) => {
+            const combined = [
+              ...(Array.isArray(data?.services) ? data!.services : []),
+              ...(Array.isArray(data?.custom_services) ? data!.custom_services : []),
+            ]
+              .map((s: any) => (typeof s === 'string' ? s : String(s)))
+              .filter(Boolean);
+            setServicesOptions(Array.from(new Set(combined)).sort());
+          })
+          .catch(() => setServicesOptions([]));
+      }
+
+      // Reset selections when opening
+      setSelectedServices([]);
     }
-  }, [isOpen]);
+  }, [isOpen, clinic?.id]);
 
   if (!isOpen) return null;
 
   const calendarDays = generateCalendarDays();
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+  // Helpers
+  const buildComposedNotes = (notes: string, services: string | string[]) => {
+    const serviceList = Array.isArray(services) ? services : (services ? [services] : []);
+    if (serviceList.length === 0) return notes || '';
+    const header = 'Requested services: ' + serviceList.join(', ');
+    return notes ? `${header}\n${notes}` : header;
+  };
+
+  const toggleServiceSelection = (service: string) => {
+    setSelectedServices(prev => 
+      prev.includes(service) 
+        ? prev.filter(s => s !== service)
+        : [...prev, service]
+    );
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex justify-between items-center">
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Book Appointment</h2>
-              <p className="text-xs sm:text-sm text-gray-600">{clinic?.clinic_name}</p>
+    <>
+      {/* Main Modal */}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col">
+          {/* Fixed Header */}
+          <div className="flex-shrink-0">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex justify-between items-center">
+              <div>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Book Appointment</h2>
+                <p className="text-xs sm:text-sm text-gray-600">{clinic?.clinic_name}</p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-            >
-              <X className="h-5 w-5 sm:h-6 sm:w-6" />
-            </button>
+            {/* Scroll Indicator */}
+            <div className="px-3 sm:px-6 py-2 bg-blue-50 border-b border-blue-200">
+              <p className="text-xs text-blue-700 text-center font-medium">
+                📅 Select a date → ⏰ Choose time → 📝 Fill details → ✅ Book appointment
+              </p>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Calendar Section */}
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+          <div className="space-y-6 pb-6">{/* Added padding bottom for better scrolling */}
+              {/* Date Selection Section */}
               <div className="bg-white border rounded-xl shadow-sm p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-base sm:text-lg font-semibold">Select Date</h3>
@@ -365,169 +428,257 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
                 </div>
               </div>
 
-              {/* Time Slots + Details */}
-              <div className="bg-white border rounded-xl shadow-sm p-4 sm:p-6">
-                {selectedDate ? (
-                  <>
-                    {/* Times */}
-                    <h3 className="text-base sm:text-lg font-semibold mb-3 flex items-center">
-                      <Clock className="h-5 w-5 mr-2 text-gray-600" />
-                      {selectedDate.toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </h3>
+              {/* Time Selection Section */}
+              {selectedDate && (
+                <div className="bg-white border rounded-xl shadow-sm p-4 sm:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold mb-3 flex items-center">
+                    <Clock className="h-5 w-5 mr-2 text-gray-600" />
+                    Available Times for {selectedDate.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </h3>
 
-                    {loading ? (
-                      <div className="grid grid-cols-3 gap-2 mb-4">
-                        {[...Array(6)].map((_, i) => (
-                          <div key={i} className="h-10 bg-gray-200 rounded animate-pulse"></div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4 max-h-40 overflow-y-auto">
+                  {loading ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+                      {[...Array(12)].map((_, i) => (
+                        <div key={i} className="h-10 bg-gray-200 rounded animate-pulse"></div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 pr-2">
                         {availableTimeSlots.map(slot => (
                           <button
                             key={slot.time}
                             onClick={() => setSelectedTime(slot.time)}
                             disabled={!slot.available}
                             className={`
-                    px-3 py-2 text-sm border rounded-lg transition-colors
-                    ${selectedTime === slot.time
+                      px-3 py-2 text-sm border rounded-lg transition-colors flex-shrink-0
+                      ${selectedTime === slot.time
                                 ? 'bg-blue-600 text-white border-blue-600'
                                 : slot.available
                                   ? 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
                                   : 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
                               }
-                  `}
+                    `}
                           >
                             {slot.formatted}
                           </button>
                         ))}
                       </div>
-                    )}
-
-                    {/* Appointment Form */}
-                    {selectedTime && (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Appointment Type
-                          </label>
-                          <select
-                            value={appointmentType}
-                            onChange={e => setAppointmentType(e.target.value as AppointmentType)}
-                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="consultation">General Consultation</option>
-                            <option value="routine_checkup">Routine Checkup</option>
-                            <option value="follow_up">Follow-up Visit</option>
-                            <option value="specialist_visit">Specialist Visit</option>
-                            <option value="vaccination">Vaccination</option>
-                            <option value="other">Other</option>
-                          </select>
+                      {availableTimeSlots.length > 12 && (
+                        <div className="mt-2 text-xs text-gray-500 text-center">
+                          Scroll to see more time slots
                         </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Notes (Optional)
-                          </label>
-                          <textarea
-                            value={patientNotes}
-                            onChange={e => setPatientNotes(e.target.value)}
-                            placeholder="Describe your symptoms..."
-                            rows={3}
-                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          />
+              {/* Appointment Details Section */}
+              {selectedDate && selectedTime && (
+                <div className="bg-white border rounded-xl shadow-sm p-4 sm:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold mb-4">Appointment Details</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Appointment Type
+                      </label>
+                      <select
+                        value={appointmentType}
+                        onChange={e => setAppointmentType(e.target.value as AppointmentType)}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="consultation">General Consultation</option>
+                        <option value="routine_checkup">Routine Checkup</option>
+                        <option value="follow_up">Follow-up Visit</option>
+                        <option value="specialist_visit">Specialist Visit</option>
+                        <option value="vaccination">Vaccination</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Services Needed <span className="text-gray-500">(select all that apply)</span>
+                      </label>
+                      {servicesOptions.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {servicesOptions.map((svc) => {
+                            const selected = selectedServices.includes(svc);
+                            return (
+                              <button
+                                type="button"
+                                key={svc}
+                                onClick={() => toggleServiceSelection(svc)}
+                                className={`px-4 py-2 rounded-lg border text-sm transition-all duration-200 ${
+                                  selected 
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' 
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50 hover:border-blue-400'
+                                }`}
+                              >
+                                {selected && (
+                                  <CheckCircle className="inline h-4 w-4 mr-1" />
+                                )}
+                                {svc}
+                              </button>
+                            );
+                          })}
                         </div>
+                      ) : (
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <p className="text-sm text-gray-600">No specific services listed by the clinic. You may describe your needs in the notes below.</p>
+                        </div>
+                      )}
+                      
+                      {selectedServices.length > 0 && (
+                        <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            <strong>Selected Services:</strong> {selectedServices.join(', ')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
 
-                        {/* Summary */}
-                        <div className="bg-gray-50 p-3 rounded-lg text-sm">
-                          <h4 className="font-semibold mb-2">Appointment Summary</h4>
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span>Clinic:</span>
-                              <span className="font-medium">{clinic?.clinic_name}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Date:</span>
-                              <span className="font-medium">{selectedDate.toLocaleDateString('en-US')}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Time:</span>
-                              <span className="font-medium">{selectedTime}</span>
-                            </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Notes <span className="text-gray-500">(Optional)</span>
+                      </label>
+                      <textarea
+                        value={patientNotes}
+                        onChange={e => setPatientNotes(e.target.value)}
+                        placeholder="Describe your symptoms, concerns, or any additional information..."
+                        rows={4}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summary and Actions Section */}
+              {selectedDate && selectedTime && (
+                <div className="bg-white border rounded-xl shadow-sm p-4 sm:p-6">
+                  <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                    <h4 className="font-semibold text-gray-900 mb-3">Appointment Summary</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Clinic:</span>
+                        <span className="font-medium text-gray-900">{clinic?.clinic_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Type:</span>
+                        <span className="font-medium text-gray-900">
+                          {appointmentType === 'consultation' ? 'General Consultation' :
+                           appointmentType === 'routine_checkup' ? 'Routine Checkup' :
+                           appointmentType === 'follow_up' ? 'Follow-up Visit' :
+                           appointmentType === 'specialist_visit' ? 'Specialist Visit' :
+                           appointmentType === 'vaccination' ? 'Vaccination' : 'Other'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Date:</span>
+                        <span className="font-medium text-gray-900">{selectedDate.toLocaleDateString('en-US')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Time:</span>
+                        <span className="font-medium text-gray-900">{selectedTime}</span>
+                      </div>
+                      {selectedServices.length > 0 && (
+                        <div className="sm:col-span-2">
+                          <span className="text-gray-600">Services:</span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {selectedServices.map(service => (
+                              <span key={service} className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                {service}
+                              </span>
+                            ))}
                           </div>
                         </div>
+                      )}
+                    </div>
+                  </div>
 
-                        {/* Actions */}
-                        <div className="flex justify-end space-x-3">
-                          <Button variant="outline" onClick={onClose}>
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={handleBookAppointment}
-                            disabled={!selectedDate || !selectedTime || loading}
-                            loading={loading}
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            Book Appointment
-                          </Button>
-                        </div>
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row justify-end gap-3">
+                    <Button variant="outline" onClick={onClose} className="sm:w-auto">
+                      Cancel
+                    </Button>
+                    {bookingSuccess ? (
+                      <div className="flex items-center justify-center text-green-600 bg-green-50 px-4 py-2 rounded-lg">
+                        <CheckCircle className="h-5 w-5 mr-2" />
+                        <span className="font-medium">Appointment Booked Successfully!</span>
                       </div>
+                    ) : (
+                      <>
+                        <Button
+                          onClick={handleProceedToGCashPayment}
+                          disabled={!selectedDate || !selectedTime || loading}
+                          className="bg-green-600 hover:bg-green-700 text-white sm:w-auto"
+                        >
+                          Pay with GCash (₱{calculateAppointmentCost().total_amount})
+                        </Button>
+                        <Button
+                          onClick={handleBookAppointment}
+                          disabled={!selectedDate || !selectedTime || loading}
+                          loading={loading}
+                          className="bg-blue-600 hover:bg-blue-700 text-white sm:w-auto"
+                        >
+                          Book Without Payment
+                        </Button>
+                      </>
                     )}
-                  </>
-                ) : (
-                  <p className="text-gray-500 text-sm">Select a date to view available times.</p>
-                )}
-              </div>
+                  </div>
+                </div>
+              )}
+
+              {/* No date selected message */}
+              {!selectedDate && (
+                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
+                  <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Date</h3>
+                  <p className="text-gray-600">Choose a date from the calendar above to view available appointment times.</p>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Payment Modal */}
-          {showPayment && appointmentData && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold mb-4">Complete Payment</h3>
-                  <PaymentForm
-                    clinicId={clinic.id}
-                    patientId={patientId}
-                    appointmentData={appointmentData}
-                    onPaymentComplete={handlePaymentComplete}
-                    onBack={() => setShowPayment(false)}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* GCash Payment Modal */}
-          {showGCashPayment && appointmentData && patientData && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold mb-4">GCash Payment - {clinic.clinic_name}</h3>
-                  <PayMongoGCashPayment
-                    amount={appointmentData.total_amount}
-                    description={`Medical consultation at ${clinic.clinic_name}`}
-                    appointmentId={appointmentData.appointment_id}
-                    clinicId={clinic.id}
-                    patientName={`${patientData.first_name} ${patientData.last_name}`}
-                    patientEmail={patientData.email || ''}
-                    patientPhone={patientData.phone || ''}
-                    onPaymentSuccess={handleGCashPaymentComplete}
-                    onPaymentError={handleGCashPaymentError}
-                    onBack={() => setShowGCashPayment(false)}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-    </div>
+      
+      {/* Adyen GCash Payment Modal */}
+      {showGCashPayment && appointmentData && patientData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold">Complete Payment - {clinic.clinic_name}</h3>
+                <button
+                  onClick={handleGCashPaymentCancel}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <GCashPayment
+                patientId={patientId}
+                clinicId={clinic.id}
+                appointmentId={appointmentData.appointment_id}
+                amount={appointmentData.total_amount}
+                currency="PHP"
+                onPaymentSuccess={handleGCashPaymentComplete}
+                onPaymentError={handleGCashPaymentError}
+                onPaymentCancel={handleGCashPaymentCancel}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

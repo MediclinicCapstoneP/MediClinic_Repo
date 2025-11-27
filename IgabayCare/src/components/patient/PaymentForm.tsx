@@ -60,8 +60,12 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
         if (currentUser) {
           const patientResult = await patientService.getPatientByUserId(currentUser.id);
           if (patientResult.success && patientResult.patient) {
+            // Use full_name if available, otherwise construct from first_name and last_name
+            const fullName = patientResult.patient.full_name || 
+              `${patientResult.patient.first_name || ''} ${patientResult.patient.last_name || ''}`.trim();
+            
             setPayerInfo({
-              name: `${patientResult.patient.first_name} ${patientResult.patient.last_name}`,
+              name: fullName,
               phone: patientResult.patient.phone || '',
               email: currentUser.email || ''
             });

@@ -12,20 +12,24 @@ export interface Appointment {
   duration_minutes: number;
   appointment_type: AppointmentType;
   status: AppointmentStatus;
-  priority: AppointmentPriority;
+  priority?: AppointmentPriority; // Made optional since it might not exist in DB
+  patient_name?: string; // Direct patient name field in the table
+  payment_amount?: number; // Payment amount field
+  services?: string[]; // Services selected by patient
   room_number?: string;
   floor_number?: string;
   building?: string;
   patient_notes?: string;
   doctor_notes?: string;
   admin_notes?: string;
+  notes?: string; // General notes field
   insurance_provider?: string;
   insurance_policy_number?: string;
   copay_amount?: number;
   total_cost?: number;
-  reminder_sent: boolean;
+  reminder_sent?: boolean; // Made optional
   reminder_sent_at?: string;
-  confirmation_sent: boolean;
+  confirmation_sent?: boolean; // Made optional
   confirmation_sent_at?: string;
   cancelled_at?: string;
   cancelled_by?: string;

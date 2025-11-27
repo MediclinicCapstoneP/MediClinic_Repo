@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Users,
   Calendar,
@@ -18,6 +18,7 @@ import {
   UserCheck,
   Eye,
   MoreHorizontal,
+  Loader2,
 } from "lucide-react";
 
 import { Card, CardContent } from "../../components/ui/Card";
@@ -25,6 +26,10 @@ import { Button } from "../../components/ui/Button";
 import { LatestReviews } from "../../components/dashboard/LatestReviews";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, Title } from "chart.js";
+import { clinicDashboardService, type ClinicStats, type RecentActivity } from "../../features/auth/utils/clinicDashboardService";
+import { reviewsService, type ReviewSentiment, type ReviewAnalytics } from "../../features/auth/utils/reviewsService";
+import { roleBasedAuthService } from "../../features/auth/utils/roleBasedAuthService";
+import { clinicService } from "../../features/auth/utils/clinicService";
 ChartJS.register(ArcElement, Tooltip, Legend, Title);
 
 interface ClinicHomeProps {
@@ -33,6 +38,12 @@ interface ClinicHomeProps {
 
 export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<ClinicStats | null>(null);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [clinicId, setClinicId] = useState<string | null>(null);
+  const [reviewSentiment, setReviewSentiment] = useState<ReviewSentiment | null>(null);
+  const [reviewAnalytics, setReviewAnalytics] = useState<ReviewAnalytics | null>(null);
 
   const quickActions = [
     {
@@ -67,44 +78,74 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
     },
   ];
 
-  const recentActivity = [
-    {
-      id: 1,
-      type: "appointment",
-      title: "New Appointment",
-      description: "John Doe - General Checkup",
-      time: "30 minutes ago",
-      icon: Calendar,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100",
-    },
-    {
-      id: 2,
-      type: "patient",
-      title: "Patient Registered",
-      description: "Jane Smith - New patient profile created",
-      time: "2 hours ago",
-      icon: UserCheck,
-      color: "text-green-600",
-      bgColor: "bg-green-100",
-    },
-    {
-      id: 3,
-      type: "review",
-      title: "New Review",
-      description: "5-star rating from patient visit",
-      time: "1 day ago",
-      icon: Star,
-      color: "text-yellow-600",
-      bgColor: "bg-yellow-100",
-    },
-  ];
+  // Fetch clinic data and stats
+  useEffect(() => {
+    const fetchClinicData = async () => {
+      try {
+        setLoading(true);
+        
+        // Get current user and clinic ID
+        const currentUser = await roleBasedAuthService.getCurrentUser();
+        if (!currentUser || currentUser.role !== 'clinic') {
+          return;
+        }
 
-  const stats = [
+        const clinicResult = await clinicService.getClinicByUserId(currentUser.user.id);
+        if (clinicResult.success && clinicResult.clinic) {
+          const clinicId = clinicResult.clinic.id;
+          setClinicId(clinicId);
+
+          // Fetch stats, recent activity, and review data
+          const [statsResult, activityResult, sentimentResult, analyticsResult] = await Promise.all([
+            clinicDashboardService.getClinicStats(clinicId),
+            clinicDashboardService.getRecentActivity(clinicId, 5),
+            reviewsService.getReviewSentiment(clinicId),
+            reviewsService.getReviewAnalytics(clinicId)
+          ]);
+
+          if (statsResult.success && statsResult.stats) {
+            setStats(statsResult.stats);
+          }
+
+          if (activityResult.success && activityResult.activities) {
+            setRecentActivity(activityResult.activities);
+          }
+
+          if (sentimentResult.success && sentimentResult.sentiment) {
+            setReviewSentiment(sentimentResult.sentiment);
+          }
+
+          if (analyticsResult.success && analyticsResult.analytics) {
+            setReviewAnalytics(analyticsResult.analytics);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching clinic data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClinicData();
+  }, []);
+
+  // Icon mapping for activity types
+  const getActivityIcon = (iconName: string) => {
+    const iconMap: { [key: string]: any } = {
+      Calendar,
+      UserCheck,
+      Star,
+      Users
+    };
+    return iconMap[iconName] || Calendar;
+  };
+
+  // Generate stats display data
+  const statsDisplay = stats ? [
     {
       title: "Total Patients",
-      value: "1,247",
-      change: "+12",
+      value: stats.totalPatients.toString(),
+      change: "+" + Math.floor(stats.totalPatients * 0.1),
       changeType: "positive",
       icon: Users,
       color: "text-blue-600",
@@ -112,7 +153,7 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
     },
     {
       title: "Today's Appointments",
-      value: "23",
+      value: stats.todayAppointments.toString(),
       change: "Scheduled",
       changeType: "neutral",
       icon: Calendar,
@@ -121,20 +162,33 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
     },
     {
       title: "Average Rating",
-      value: "4.8",
+      value: stats.averageRating.toFixed(1),
       change: "+0.2",
       changeType: "positive",
       icon: Star,
       color: "text-yellow-600",
       bgColor: "bg-yellow-50",
     },
-  ];
+  ] : [];
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-center min-h-96">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading clinic dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, index) => (
+        {statsDisplay.map((stat, index) => (
           <div
             key={stat.title}
             className={`transform transition-all duration-300 hover:scale-105 hover:shadow-lg cursor-pointer ${
@@ -191,53 +245,111 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Reviews Table */}
           <div className="w-full lg:w-2/3">
-            <LatestReviews />
+            <LatestReviews clinicId={clinicId || undefined} limit={5} />
           </div>
 
-          {/* Pie Chart */}
-          {/* Pie Chart */}
-          <div className="w-full lg:w-1/3 bg-white rounded-lg shadow p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Review Sentiment
-            </h3>
+          {/* Enhanced Pie Chart */}
+          <div className="w-full lg:w-1/3">
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Review Analytics
+                </h3>
+                {reviewAnalytics && (
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-yellow-600">
+                      {reviewAnalytics.averageRating}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {reviewAnalytics.totalReviews} reviews
+                    </p>
+                  </div>
+                )}
+              </div>
 
-            <div
-              style={{ position: "relative", height: "250px", width: "100%" }}
-            >
-              <Pie
-                data={{
-                  labels: ["Positive", "Negative", "Neutral"],
-                  datasets: [
-                    {
-                      label: "Sentiment",
-                      data: [10, 5, 2],
-                      backgroundColor: [
-                        "rgba(34, 197, 94, 0.5)", // Green
-                        "rgba(239, 68, 68, 0.5)", // Red
-                        "rgba(234, 179, 8, 0.5)", // Yellow
+              {reviewSentiment && (reviewSentiment.positive + reviewSentiment.negative + reviewSentiment.neutral) > 0 ? (
+                <div
+                  style={{ position: "relative", height: "200px", width: "100%" }}
+                >
+                  <Pie
+                    data={{
+                      labels: ["Positive (4-5★)", "Neutral (3★)", "Negative (1-2★)"],
+                      datasets: [
+                        {
+                          label: "Reviews",
+                          data: [reviewSentiment.positive, reviewSentiment.neutral, reviewSentiment.negative],
+                          backgroundColor: [
+                            "rgba(34, 197, 94, 0.8)", // Green
+                            "rgba(234, 179, 8, 0.8)", // Yellow
+                            "rgba(239, 68, 68, 0.8)", // Red
+                          ],
+                          borderColor: [
+                            "rgba(34, 197, 94, 1)",
+                            "rgba(234, 179, 8, 1)",
+                            "rgba(239, 68, 68, 1)",
+                          ],
+                          borderWidth: 2,
+                        },
                       ],
-                      borderColor: [
-                        "rgba(34, 197, 94, 1)",
-                        "rgba(239, 68, 68, 1)",
-                        "rgba(234, 179, 8, 1)",
-                      ],
-                      borderWidth: 1,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: "bottom",
-                    },
-                    title: {
-                      display: false,
-                    },
-                  },
-                }}
-              />
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: "bottom",
+                          labels: {
+                            padding: 15,
+                            font: {
+                              size: 11
+                            }
+                          }
+                        },
+                        title: {
+                          display: false,
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: (context) => {
+                              const total = reviewSentiment.positive + reviewSentiment.neutral + reviewSentiment.negative;
+                              const percentage = Math.round((context.raw as number / total) * 100);
+                              return `${context.label}: ${context.raw} reviews (${percentage}%)`;
+                            }
+                          }
+                        }
+                      },
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-40">
+                  <div className="text-center text-gray-400">
+                    <Star className="h-12 w-12 mx-auto mb-2" />
+                    <p className="text-sm">No review data yet</p>
+                    <p className="text-xs">Reviews will appear here once patients leave feedback</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional metrics */}
+              {reviewAnalytics && reviewAnalytics.totalReviews > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-gray-500">Recommendation Rate</p>
+                      <p className="text-sm font-semibold text-green-600">
+                        {reviewAnalytics.recommendationRate}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Verified Reviews</p>
+                      <p className="text-sm font-semibold text-blue-600">
+                        {reviewAnalytics.verifiedReviewsCount}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -249,33 +361,46 @@ export const ClinicHome: React.FC<ClinicHomeProps> = ({ onNavigate }) => {
           Recent Activity
         </h2>
         <div className="space-y-4">
-          {recentActivity.map((activity) => (
-            <Card
-              key={activity.id}
-              className="group cursor-pointer transform transition-all duration-300 hover:scale-102 hover:shadow-md border-l-4 border-l-transparent hover:border-l-secondary-500"
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-4">
-                  <div
-                    className={`p-2 rounded-full ${activity.bgColor} group-hover:scale-110 transition-transform duration-300`}
-                  >
-                    <activity.icon className={`h-5 w-5 ${activity.color}`} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 group-hover:text-secondary-600 transition-colors">
-                      {activity.title}
-                    </h3>
-                    <p className="text-gray-600 text-sm">
-                      {activity.description}
-                    </p>
-                  </div>
-                  <div className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors">
-                    {activity.time}
-                  </div>
-                </div>
+          {recentActivity.length > 0 ? (
+            recentActivity.map((activity) => {
+              const ActivityIcon = getActivityIcon(activity.icon);
+              return (
+                <Card
+                  key={activity.id}
+                  className="group cursor-pointer transform transition-all duration-300 hover:scale-102 hover:shadow-md border-l-4 border-l-transparent hover:border-l-secondary-500"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-4">
+                      <div
+                        className={`p-2 rounded-full ${activity.bgColor} group-hover:scale-110 transition-transform duration-300`}
+                      >
+                        <ActivityIcon className={`h-5 w-5 ${activity.color}`} />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 group-hover:text-secondary-600 transition-colors">
+                          {activity.title}
+                        </h3>
+                        <p className="text-gray-600 text-sm">
+                          {activity.description}
+                        </p>
+                      </div>
+                      <div className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors">
+                        {activity.time}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
+            <Card>
+              <CardContent className="p-6 text-center text-gray-500">
+                <Activity className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No recent activity to display</p>
+                <p className="text-sm">Activity will appear here as patients book appointments and interact with your clinic.</p>
               </CardContent>
             </Card>
-          ))}
+          )}
         </div>
       </div>
 

@@ -71,7 +71,19 @@ export const roleBasedAuthService = {
         error,
       } = await supabase.auth.getUser();
 
-      if (error || !user) {
+      if (error) {
+        // Handle specific refresh token errors
+        if (error.message.includes('refresh_token') || error.message.includes('Invalid Refresh Token')) {
+          console.warn('Invalid refresh token detected, clearing session:', error.message);
+          // Clear the invalid session
+          await supabase.auth.signOut();
+          return null;
+        }
+        console.error('Auth error:', error);
+        return null;
+      }
+
+      if (!user) {
         return null;
       }
 
@@ -84,6 +96,11 @@ export const roleBasedAuthService = {
       return { user, role };
     } catch (error) {
       console.error("Error getting current user:", error);
+      // If there's a token error, clear the session
+      if (error instanceof Error && (error.message.includes('refresh_token') || error.message.includes('Invalid Refresh Token'))) {
+        console.warn('Clearing invalid session due to token error');
+        await supabase.auth.signOut();
+      }
       return null;
     }
   },
@@ -167,6 +184,13 @@ export const roleBasedAuthService = {
 
         if (error) {
           console.error("Patient sign in error:", error);
+          // Provide more specific error messages
+          if (error.message.includes('Invalid login credentials')) {
+            return { success: false, error: "Invalid email or password. Please check your credentials and try again." };
+          }
+          if (error.message.includes('Email not confirmed')) {
+            return { success: false, error: "Please verify your email before signing in. Check your inbox for the confirmation email." };
+          }
           return { success: false, error: error.message };
         }
 
@@ -249,6 +273,8 @@ export const roleBasedAuthService = {
             number_of_doctors: data.number_of_doctors || 0,
             number_of_staff: data.number_of_staff || 0,
             description: data.description,
+            latitude: data.latitude,
+            longitude: data.longitude,
             status: "approved" // Set status to approved for new registrations
           }
         };
@@ -338,6 +364,8 @@ export const roleBasedAuthService = {
           number_of_doctors: registrationData.number_of_doctors || 0,
           number_of_staff: registrationData.number_of_staff || 0,
           description: registrationData.description,
+          latitude: registrationData.latitude,
+          longitude: registrationData.longitude,
         });
 
         if (!clinicResult.success) {
@@ -382,6 +410,13 @@ export const roleBasedAuthService = {
 
         if (error) {
           console.error("Clinic sign in error:", error);
+          // Provide more specific error messages
+          if (error.message.includes('Invalid login credentials')) {
+            return { success: false, error: "Invalid email or password. Please check your credentials and try again." };
+          }
+          if (error.message.includes('Email not confirmed')) {
+            return { success: false, error: "Please verify your email before signing in. Check your inbox for the confirmation email." };
+          }
           return { success: false, error: error.message };
         }
 
@@ -500,9 +535,9 @@ export const roleBasedAuthService = {
     },
   },
 
-  // Doctor Authentication (for future use)
+  // Doctor Authentication
   doctor: {
-    // Sign up for doctors
+    // Sign up for doctors (typically done by clinics)
     async signUp(data: DoctorAuthData): Promise<AuthResult> {
       try {
         console.log("Doctor sign up attempt for:", data.email);
@@ -533,7 +568,30 @@ export const roleBasedAuthService = {
           return { success: false, error: "No user data returned" };
         }
 
-        // TODO: Create doctor profile in database when doctors table is implemented
+        // Create doctor profile in database
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Delay for session
+        try {
+          const { doctorService } = await import('./doctorService');
+          const doctorResult = await doctorService.createDoctor({
+            user_id: authData.user.id,
+            clinic_id: data.clinic_id || '',
+            full_name: `${data.firstName} ${data.lastName}`,
+            specialization: data.specialization,
+            email: data.email,
+            phone: data.phone,
+            license_number: data.licenseNumber,
+            years_experience: data.experience_years,
+            is_clinic_created: true,
+            status: 'active'
+          });
+
+          if (!doctorResult.success) {
+            console.error("Failed to create doctor profile:", doctorResult.error);
+          }
+        } catch (error) {
+          console.error("Exception during doctor profile creation:", error);
+        }
+
         console.log("Doctor sign up successful:", authData.user.id);
         return { success: true, user: authData.user, role: "doctor" };
       } catch (error) {
@@ -557,6 +615,13 @@ export const roleBasedAuthService = {
 
         if (error) {
           console.error("Doctor sign in error:", error);
+          // Provide more specific error messages
+          if (error.message.includes('Invalid login credentials')) {
+            return { success: false, error: "Invalid email or password. Please check your credentials and try again." };
+          }
+          if (error.message.includes('Email not confirmed')) {
+            return { success: false, error: "Please verify your email before signing in. Check your inbox for the confirmation email." };
+          }
           return { success: false, error: error.message };
         }
 
@@ -582,6 +647,31 @@ export const roleBasedAuthService = {
           return {
             success: false,
             error: "Please verify your email before signing in",
+          };
+        }
+
+        // Verify doctor profile exists in database
+        try {
+          const { doctorService } = await import('./doctorService');
+          const doctorResult = await doctorService.getDoctorByEmail(data.email);
+          
+          if (!doctorResult.success || !doctorResult.doctor) {
+            console.error("Doctor profile not found in database");
+            await supabase.auth.signOut();
+            return {
+              success: false,
+              error: "Doctor profile not found. Please contact your clinic administrator.",
+            };
+          }
+
+          // Update last login
+          await doctorService.updateDoctor(doctorResult.doctor.id, {});
+          
+        } catch (error) {
+          console.error("Error verifying doctor profile:", error);
+          return {
+            success: false,
+            error: "Unable to verify doctor credentials. Please try again.",
           };
         }
 

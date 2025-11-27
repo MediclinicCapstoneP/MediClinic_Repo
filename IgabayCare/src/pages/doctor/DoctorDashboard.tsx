@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../supabaseClient';
 import { 
   User, Calendar, Clock, CheckCircle, Edit, Camera, 
   LogOut, Search, Filter, Plus, FileText, Stethoscope,
@@ -14,9 +15,18 @@ import { Modal } from '../../components/ui/Modal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthService';
 import { prescriptionService, PrescriptionWithPatient, CreatePrescriptionData } from '../../features/auth/utils/prescriptionService';
+import { doctorDashboardService, DoctorStats, DoctorActivity } from '../../features/auth/utils/doctorDashboardService';
+import { doctorService, DoctorProfile } from '../../features/auth/utils/doctorService';
+import { doctorAppointmentService, PatientInfo } from '../../features/auth/utils/doctorAppointmentService';
+import { DoctorScheduleManager } from '../../components/doctor/DoctorScheduleManager';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { DoctorAppointments } from './DoctorAppointments';
+import { DoctorAppointmentHistory } from './DoctorAppointmentHistory';
+import { DoctorPrescriptions } from './DoctorPrescriptionsEnhanced';
+import { DoctorPatientRecords } from './DoctorPatientRecords';
+import { DoctorManageProfile } from './DoctorManageProfile';
 import { SkeletonDashboard } from '../../components/ui/Skeleton';
+import { DoctorNotificationDropdown } from '../../components/doctor/DoctorNotificationDropdown';
 
 interface Appointment {
   id: string;
@@ -33,29 +43,21 @@ interface Appointment {
   followUpDate?: string;
 }
 
-interface Patient {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  age: number;
-  gender: string;
-  lastVisit?: string;
-  medicalHistory?: string;
-  allergies?: string;
-  currentMedications?: string;
-}
+// Using PatientInfo from doctorAppointmentService instead of local interface
 
 // Using PrescriptionWithPatient from prescriptionService instead of local interface
 
 export const DoctorDashboard: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
+  const [doctorStats, setDoctorStats] = useState<DoctorStats | null>(null);
+  const [doctorActivity, setDoctorActivity] = useState<DoctorActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('appointments');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients, setPatients] = useState<PatientInfo[]>([]);
   const [prescriptions, setPrescriptions] = useState<PrescriptionWithPatient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<PatientInfo | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
@@ -74,6 +76,15 @@ export const DoctorDashboard: React.FC = () => {
   });
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [profileUpdateData, setProfileUpdateData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    specialization: '',
+    availability: '',
+    years_experience: 0
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -82,13 +93,17 @@ export const DoctorDashboard: React.FC = () => {
         setLoading(true);
         const user = await roleBasedAuthService.getCurrentUser();
         if (!user || user.role !== 'doctor') {
+          // Clear any invalid session and redirect
+          await roleBasedAuthService.signOut();
           navigate('/doctor-signin');
           return;
         }
         setCurrentUser(user);
-        loadMockData();
+        await loadDoctorData(user.user.id);
       } catch (error) {
         console.error('Auth check error:', error);
+        // Clear session on auth error and redirect
+        await roleBasedAuthService.signOut();
         navigate('/doctor-signin');
       } finally {
         setLoading(false);
@@ -98,113 +113,47 @@ export const DoctorDashboard: React.FC = () => {
     checkAuth();
   }, [navigate]);
 
-  const loadMockData = async () => {
-    // Mock appointments data
-    const mockAppointments: Appointment[] = [
-      {
-        id: '1',
-        patientName: 'John Smith',
-        patientId: 'P001',
-        patientEmail: 'john.smith@email.com',
-        patientPhone: '+1 234-567-8901',
-        date: '2024-01-15',
-        time: '09:00',
-        status: 'scheduled',
-        type: 'General Consultation',
-        notes: 'Follow-up appointment for blood pressure monitoring'
-      },
-      {
-        id: '2',
-        patientName: 'Sarah Johnson',
-        patientId: 'P002',
-        patientEmail: 'sarah.johnson@email.com',
-        patientPhone: '+1 234-567-8902',
-        date: '2024-01-15',
-        time: '10:30',
-        status: 'in-progress',
-        type: 'Physical Examination',
-        notes: 'Annual checkup and vaccination'
-      },
-      {
-        id: '3',
-        patientName: 'Michael Brown',
-        patientId: 'P003',
-        patientEmail: 'michael.brown@email.com',
-        patientPhone: '+1 234-567-8903',
-        date: '2024-01-15',
-        time: '14:00',
-        status: 'completed',
-        type: 'Follow-up Consultation',
-        notes: 'Diabetes management review',
-        prescription: 'Metformin 500mg twice daily'
-      },
-      {
-        id: '4',
-        patientName: 'Emily Davis',
-        patientId: 'P004',
-        patientEmail: 'emily.davis@email.com',
-        patientPhone: '+1 234-567-8904',
-        date: '2024-01-16',
-        time: '11:00',
-        status: 'scheduled',
-        type: 'Emergency Consultation',
-        notes: 'Chest pain and shortness of breath'
-      }
-    ];
+  const loadDoctorData = async (userId: string) => {
+    try {
+      // Get doctor profile
+      const doctorResult = await doctorDashboardService.getDoctorByUserId(userId);
+      if (doctorResult.success && doctorResult.doctor) {
+        const doctor = doctorResult.doctor;
+        setDoctorProfile(doctor);
+        
+        // Set profile update data
+        setProfileUpdateData({
+          first_name: doctor.first_name || '',
+          last_name: doctor.last_name || '',
+          email: doctor.email || '',
+          phone: doctor.phone || '',
+          specialization: doctor.specialization || '',
+          availability: doctor.availability || '',
+          years_experience: doctor.years_experience || 0
+        });
 
-    // Mock patients data
-    const mockPatients: Patient[] = [
-      {
-        id: 'P001',
-        name: 'John Smith',
-        email: 'john.smith@email.com',
-        phone: '+1 234-567-8901',
-        age: 45,
-        gender: 'Male',
-        lastVisit: '2024-01-08',
-        medicalHistory: 'Hypertension, Type 2 Diabetes',
-        allergies: 'Penicillin',
-        currentMedications: 'Lisinopril 10mg daily, Metformin 500mg twice daily'
-      },
-      {
-        id: 'P002',
-        name: 'Sarah Johnson',
-        email: 'sarah.johnson@email.com',
-        phone: '+1 234-567-8902',
-        age: 32,
-        gender: 'Female',
-        lastVisit: '2024-01-10',
-        medicalHistory: 'Asthma, Seasonal allergies',
-        allergies: 'None known',
-        currentMedications: 'Albuterol inhaler as needed'
-      },
-      {
-        id: 'P003',
-        name: 'Michael Brown',
-        email: 'michael.brown@email.com',
-        phone: '+1 234-567-8903',
-        age: 58,
-        gender: 'Male',
-        lastVisit: '2024-01-12',
-        medicalHistory: 'Type 2 Diabetes, High cholesterol',
-        allergies: 'Sulfa drugs',
-        currentMedications: 'Metformin 500mg twice daily, Atorvastatin 20mg daily'
-      }
-    ];
-
-    setAppointments(mockAppointments);
-    setPatients(mockPatients);
-    
-    // Load real prescriptions if user is authenticated
-    if (currentUser?.user?.id) {
-      try {
-        const result = await prescriptionService.getPrescriptionsByDoctor(currentUser.user.id);
-        if (result.success && result.prescriptions) {
-          setPrescriptions(result.prescriptions);
+        // Load doctor stats
+        const statsResult = await doctorDashboardService.getDoctorStats(doctor.id);
+        if (statsResult.success && statsResult.stats) {
+          setDoctorStats(statsResult.stats);
         }
-      } catch (error) {
-        console.error('Error loading prescriptions:', error);
+
+        // Load doctor activity
+        const activityResult = await doctorDashboardService.getDoctorActivity(doctor.id, 10);
+        if (activityResult.success && activityResult.activities) {
+          setDoctorActivity(activityResult.activities);
+        }
+
+        // Load prescriptions
+        const prescriptionsResult = await prescriptionService.getPrescriptionsByDoctor(doctor.id);
+        if (prescriptionsResult.success && prescriptionsResult.prescriptions) {
+          setPrescriptions(prescriptionsResult.prescriptions);
+        }
+      } else {
+        console.error('Failed to load doctor profile:', doctorResult.error);
       }
+    } catch (error) {
+      console.error('Error loading doctor data:', error);
     }
   };
 
@@ -363,10 +312,49 @@ export const DoctorDashboard: React.FC = () => {
     }));
   };
 
-  const handleProfilePictureUpload = (file: File) => {
-    setProfilePicture(file);
-    // Here you would typically upload to your storage service
-    console.log('Profile picture uploaded:', file.name);
+  const handleProfilePictureUpload = async (file: File) => {
+    if (!doctorProfile) return;
+    
+    try {
+      setProfilePicture(file);
+      const result = await doctorDashboardService.uploadProfilePicture(doctorProfile.id, file);
+      
+      if (result.success) {
+        // Update doctor profile state
+        setDoctorProfile(prev => prev ? {
+          ...prev,
+          profile_picture_url: result.url || null,
+          profile_picture_path: result.path || null
+        } : null);
+        alert('Profile picture updated successfully!');
+      } else {
+        alert(`Failed to upload profile picture: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      alert('Failed to upload profile picture');
+    } finally {
+      setProfilePicture(null);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!doctorProfile) return;
+    
+    try {
+      const result = await doctorDashboardService.updateDoctorProfile(doctorProfile.id, profileUpdateData);
+      
+      if (result.success && result.doctor) {
+        setDoctorProfile(result.doctor);
+        setShowProfileModal(false);
+        alert('Profile updated successfully!');
+      } else {
+        alert(`Failed to update profile: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Failed to update profile');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -823,8 +811,12 @@ export const DoctorDashboard: React.FC = () => {
                   <User className="h-6 w-6 text-theme-dark" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{patient.name}</h3>
-                  <p className="text-sm text-gray-600">{patient.age} years, {patient.gender}</p>
+                  <h3 className="font-medium text-gray-900">{patient.first_name} {patient.last_name}</h3>
+                  {patient.date_of_birth && (
+                    <p className="text-sm text-gray-600">
+                      {new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear()} years
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -839,21 +831,21 @@ export const DoctorDashboard: React.FC = () => {
                   <span className="text-sm text-gray-600">{patient.phone}</span>
                 </div>
 
-                {patient.lastVisit && (
+                {patient.last_visit && (
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Last visit: {patient.lastVisit}</span>
+                    <span className="text-sm text-gray-600">Last visit: {patient.last_visit}</span>
           </div>
         )}
       </div>
 
-              {patient.medicalHistory && (
+              {patient.medical_conditions && (
                 <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-blue-800">Medical History</span>
                   </div>
-                  <p className="text-sm text-blue-700">{patient.medicalHistory}</p>
+                  <p className="text-sm text-blue-700">{patient.medical_conditions}</p>
                 </div>
               )}
 
@@ -944,19 +936,39 @@ export const DoctorDashboard: React.FC = () => {
   );
 
   const renderContent = () => {
+    const doctorId = doctorProfile?.id || '';
+    
+    // Log doctor ID for debugging
+    console.log('Doctor Dashboard - Current doctor ID:', doctorId);
+    
+    // Check if the doctor ID matches the one in the appointment
+    const matchesAppointmentDoctorId = doctorId === 'a35516af-53a9-4ed2-9329-bbe2126bb972';
+    console.log('Doctor ID matches appointment doctor_id:', matchesAppointmentDoctorId);
+    
     switch (activeTab) {
       case 'appointments':
-        return <DoctorAppointments doctorId={currentUser?.id || ''} />;
+        return (
+          <>
+            {/* Debug info */}
+            {import.meta.env.DEV && (
+              <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                <p>Debug - Doctor ID: {doctorId}</p>
+                <p>Matches appointment doctor_id: {matchesAppointmentDoctorId ? 'Yes' : 'No'}</p>
+              </div>
+            )}
+            <DoctorAppointments doctorId={doctorId} />
+          </>
+        );
       case 'history':
-        return renderHistory();
+        return <DoctorAppointmentHistory doctorId={doctorId} />;
       case 'prescriptions':
-        return renderPrescriptions();
+        return <DoctorPrescriptions doctorId={doctorId} />;
       case 'patients':
-        return renderPatients();
+        return <DoctorPatientRecords doctorId={doctorId} />;
       case 'profile':
-        return renderProfile();
+        return <DoctorManageProfile doctorId={doctorId} onProfileUpdate={() => loadDoctorData(currentUser?.user?.id)} />;
       default:
-        return <DoctorAppointments doctorId={currentUser?.id || ''} />;
+        return <DoctorAppointments doctorId={doctorId} />;
     }
   };
 
@@ -1030,7 +1042,7 @@ export const DoctorDashboard: React.FC = () => {
             <div className="space-y-4">
           <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Patient</label>
-                <p className="text-gray-900">{selectedPatient.name}</p>
+                <p className="text-gray-900">{selectedPatient.first_name} {selectedPatient.last_name}</p>
           </div>
           
           <div>
@@ -1125,8 +1137,12 @@ export const DoctorDashboard: React.FC = () => {
                   <User className="h-8 w-8 text-theme-dark" />
                 </div>
           <div>
-                  <h3 className="text-lg font-medium text-gray-900">{selectedPatient.name}</h3>
-                  <p className="text-gray-600">{selectedPatient.age} years, {selectedPatient.gender}</p>
+                  <h3 className="text-lg font-medium text-gray-900">{selectedPatient.first_name} {selectedPatient.last_name}</h3>
+                  {selectedPatient.date_of_birth && (
+                    <p className="text-gray-600">
+                      {new Date().getFullYear() - new Date(selectedPatient.date_of_birth).getFullYear()} years
+                    </p>
+                  )}
               </div>
               </div>
 
@@ -1141,10 +1157,10 @@ export const DoctorDashboard: React.FC = () => {
             </div>
           </div>
           
-              {selectedPatient.medicalHistory && (
+              {selectedPatient.medical_conditions && (
           <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Medical History</label>
-                  <p className="text-gray-900 bg-gray-50 p-3 rounded">{selectedPatient.medicalHistory}</p>
+                  <p className="text-gray-900 bg-gray-50 p-3 rounded">{selectedPatient.medical_conditions}</p>
           </div>
               )}
 
@@ -1155,10 +1171,10 @@ export const DoctorDashboard: React.FC = () => {
                 </div>
               )}
 
-              {selectedPatient.currentMedications && (
+              {selectedPatient.medications && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Current Medications</label>
-                  <p className="text-gray-900 bg-blue-50 p-3 rounded">{selectedPatient.currentMedications}</p>
+                  <p className="text-gray-900 bg-blue-50 p-3 rounded">{selectedPatient.medications}</p>
                 </div>
               )}
 

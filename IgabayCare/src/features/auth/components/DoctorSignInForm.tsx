@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Stethoscope, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -18,20 +18,28 @@ export const DoctorSignInForm: React.FC<DoctorSignInFormProps> = ({ onSuccess })
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
     try {
+      console.log('DoctorSignInForm: handleSubmit called');
+      e.preventDefault();
+      
+      if (isLoading) {
+        console.log('DoctorSignInForm: Already loading, ignoring submit');
+        return;
+      }
+      
+      setIsLoading(true);
+      setError(null);
+      
+      console.log('DoctorSignInForm: Starting sign in process with email:', formData.email);
       const result = await roleBasedAuthService.doctor.signIn(formData);
       
       if (result.success) {
         console.log('Doctor sign in successful');
         onSuccess?.();
       } else {
+        console.error('Doctor sign in failed:', result.error);
         setError(result.error || 'Sign in failed');
       }
     } catch (err) {
@@ -62,7 +70,7 @@ export const DoctorSignInForm: React.FC<DoctorSignInFormProps> = ({ onSuccess })
             <h3 className="text-xl font-semibold text-gray-900">Doctor Sign In</h3>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} action="#" className="space-y-6">
               {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                   <div className="flex items-center space-x-2">
@@ -110,7 +118,7 @@ export const DoctorSignInForm: React.FC<DoctorSignInFormProps> = ({ onSuccess })
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center space-y-3">
               <p className="text-sm text-gray-600">
                 Forgot password?{' '}
                 <Link
@@ -120,11 +128,21 @@ export const DoctorSignInForm: React.FC<DoctorSignInFormProps> = ({ onSuccess })
                   Click here to reset
                 </Link>
               </p>
+              <div className="border-t pt-4">
+                <p className="text-xs text-gray-500 mb-2">
+                  Doctor accounts are created by clinic administrators
+                </p>
+                <p className="text-sm text-gray-600">
+                  Are you a patient?{' '}
+                  <Link
+                    to="/signin"
+                    className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                  >
+                    Patient Sign In
+                  </Link>
+                </p>
+              </div>
             </div>
-
-           
-
-           
           </CardContent>
         </Card>
       </div>

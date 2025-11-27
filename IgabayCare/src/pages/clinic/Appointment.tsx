@@ -4,7 +4,9 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { AppointmentService } from '../../features/auth/utils/appointmentService';
+import { AppointmentServicesService } from '../../features/auth/utils/appointmentServicesService';
 import { doctorService, DoctorProfile } from '../../features/auth/utils/doctorService';
+import { DoctorAppointmentService } from '../../services/doctorAppointmentService';
 import { SkeletonTable, Skeleton } from '../../components/ui/Skeleton';
 import {
   AppointmentWithDetails,
@@ -30,6 +32,7 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<AppointmentStatus | 'all'>('all');
   const [filterDate, setFilterDate] = useState<string>('');
+  const [appointmentServices, setAppointmentServices] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     loadAppointments();
@@ -47,6 +50,25 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
 
       const appointmentsData = await AppointmentService.getAppointmentsWithDetails(filters);
       setAppointments(appointmentsData);
+
+      // Load services for each appointment
+      const servicesMap: Record<string, string[]> = {};
+      await Promise.all(
+        appointmentsData.map(async (appointment) => {
+          try {
+            const services = await AppointmentServicesService.getAppointmentServicesDisplay(
+              appointment.id,
+              appointment.appointment_type,
+              appointment.clinic_id
+            );
+            servicesMap[appointment.id] = services;
+          } catch (error) {
+            console.warn(`Error loading services for appointment ${appointment.id}:`, error);
+            servicesMap[appointment.id] = AppointmentServicesService.formatServicesDisplay([]).split(', ');
+          }
+        })
+      );
+      setAppointmentServices(servicesMap);
     } catch (error) {
       console.error('Error loading appointments:', error);
     } finally {
@@ -98,11 +120,36 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
 
     try {
       const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+      
+      // 1. Update the main appointment with doctor info
       await AppointmentService.updateAppointment(selectedAppointment.id, {
         doctor_id: selectedDoctorId,
         doctor_name: selectedDoctor?.full_name || '',
         doctor_specialty: selectedDoctor?.specialization || ''
       });
+      
+      // 2. Create doctor appointment in the doctor_appointments table
+      console.log('🎆 Creating doctor appointment for assignment...');
+      const doctorAppointmentResult = await DoctorAppointmentService.createDoctorAppointment({
+        doctor_id: selectedDoctorId,
+        appointment_id: selectedAppointment.id,
+        patient_id: selectedAppointment.patient_id,
+        clinic_id: selectedAppointment.clinic_id,
+        appointment_date: selectedAppointment.appointment_date,
+        appointment_time: selectedAppointment.appointment_time,
+        appointment_type: selectedAppointment.appointment_type,
+        duration_minutes: selectedAppointment.duration_minutes || 30,
+        payment_amount: selectedAppointment.payment_amount || 0,
+        priority: selectedAppointment.priority || 'normal'
+      });
+      
+      if (doctorAppointmentResult.success) {
+        console.log('✅ Doctor appointment created successfully!');
+      } else {
+        console.error('❌ Error creating doctor appointment:', doctorAppointmentResult.error);
+        // Still continue - the main appointment assignment worked
+      }
+      
       await loadAppointments();
       setShowAssignDoctorModal(false);
       setSelectedAppointment(null);
@@ -180,8 +227,8 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
             <div className="mt-1 text-sm text-blue-600">
               Selected:{' '}
               <strong>
-                {selectedAppointment.patient?.first_name}{' '}
-                {selectedAppointment.patient?.last_name} on{' '}
+                {selectedAppointment.patient_name || 
+                 (selectedAppointment.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Unknown Patient')} on{' '}
                 {formatDate(selectedAppointment.appointment_date)}
               </strong>
             </div>
@@ -242,23 +289,23 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
                   Date & Time
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
+                  Type & Services
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Doctor
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                  Payment
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Priority
+                  Status
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {appointments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                     No appointments found
                   </td>
                 </tr>
@@ -282,11 +329,11 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {appointment.patient?.first_name}{' '}
-                          {appointment.patient?.last_name}
+                          {appointment.patient_name || 
+                           (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 'Unknown Patient')}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {appointment.patient?.email}
+                          {appointment.patient?.email || `ID: ${appointment.patient_id}`}
                         </div>
                       </div>
                     </td>
@@ -300,10 +347,22 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">
-                        {APPOINTMENT_TYPES[appointment.appointment_type]}
-                      </span>
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {APPOINTMENT_TYPES[appointment.appointment_type]}
+                        </div>
+                        {appointmentServices[appointment.id] && appointmentServices[appointment.id].length > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {AppointmentServicesService.formatServicesDisplay(appointmentServices[appointment.id])}
+                          </div>
+                        )}
+                        {appointment.notes && (
+                          <div className="text-xs text-gray-500 mt-1 max-w-xs truncate">
+                            Note: {appointment.notes}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {appointment.doctor_name ? (
@@ -320,10 +379,24 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(appointment.status)}
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          ₱{appointment.payment_amount?.toLocaleString() || '0.00'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {appointment.duration_minutes || 30} min
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getPriorityBadge(appointment.priority)}
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(appointment.status)}
+                        {appointment.priority && (
+                          <div className="text-xs">
+                            {getPriorityBadge(appointment.priority)}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -340,8 +413,9 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
         onConfirm={confirmAppointment}
         title="Confirm Appointment"
         message={`Are you sure you want to confirm the appointment for ${
-          selectedAppointment?.patient?.first_name || ''
-        } ${selectedAppointment?.patient?.last_name || ''} on ${
+          selectedAppointment?.patient_name ||
+          (selectedAppointment?.patient ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}` : 'Unknown Patient')
+        } on ${
           selectedAppointment ? formatDate(selectedAppointment.appointment_date) : ''
         }?`}
       />

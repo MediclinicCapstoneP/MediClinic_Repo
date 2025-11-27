@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../supabaseClient';
 import { mlValidationService } from './mlValidationService';
 import { adyenPaymentService } from './adyenPaymentService';
 
@@ -181,7 +181,7 @@ export class EnhancedAppointmentService {
           *,
           patients:patient_id (first_name, last_name, email, phone),
           clinics:clinic_id (clinic_name, address, phone),
-          doctors:doctor_id (first_name, last_name, specialization)
+          doctors:doctor_id (full_name, specialization)
         `)
         .single();
 
@@ -272,7 +272,7 @@ export class EnhancedAppointmentService {
       // Get doctors and their schedules
       const { data: doctors, error: doctorError } = await supabase
         .from('doctors')
-        .select('id, first_name, last_name, consultation_fee, working_hours')
+        .select('id, full_name, consultation_fee, working_hours')
         .eq('clinic_id', clinicId)
         .eq('status', 'active');
 
@@ -336,7 +336,7 @@ export class EnhancedAppointmentService {
           *,
           patients:patient_id (first_name, last_name, email, phone),
           clinics:clinic_id (clinic_name, address, phone),
-          doctors:doctor_id (first_name, last_name, specialization)
+          doctors:doctor_id (full_name, specialization)
         `)
         .single();
 
@@ -489,7 +489,7 @@ export class EnhancedAppointmentService {
           *,
           patients:patient_id (first_name, last_name, email, phone),
           clinics:clinic_id (clinic_name, address, phone),
-          doctors:doctor_id (first_name, last_name, specialization)
+          doctors:doctor_id (full_name, specialization)
         `, { count: 'exact' });
 
       // Apply filters

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, CreditCard, Smartphone, Clock, MapPin, User, Calendar, ChevronDown } from 'lucide-react';
 import { adyenPaymentService, PaymentRequest, PaymentSession } from '../../services/adyenPaymentService';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../supabaseClient';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Card } from '../ui/Card';
@@ -299,19 +299,15 @@ export const PaymentFirstBookingModal: React.FC<PaymentFirstBookingModalProps> =
         payment_id: paymentId
       };
 
-      const response = await fetch('/api/appointments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(appointmentData)
-      });
+      const { data: appointment, error } = await supabase
+        .from('appointments')
+        .insert([appointmentData])
+        .select()
+        .single();
 
-      if (!response.ok) {
-        throw new Error('Failed to create appointment');
+      if (error) {
+        throw new Error(`Failed to create appointment: ${error.message}`);
       }
-
-      const appointment = await response.json();
       onBookingSuccess(appointment.id, paymentId);
       
     } catch (error) {

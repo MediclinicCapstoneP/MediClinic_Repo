@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { User, Calendar, Phone, Mail, MapPin, Heart, Pill, AlertTriangle, Save, Trash2, Edit, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { User, Calendar, Phone, Mail, MapPin, Heart, Pill, AlertTriangle, Save, Trash2, Edit, Loader2, AlertCircle, Bell } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { ProfilePicture } from '../../components/ui/ProfilePicture';
 import { authService } from '../../features/auth/utils/authService';
 import { patientService, type PatientProfile } from '../../features/auth/utils/patientService';
+import NotificationPreferences from '../../components/patient/NotificationPreferences';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
 
 export const PatientProfileComponent: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'personal' | 'medical' | 'settings'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'medical' | 'notifications' | 'settings'>('personal');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,20 +37,42 @@ export const PatientProfileComponent: React.FC = () => {
 
   const [originalData, setOriginalData] = useState<PatientProfile | null>(null);
 
+  // Helper function to sanitize data for database
+  // Moved above handleSave to prevent temporal dead zone
+  const sanitizeDataForDatabase = useCallback((data: PatientProfile) => {
+    return {
+      ...data,
+      phone: data.phone || undefined,
+      address: data.address || undefined,
+      emergency_contact: data.emergency_contact || undefined,
+      blood_type: data.blood_type || undefined,
+      allergies: data.allergies || undefined,
+      medications: data.medications || undefined,
+      medical_conditions: data.medical_conditions || undefined,
+      profile_pic_url: data.profile_pic_url || undefined,
+    };
+  }, []);
+
   // Fetch patient data from Supabase
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchPatientData = async () => {
       try {
         setIsLoading(true);
         setError(null);
         
         const currentUser = await authService.getCurrentUser();
+        if (!isMounted) return;
+        
         if (!currentUser) {
           setError('No authenticated user found');
           return;
         }
 
         const patientResult = await patientService.getPatientByUserId(currentUser.id);
+        if (!isMounted) return;
+        
         if (patientResult.success && patientResult.patient) {
           // Convert null values to empty strings for React inputs
           const sanitizedPatient = {
@@ -68,17 +92,24 @@ export const PatientProfileComponent: React.FC = () => {
           setError(patientResult.error || 'Patient profile not found');
         }
       } catch (err) {
+        if (!isMounted) return;
         console.error('Error fetching patient data:', err);
         setError('Failed to load patient data');
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchPatientData();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []); 
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
       setError(null);
@@ -105,48 +136,34 @@ export const PatientProfileComponent: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [patientData]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     if (originalData) {
       setPatientData(originalData);
     }
     setIsEditing(false);
     setError(null);
-  };
+  }, [originalData]);
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = useCallback((field: string, value: any) => {
     setPatientData(prev => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
-  const handleProfilePictureUpdate = (url: string) => {
+  const handleProfilePictureUpdate = useCallback((url: string) => {
     setPatientData(prev => ({
       ...prev,
       profile_pic_url: url,
     }));
-  };
+  }, []);
 
-  const handleProfilePictureDelete = () => {
+  const handleProfilePictureDelete = useCallback(() => {
     setPatientData(prev => ({
       ...prev,
-      profile_pic_url: url,
+      profile_pic_url: null,
     }));
-  };
+  }, []);
 
-  // Helper function to sanitize data for database
-  const sanitizeDataForDatabase = (data: PatientProfile) => {
-    return {
-      ...data,
-      phone: data.phone || undefined,
-      address: data.address || undefined,
-      emergency_contact: data.emergency_contact || undefined,
-      blood_type: data.blood_type || undefined,
-      allergies: data.allergies || undefined,
-      medications: data.medications || undefined,
-      medical_conditions: data.medical_conditions || undefined,
-      profile_pic_url: data.profile_pic_url || undefined,
-    };
-  };
 
   const handleDeleteAccount = async () => {
     if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
@@ -205,40 +222,45 @@ export const PatientProfileComponent: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Patient Profile</h1>
-          <p className="text-gray-600">Manage your personal and medical information</p>
-        </div>
-        <div className="flex space-x-2">
-          {isEditing && (
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-          )}
-          <Button
-            variant={isEditing ? "gradient" : "outline"}
-            onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-            loading={isSaving}
-          >
-            {isEditing ? (
-              <>
-                <Save size={16} className="mr-2" />
-                Save Changes
-              </>
-            ) : (
-              <>
-                <Edit size={16} className="mr-2" />
-                Edit Profile
-              </>
+    <ErrorBoundary>
+      <div className="p-3 sm:p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div className="flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Patient Profile</h1>
+            <p className="text-gray-600">Manage your personal and medical information</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full sm:w-auto">
+            {isEditing && (
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                className="w-full sm:w-auto order-2 sm:order-1"
+                size="sm"
+              >
+                Cancel
+              </Button>
             )}
-          </Button>
+            <Button
+              variant={isEditing ? "gradient" : "outline"}
+              onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+              loading={isSaving}
+              className="w-full sm:w-auto order-1 sm:order-2"
+              size="sm"
+            >
+              {isEditing ? (
+                <>
+                  <Save size={16} className="mr-2" />
+                  Save Changes
+                </>
+              ) : (
+                <>
+                  <Edit size={16} className="mr-2" />
+                  Edit Profile
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
 
       {/* Error Message */}
       {error && (
@@ -250,9 +272,9 @@ export const PatientProfileComponent: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         {/* Profile Section */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-1 space-y-4 lg:space-y-6">
           {/* Profile Picture */}
           <Card>
             <CardContent className="p-6 text-center">
@@ -298,42 +320,56 @@ export const PatientProfileComponent: React.FC = () => {
         </div>
 
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 lg:space-y-6">
           {/* Tab Navigation */}
           <Card>
             <CardContent className="p-0">
-              <div className="flex border-b">
+              <div className="flex border-b overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('personal')}
-                  className={`flex-1 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex-1 min-w-0 px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'personal'
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <User size={16} className="mr-2 inline" />
-                  Personal Info
+                  <User size={14} className="mr-1 sm:mr-2 inline" />
+                  <span className="hidden sm:inline">Personal Info</span>
+                  <span className="sm:hidden">Personal</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('medical')}
-                  className={`flex-1 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex-1 min-w-0 px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'medical'
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <Heart size={16} className="mr-2 inline" />
-                  Medical Info
+                  <Heart size={14} className="mr-1 sm:mr-2 inline" />
+                  <span className="hidden sm:inline">Medical Info</span>
+                  <span className="sm:hidden">Medical</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('notifications')}
+                  className={`flex-1 min-w-0 px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'notifications'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Bell size={14} className="mr-1 sm:mr-2 inline" />
+                  <span className="hidden sm:inline">Notifications</span>
+                  <span className="sm:hidden">Notif</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('settings')}
-                  className={`flex-1 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex-1 min-w-0 px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'settings'
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <AlertTriangle size={16} className="mr-2 inline" />
+                  <AlertTriangle size={14} className="mr-1 sm:mr-2 inline" />
                   Settings
                 </button>
               </div>
@@ -346,7 +382,7 @@ export const PatientProfileComponent: React.FC = () => {
               <CardHeader>
                 <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
               </CardHeader>
-              <CardContent className="pt-0 space-y-4">
+              <CardContent className="pt-0 space-y-4 px-3 sm:px-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="First Name"
@@ -460,6 +496,11 @@ export const PatientProfileComponent: React.FC = () => {
             </Card>
           )}
 
+
+          {activeTab === 'notifications' && (
+            <NotificationPreferences />
+          )}
+
           {activeTab === 'settings' && (
             <Card>
               <CardHeader>
@@ -492,5 +533,6 @@ export const PatientProfileComponent: React.FC = () => {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 };

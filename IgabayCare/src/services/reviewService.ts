@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../supabaseClient';
 
 // Review interfaces
 export interface Review {
@@ -34,8 +34,7 @@ export interface ReviewWithDetails extends Review {
     clinic_name: string;
   };
   doctor?: {
-    first_name: string;
-    last_name: string;
+    full_name: string;
     specialization: string;
   };
   appointment: {
@@ -231,7 +230,7 @@ export class ReviewService {
           *,
           patient:patients(first_name, last_name),
           clinic:clinics(clinic_name),
-          doctor:doctors(first_name, last_name, specialization),
+          doctor:doctors(full_name, specialization),
           appointment:appointments(appointment_date, appointment_type)
         ` : '*')
         .eq('clinic_id', clinicId)
@@ -281,7 +280,7 @@ export class ReviewService {
         .select(options?.includeDetails ? `
           *,
           clinic:clinics(clinic_name),
-          doctor:doctors(first_name, last_name, specialization),
+          doctor:doctors(full_name, specialization),
           appointment:appointments(appointment_date, appointment_type)
         ` : '*')
         .eq('patient_id', patientId)
@@ -475,7 +474,7 @@ export class ReviewService {
           *,
           patient:patients(first_name, last_name),
           clinic:clinics(clinic_name),
-          doctor:doctors(first_name, last_name, specialization),
+          doctor:doctors(full_name, specialization),
           appointment:appointments(appointment_date, appointment_type)
         `)
         .eq('is_published', true)
@@ -512,7 +511,7 @@ export class ReviewService {
           *,
           patient:patients(first_name, last_name),
           clinic:clinics(clinic_name),
-          doctor:doctors(first_name, last_name, specialization),
+          doctor:doctors(full_name, specialization),
           appointment:appointments(appointment_date, appointment_type)
         `)
         .eq('is_published', true)

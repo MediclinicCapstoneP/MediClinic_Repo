@@ -27,11 +27,18 @@ CREATE TABLE IF NOT EXISTS public.clinics (
   description text,
   profile_picture_url text,
   profile_picture_path text,
+  latitude numeric(10,8),
+  longitude numeric(11,8),
   status text DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT clinics_pkey PRIMARY KEY (id)
 );
+
+-- Add latitude and longitude columns to existing clinics table if they don't exist
+ALTER TABLE public.clinics 
+ADD COLUMN IF NOT EXISTS latitude numeric(10,8),
+ADD COLUMN IF NOT EXISTS longitude numeric(11,8);
 
 -- 2. Drop existing RLS policies for clinics to recreate them
 DROP POLICY IF EXISTS "Clinics can view own profile" ON clinics;
@@ -158,6 +165,8 @@ SELECT
     number_of_doctors,
     number_of_staff,
     description,
+    latitude,
+    longitude,
     created_at
 FROM clinics 
 WHERE status = 'approved';
@@ -254,6 +263,8 @@ RETURNS TABLE (
     number_of_doctors integer,
     number_of_staff integer,
     description text,
+    latitude numeric,
+    longitude numeric,
     status text,
     created_at timestamptz,
     updated_at timestamptz
@@ -278,6 +289,8 @@ BEGIN
         c.number_of_doctors,
         c.number_of_staff,
         c.description,
+        c.latitude,
+        c.longitude,
         c.status,
         c.created_at,
         c.updated_at
@@ -320,6 +333,8 @@ RETURNS TABLE (
     state text,
     specialties text[],
     services text[],
+    latitude numeric,
+    longitude numeric,
     status text
 ) AS $$
 BEGIN
@@ -334,6 +349,8 @@ BEGIN
         c.state,
         c.specialties,
         c.services,
+        c.latitude,
+        c.longitude,
         c.status
     FROM clinics c
     WHERE c.status = 'approved'

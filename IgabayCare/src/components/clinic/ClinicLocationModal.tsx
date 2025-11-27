@@ -26,7 +26,7 @@ export const ClinicLocationModal: React.FC<ClinicLocationModalProps> = ({
 
   useEffect(() => {
     if (open && mapContainerRef.current && !mapRef.current) {
-      mapRef.current = L.map(mapContainerRef.current).setView([11.0519, 124.0036], 13);
+      mapRef.current = L.map(mapContainerRef.current).setView([11.049430, 124.005128], 13);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',

@@ -45,8 +45,8 @@ export const MapModal: React.FC<MapModalProps> = ({
   isOpen,
   onClose,
   onLocationSelect,
-  initialLatitude = 14.5995, // Manila, Philippines default
-  initialLongitude = 120.9842,
+  initialLatitude = 11.049430, // Specified default location
+  initialLongitude = 124.005128,
   title = "Select Clinic Location"
 }) => {
   const [position, setPosition] = useState<LatLng | null>(

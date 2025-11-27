@@ -22,12 +22,14 @@ export const SignInForm: React.FC = () => {
     setError(null);
 
     try {
+      console.log('Attempting patient sign in with email:', formData.email);
       const result = await roleBasedAuthService.patient.signIn(formData);
 
       if (result.success) {
         console.log('Patient sign in successful');
         navigate('/patient/dashboard');
       } else {
+        console.error('Patient sign in failed:', result.error);
         setError(result.error || 'Sign in failed');
       }
     } catch (err) {
@@ -58,7 +60,7 @@ export const SignInForm: React.FC = () => {
             <h3 className="text-xl font-semibold text-gray-800">Patient Sign In</h3>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} action="#" className="space-y-6">
               {error && (
                 <div className="p-3 bg-red-100 border border-red-300 rounded-lg text-sm text-red-800 flex items-center gap-2">
                   <AlertCircle size={18} className="text-red-600" />

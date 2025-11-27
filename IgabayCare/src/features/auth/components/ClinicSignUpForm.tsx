@@ -297,13 +297,13 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
             
             for (const service of formData.service_pricing) {
               if (service.service_name && service.base_price > 0) {
-                await clinicServicePricingService.createClinicService({
-                  clinic_id: result.clinic.id,
+                await clinicServicePricingService.createClinicService(result.clinic.id, {
                   service_name: service.service_name,
                   base_price: service.base_price,
                   description: service.description || '',
                   duration_minutes: service.duration_minutes || 30,
-                  service_category: 'consultation'
+                  service_category: 'consultation',
+                  clinic_id: result.clinic.id
                 });
               }
             }
@@ -617,7 +617,7 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+      <form className="space-y-6" onSubmit={handleSubmit} action="#">
                 {/* Step 1: Basic Information */}
                 {currentStep === 1 && (
                   <div className="space-y-6">
@@ -1140,8 +1140,8 @@ export const ClinicSignUpForm: React.FC<ClinicSignUpFormProps> = ({ onSuccess })
             isOpen={showMapModal}
             onClose={() => setShowMapModal(false)}
             onLocationSelect={handleLocationSelect}
-            initialLatitude={formData.latitude || 14.5995}
-            initialLongitude={formData.longitude || 120.9842}
+            initialLatitude={formData.latitude || 11.049430}
+            initialLongitude={formData.longitude || 124.005128}
             title="Select Your Clinic Location"
           />
         </div>

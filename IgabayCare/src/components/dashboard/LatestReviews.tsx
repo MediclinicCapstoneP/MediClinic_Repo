@@ -1,103 +1,13 @@
-import React from 'react';
-import { Star, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Star, Clock, Verified, ThumbsUp, ThumbsDown, MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
-
-interface Review {
-  id: string;
-  patientName: string;
-  patientImage: string;
-  rating: number;
-  reviewText: string;
-  source: 'Yelp' | 'PatientPop' | 'Facebook' | 'Google';
-  timestamp: string;
-  images?: string[];
-}
+import { reviewsService, type ReviewWithPatient } from '../../features/auth/utils/reviewsService';
 
 interface LatestReviewsProps {
-  reviews?: Review[];
+  clinicId?: string;
+  limit?: number;
 }
 
-const mockReviews: Review[] = [
-  {
-    id: '1',
-    patientName: 'Deena Timmons',
-    patientImage: '/api/placeholder/40/40',
-    rating: 5,
-    reviewText: 'I must once again praise Dr. Coleman for her outstanding advise and medical care. Her skills as a physician are stellar, and she will only recommend procedures that can enhance your physical beauty. The office is immaculate, colorful and inviting.',
-    source: 'Yelp',
-    timestamp: '5 hours ago',
-    images: [
-      '/api/placeholder/80/80',
-      '/api/placeholder/80/80',
-      '/api/placeholder/80/80',
-      '/api/placeholder/80/80'
-    ]
-  },
-  {
-    id: '2',
-    patientName: 'Sheila Lee',
-    patientImage: '/api/placeholder/40/40',
-    rating: 5,
-    reviewText: 'Dr. Coleman is the consumate professional. I have seen dermatologists in NYC and Beverly Hills, and she is by far the most knowledeable. As a physician, her primary concern is health, skin care, and screening.',
-    source: 'PatientPop',
-    timestamp: '2 days ago'
-  },
-  {
-    id: '3',
-    patientName: 'Sarah Doyle',
-    patientImage: '/api/placeholder/40/40',
-    rating: 5,
-    reviewText: 'Dr. Coleman clearly cares about her patients and spent time walking me through my skin\'s health and things I can do to stay looking my best.',
-    source: 'Facebook',
-    timestamp: '5 days ago'
-  }
-];
-
-const getSourceIcon = (source: string) => {
-  switch (source) {
-    case 'Yelp':
-      return (
-        <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-xs font-bold">Y</span>
-        </div>
-      );
-    case 'PatientPop':
-      return (
-        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-xs font-bold">P</span>
-        </div>
-      );
-    case 'Facebook':
-      return (
-        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-xs font-bold">f</span>
-        </div>
-      );
-    case 'Google':
-      return (
-        <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
-          <span className="text-white text-xs font-bold">G</span>
-        </div>
-      );
-    default:
-      return null;
-  }
-};
-
-const getSourceColor = (source: string) => {
-  switch (source) {
-    case 'Yelp':
-      return 'text-red-600';
-    case 'PatientPop':
-      return 'text-green-600';
-    case 'Facebook':
-      return 'text-blue-600';
-    case 'Google':
-      return 'text-blue-600';
-    default:
-      return 'text-gray-600';
-  }
-};
 
 const StarRating: React.FC<{ rating: number }> = ({ rating }) => {
   return (
@@ -114,80 +24,224 @@ const StarRating: React.FC<{ rating: number }> = ({ rating }) => {
   );
 };
 
-export const LatestReviews: React.FC<LatestReviewsProps> = ({ reviews = mockReviews }) => {
+const formatTimeAgo = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) {
+    return 'Just now';
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  } else {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
+};
+
+export const LatestReviews: React.FC<LatestReviewsProps> = ({ clinicId, limit = 5 }) => {
+  const [reviews, setReviews] = useState<ReviewWithPatient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (clinicId) {
+      fetchReviews();
+    }
+  }, [clinicId, limit]);
+
+  const fetchReviews = async () => {
+    if (!clinicId) return;
+
+    try {
+      setLoading(true);
+      const result = await reviewsService.getLatestReviews(clinicId, limit);
+      
+      if (result.success && result.reviews) {
+        setReviews(result.reviews);
+        setError(null);
+      } else {
+        setError(result.error || 'Failed to load reviews');
+      }
+    } catch (err) {
+      setError('Failed to load reviews');
+      console.error('Error fetching reviews:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card className="h-full">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold text-gray-900">Latest Reviews</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading reviews...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="h-full">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold text-gray-900">Latest Reviews</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <MessageCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 mb-2">Unable to load reviews</p>
+            <p className="text-sm text-gray-400">{error}</p>
+            <button 
+              onClick={fetchReviews}
+              className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Try again
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (reviews.length === 0) {
+    return (
+      <Card className="h-full">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold text-gray-900">Latest Reviews</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <Star className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 mb-2">No reviews yet</p>
+            <p className="text-sm text-gray-400">Patient reviews will appear here once they start leaving feedback.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="h-full">
       <CardHeader className="pb-4">
-        <CardTitle className="text-lg font-semibold text-gray-900">Latest Reviews</CardTitle>
+        <CardTitle className="text-lg font-semibold text-gray-900">
+          Latest Reviews ({reviews.length})
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {reviews.map((review) => (
           <div key={review.id} className="border-b border-gray-100 last:border-b-0 pb-4 last:pb-0">
             <div className="flex items-start space-x-3">
-              {/* Profile Picture with Source Badge */}
+              {/* Profile Picture with Verification Badge */}
               <div className="relative flex-shrink-0">
                 <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-sm font-medium">
-                      {review.patientName.charAt(0)}
+                      {(review.patients.first_name?.charAt(0) || 'U')}{(review.patients.last_name?.charAt(0) || 'U')}
                     </span>
                   </div>
                 </div>
-                {/* Source Badge */}
-                <div className="absolute -bottom-1 -right-1">
-                  {getSourceIcon(review.source)}
-                </div>
+                {/* Verification Badge */}
+                {review.is_verified && (
+                  <div className="absolute -bottom-1 -right-1">
+                    <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                      <Verified className="h-3 w-3 text-white" />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Review Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-semibold text-gray-900 truncate">
-                    {review.patientName}
-                  </h4>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900">
+                      {`${review.patients.first_name || ''} ${review.patients.last_name || ''}`.trim() || 'Unknown Patient'}
+                    </h4>
+                    {review.appointments && (
+                      <p className="text-xs text-gray-500">
+                        {review.appointments.appointment_type?.replace('_', ' ')} • {new Date(review.appointments.appointment_date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
                   <div className="flex items-center space-x-2 text-xs text-gray-500">
                     <Clock className="h-3 w-3" />
-                    <span>{review.timestamp}</span>
+                    <span>{formatTimeAgo(review.created_at)}</span>
                   </div>
                 </div>
 
-                {/* Rating and Source */}
+                {/* Rating */}
                 <div className="flex items-center space-x-2 mb-3">
                   <StarRating rating={review.rating} />
-                  <span className="text-xs text-gray-500">
-                    from {review.source}
+                  <span className="text-sm font-medium text-gray-700">
+                    {review.rating}.0
                   </span>
+                  {review.is_verified && (
+                    <span className="text-xs text-green-600 font-medium">
+                      Verified
+                    </span>
+                  )}
                 </div>
 
                 {/* Review Text */}
-                <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                  {review.reviewText}
-                </p>
+                {review.review_text && (
+                  <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                    "{review.review_text}"
+                  </p>
+                )}
 
-                {/* Review Images (if any) */}
-                {review.images && review.images.length > 0 && (
-                  <div className="flex space-x-2 mb-3">
-                    {review.images.slice(0, 4).map((image, index) => (
-                      <div
-                        key={index}
-                        className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center"
-                      >
-                        <div className="w-12 h-12 bg-gradient-to-br from-gray-300 to-gray-400 rounded-lg flex items-center justify-center">
-                          <span className="text-gray-500 text-xs">IMG</span>
-                        </div>
+                {/* Quality Metrics */}
+                {(review.service_quality || review.facility_cleanliness || review.staff_friendliness) && (
+                  <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+                    {review.service_quality && (
+                      <div className="text-center">
+                        <p className="font-medium text-gray-600">Service</p>
+                        <p className="text-blue-600">{review.service_quality}/5</p>
                       </div>
-                    ))}
+                    )}
+                    {review.facility_cleanliness && (
+                      <div className="text-center">
+                        <p className="font-medium text-gray-600">Cleanliness</p>
+                        <p className="text-green-600">{review.facility_cleanliness}/5</p>
+                      </div>
+                    )}
+                    {review.staff_friendliness && (
+                      <div className="text-center">
+                        <p className="font-medium text-gray-600">Staff</p>
+                        <p className="text-purple-600">{review.staff_friendliness}/5</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Source Link */}
+                {/* Recommendation */}
                 <div className="flex items-center justify-between">
-                  <span className={`text-xs font-medium ${getSourceColor(review.source)}`}>
-                    {review.source} Review
+                  <div className="flex items-center space-x-2">
+                    {review.would_recommend ? (
+                      <>
+                        <ThumbsUp className="h-4 w-4 text-green-600" />
+                        <span className="text-xs text-green-600 font-medium">Recommends</span>
+                      </>
+                    ) : (
+                      <>
+                        <ThumbsDown className="h-4 w-4 text-red-600" />
+                        <span className="text-xs text-red-600 font-medium">Does not recommend</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    IgabayCare Review
                   </span>
-                  <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">
-                    View Full Review
-                  </button>
                 </div>
               </div>
             </div>
@@ -197,10 +251,10 @@ export const LatestReviews: React.FC<LatestReviewsProps> = ({ reviews = mockRevi
         {/* View All Reviews Button */}
         <div className="pt-4 border-t border-gray-100">
           <button className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium py-2 rounded-lg hover:bg-blue-50 transition-colors">
-            View All Reviews
+            View All {reviews.length > limit ? `${reviews.length} ` : ''}Reviews
           </button>
         </div>
       </CardContent>
     </Card>
   );
-}; 
+};

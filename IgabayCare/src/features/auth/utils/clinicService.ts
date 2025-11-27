@@ -61,6 +61,8 @@ export interface CreateClinicData {
   number_of_staff?: number;
   description?: string;
   profile_pic_url?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export const clinicService = {

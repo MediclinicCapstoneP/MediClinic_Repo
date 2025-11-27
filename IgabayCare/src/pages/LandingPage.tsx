@@ -159,28 +159,37 @@ const LandingPage = () => {
             and deliver exceptional patient care.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-slide-up mb-12">
-            <Button 
-              variant="primary" 
-              size="lg" 
-              onClick={() => navigate("/signup")} 
-              className="text-lg px-8 py-4 shadow-primary-glow hover:shadow-xl"
-            >
-              <Heart className="mr-2 h-5 w-5" />
-              Start Your Healthcare Journey
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="lg" 
-              className="text-lg px-8 py-4 border-primary-300 text-primary-700 hover:bg-primary-50"
-            >
-              <Link to="/learn-more" className="flex items-center">
-                <Shield className="mr-2 h-5 w-5" />
-                <span>Learn About Security</span>
-              </Link>
-            </Button>
-          </div>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center animate-slide-up mb-12">
+          <Button 
+            variant="primary" 
+            size="lg" 
+            onClick={() => navigate("/signup")} 
+            className="text-lg px-8 py-4 shadow-primary-glow hover:shadow-xl"
+          >
+            <Heart className="mr-2 h-5 w-5" />
+            Start Your Healthcare Journey
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="text-lg px-8 py-4 border-primary-300 text-primary-700 hover:bg-primary-50"
+          >
+            <Link to="/learn-more" className="flex items-center">
+              <Shield className="mr-2 h-5 w-5" />
+              <span>Learn About Security</span>
+            </Link>
+          </Button>
+          <Button 
+            variant="medical" 
+            size="lg" 
+            onClick={() => navigate("/chat")} 
+            className="text-lg px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <MessageCircle className="mr-2 h-5 w-5" />
+            Try AI Assistant
+          </Button>
+        </div>
 
           {/* Trust indicators */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16">
