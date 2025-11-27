@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { TooltipProvider } from '@radix-ui/react-tooltip';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { prescriptionService, type PrescriptionWithMedications } from '../../services/prescriptionService';
 import { authService } from '../../features/auth/utils/authService';
 import { patientService } from '../../features/auth/utils/patientService';
@@ -224,92 +224,77 @@ const PatientPrescriptionsPage: React.FC = () => {
                     </span>
                   </p>
                 </div>
-            <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm">
-                <h3 className="font-medium text-blue-900 mb-1">Understanding Your Medications</h3>
-                <p className="text-blue-800">
-                  This page shows all medications prescribed by your doctors. 
-                  <strong className="text-blue-900"> "Currently Taking"</strong> means you should continue taking these medications. 
-                  If you have questions or experience side effects, contact your doctor immediately.
-                  <span className="inline-flex items-center gap-1 ml-2">
-                    <HelpCircle size={12} className="text-blue-600" />
-                    <span className="text-xs">Hover over help icons for explanations</span>
-                  </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Header with navigation and patient info */}
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPatientHome}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft size={16} />
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <Home size={16} className="sm:hidden" />
+              </Button>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Medications</h1>
+                <p className="text-gray-600">
+                  {patientInfo ? 
+                    `${patientInfo.first_name} ${patientInfo.last_name} - Track your medications and instructions from your doctor` :
+                    'Track your medications and instructions from your doctor'
+                  }
                 </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Header with navigation and patient info */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex items-center gap-4">
             <Button
+              onClick={loadPrescriptions}
+              disabled={loading}
               variant="outline"
               size="sm"
-              onClick={goToPatientHome}
-              className="flex items-center gap-2"
             >
-              <ArrowLeft size={16} />
-              <span className="hidden sm:inline">Back to Dashboard</span>
-              <Home size={16} className="sm:hidden" />
+              <RefreshCw size={16} className="mr-2" />
+              Refresh
             </Button>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Medications</h1>
-              <p className="text-gray-600">
-                {patientInfo ? 
-                  `${patientInfo.first_name} ${patientInfo.last_name} - Track your medications and instructions from your doctor` :
-                  'Track your medications and instructions from your doctor'
-                }
-              </p>
-            </div>
           </div>
           
-          <Button
-            onClick={loadPrescriptions}
-            disabled={loading}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCw size={16} className="mr-2" />
-            Refresh
-          </Button>
-        </div>
-
-        {/* Quick stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-gray-600">{stats.total}</div>
-              <div className="text-sm text-gray-600">All Medications</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-              <div className="text-sm text-gray-600">Currently Taking</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
-              <div className="text-sm text-gray-600">Treatment Done</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
-              <div className="text-sm text-gray-600">No Longer Valid</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-purple-600">{stats.recentCount}</div>
-              <div className="text-sm text-gray-600">New This Month</div>
-            </CardContent>
-          </Card>
-        </div>
+          {/* Quick stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-gray-600">{stats.total}</div>
+                <div className="text-sm text-gray-600">All Medications</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+                <div className="text-sm text-gray-600">Currently Taking</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
+                <div className="text-sm text-gray-600">Treatment Done</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-orange-600">{stats.expired}</div>
+                <div className="text-sm text-gray-600">No Longer Valid</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-purple-600">{stats.recentCount}</div>
+                <div className="text-sm text-gray-600">New This Month</div>
+              </CardContent>
+            </Card>
+          </div>
 
         {/* Search and filter controls */}
         <Card>
@@ -513,34 +498,55 @@ const PatientPrescriptionsPage: React.FC = () => {
                               <div className="text-sm text-gray-600 space-y-1">
                                 <div>
                                   <strong>Strength:</strong> {medication.strength}
-                                  <Tooltip content="The amount of active medicine in each pill/dose">
-                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
-                                  </Tooltip>
+                                  <Tooltip.Root>
+                                    <Tooltip.Trigger asChild>
+                                      <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Content side="top" className="bg-gray-800 text-white text-xs px-2 py-1 rounded" sideOffset={5}>
+                                      The amount of active medicine in each pill/dose
+                                      <Tooltip.Arrow className="fill-gray-800" />
+                                    </Tooltip.Content>
+                                  </Tooltip.Root>
                                 </div>
                                 <div>
                                   <strong>How much to take:</strong> {medication.dosage}
-                                  <Tooltip content="The number of pills or amount of medicine to take each time">
-                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
-                                  </Tooltip>
+                                  <Tooltip.Root>
+                                    <Tooltip.Trigger asChild>
+                                      <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Content side="top" className="bg-gray-800 text-white text-xs px-2 py-1 rounded" sideOffset={5}>
+                                      The number of pills or amount of medicine to take each time
+                                      <Tooltip.Arrow className="fill-gray-800" />
+                                    </Tooltip.Content>
+                                  </Tooltip.Root>
                                 </div>
                                 <div>
                                   <strong>How often:</strong> {medication.frequency}
-                                  <Tooltip content="How many times per day you should take this medicine">
-                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
-                                  </Tooltip>
+                                  <Tooltip.Root>
+                                    <Tooltip.Trigger asChild>
+                                      <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Content side="top" className="bg-gray-800 text-white text-xs px-2 py-1 rounded" sideOffset={5}>
+                                      How many times per day you should take this medicine
+                                      <Tooltip.Arrow className="fill-gray-800" />
+                                    </Tooltip.Content>
+                                  </Tooltip.Root>
                                 </div>
                                 <div>
                                   <strong>For how long:</strong> {medication.duration}
-                                  <Tooltip content="The total time period you need to take this medicine">
-                                    <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
-                                  </Tooltip>
+                                  <Tooltip.Root>
+                                    <Tooltip.Trigger asChild>
+                                      <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Content side="top" className="bg-gray-800 text-white text-xs px-2 py-1 rounded" sideOffset={5}>
+                                      The total time period you need to take this medicine
+                                      <Tooltip.Arrow className="fill-gray-800" />
+                                    </Tooltip.Content>
+                                  </Tooltip.Root>
                                 </div>
                                 {medication.timing && (
                                   <div>
                                     <strong>When to take:</strong> {medication.timing}
-                                    <Tooltip content="The best time of day to take this medicine (e.g., with food, before meals)">
-                                      <HelpCircle size={12} className="inline-block ml-1 text-gray-400 cursor-help" />
-                                    </Tooltip>
                                   </div>
                                 )}
                               </div>
@@ -769,7 +775,8 @@ const PatientPrescriptionsPage: React.FC = () => {
         )}
       </div>
     </div>
-  );
+  </Tooltip.Provider>
+);
 };
 
 export default PatientPrescriptionsPage;
