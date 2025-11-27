@@ -93,31 +93,37 @@ const LandingPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-medical-50 to-clinical-50 text-foreground">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 text-foreground relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-gradient-to-br from-blue-200 to-sky-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
+        <div className="absolute top-40 right-20 w-72 h-72 bg-gradient-to-br from-sky-200 to-cyan-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-8 left-40 w-72 h-72 bg-gradient-to-br from-cyan-200 to-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+      </div>
 
       {/* Header */}
-      <header className="border-b border-primary-200 bg-white/90 backdrop-blur-sm sticky top-0 z-50 shadow-medical">
+      <header className="border-b border-blue-200 bg-white/95 backdrop-blur-sm sticky top-0 z-50 shadow-lg relative">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-primary rounded-xl shadow-medical">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-sky-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
               <Heart className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-hero bg-clip-text text-transparent">IgabayCare</span>
-            <span className="text-xs text-medical-600 font-medium px-2 py-1 bg-medical-50 rounded-full border border-medical-200">Medical Platform</span>
+            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">IgabayCare</span>
+            <span className="text-xs text-blue-600 font-medium px-2 py-1 bg-blue-50 rounded-full border border-blue-200">Medical Platform</span>
           </div>
           <nav className="hidden md:flex items-center gap-6">
-            <a href="#features" className="text-neutral-600 hover:text-primary-600 transition-colors font-medium flex items-center">
+            <a href="#features" className="text-neutral-600 hover:text-blue-600 transition-colors font-medium flex items-center">
               <Activity className="h-4 w-4 mr-1" />
               Features
             </a>
-            <a href="#about" className="text-neutral-600 hover:text-primary-600 transition-colors font-medium flex items-center">
+            <a href="#about" className="text-neutral-600 hover:text-blue-600 transition-colors font-medium flex items-center">
               <Shield className="h-4 w-4 mr-1" />
               About
             </a>
-            <Button variant="outline" size="sm" onClick={() => navigate("/signin")} className="border-primary-500 text-primary-600 hover:bg-primary-50">
+            <Button variant="outline" size="sm" onClick={() => navigate("/signin")} className="border-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400">
               Patient Portal
             </Button>
-            <Button variant="medical" size="sm" onClick={() => navigate("/clinic-signin")} className="bg-clinical-500 hover:bg-clinical-600">
+            <Button variant="medical" size="sm" onClick={() => navigate("/clinic-signin")} className="bg-gradient-to-r from-sky-500 to-cyan-600 hover:from-sky-600 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl">
               Provider Access
             </Button>
           </nav>
@@ -126,21 +132,21 @@ const LandingPage = () => {
 
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 text-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-50/30 via-medical-50/30 to-clinical-50/30 rounded-3xl"></div>
-        <div className="absolute top-10 left-10 w-20 h-20 bg-primary-200/30 rounded-full blur-xl"></div>
-        <div className="absolute bottom-10 right-10 w-32 h-32 bg-medical-200/30 rounded-full blur-xl"></div>
-        <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-clinical-200/30 rounded-full blur-lg"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-50/40 via-sky-50/40 to-cyan-50/40 rounded-3xl"></div>
+        <div className="absolute top-10 left-10 w-20 h-20 bg-gradient-to-br from-blue-200 to-sky-200 rounded-full blur-xl opacity-30 animate-blob"></div>
+        <div className="absolute bottom-10 right-10 w-32 h-32 bg-gradient-to-br from-sky-200 to-cyan-200 rounded-full blur-xl opacity-30 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-gradient-to-br from-cyan-200 to-blue-200 rounded-full blur-lg opacity-30 animate-blob animation-delay-4000"></div>
 
         <div className="relative max-w-5xl mx-auto">
           <div className="animate-bounce-gentle mb-8">
-            <div className="inline-flex items-center gap-3 bg-white/80 text-primary-700 px-6 py-3 rounded-full text-sm font-medium shadow-medical border border-primary-200">
+            <div className="inline-flex items-center gap-3 bg-white/90 text-blue-700 px-6 py-3 rounded-full text-sm font-medium shadow-lg border border-blue-200 backdrop-blur-sm">
               <div className="flex items-center">
-                <Award className="h-4 w-4 text-clinical-500 mr-1" />
-                <span className="text-clinical-600 font-semibold">HIPAA Compliant</span>
+                <Award className="h-4 w-4 text-cyan-600 mr-1" />
+                <span className="text-cyan-700 font-semibold">HIPAA Compliant</span>
               </div>
-              <div className="w-px h-4 bg-neutral-300"></div>
+              <div className="w-px h-4 bg-blue-300"></div>
               <div className="flex items-center">
-                <Shield className="h-4 w-4 text-primary-500 mr-1" />
+                <Shield className="h-4 w-4 text-blue-600 mr-1" />
                 <span>Trusted by 500+ Clinics</span>
               </div>
             </div>
@@ -148,7 +154,7 @@ const LandingPage = () => {
           
           <h1 className="text-5xl md:text-7xl font-bold text-foreground mb-6 animate-slide-up leading-tight">
             Professional Healthcare,{" "}
-            <span className="bg-gradient-hero bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-600 via-sky-600 to-cyan-600 bg-clip-text text-transparent">
               Digitally Enhanced
             </span>
           </h1>
@@ -164,7 +170,7 @@ const LandingPage = () => {
             variant="primary" 
             size="lg" 
             onClick={() => navigate("/signup")} 
-            className="text-lg px-8 py-4 shadow-primary-glow hover:shadow-xl"
+            className="text-lg px-8 py-4 bg-gradient-to-r from-blue-500 to-sky-600 hover:from-blue-600 hover:to-sky-700 shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             <Heart className="mr-2 h-5 w-5" />
             Start Your Healthcare Journey
@@ -173,7 +179,7 @@ const LandingPage = () => {
           <Button 
             variant="outline" 
             size="lg" 
-            className="text-lg px-8 py-4 border-primary-300 text-primary-700 hover:bg-primary-50"
+            className="text-lg px-8 py-4 border-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
           >
             <Link to="/learn-more" className="flex items-center">
               <Shield className="mr-2 h-5 w-5" />
@@ -184,7 +190,7 @@ const LandingPage = () => {
             variant="medical" 
             size="lg" 
             onClick={() => navigate("/chat")} 
-            className="text-lg px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white"
+            className="text-lg px-8 py-4 bg-gradient-to-r from-sky-500 to-cyan-600 hover:from-sky-600 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             <MessageCircle className="mr-2 h-5 w-5" />
             Try AI Assistant
@@ -517,6 +523,7 @@ const LandingPage = () => {
         </div>
       </footer>
     </div>
+
   );
 };
 

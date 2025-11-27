@@ -157,10 +157,6 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
           ...(c.custom_specialties || []),
           ...((c.services_with_pricing || []).map((s: any) => s.service_name))
         ];
-        const matches = (
-          (c.clinic_name || '').toLowerCase().includes(q) ||
-          servicesList.some((s: string) => s.toLowerCase().includes(q))
-        );
         const available = (c.services_with_pricing || []).some((s: any) => s.is_available);
         const distance = loc && c.latitude && c.longitude
           ? calculateDistance(loc.lat, loc.lng, Number(c.latitude), Number(c.longitude))
@@ -198,19 +194,19 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
 
   return (
     <>
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-[#378CE7] shadow-sm border-b border-[#5356FF] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Left side - Logo and title */}
           <div className="flex items-center space-x-3 sm:space-x-5">
             <div className="flex items-center space-x-2">
-              <div className="p-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
+              <div className="p-1 bg-gradient-to-r from-[#5356FF] to-[#378CE7] rounded-lg">
                 <Heart className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-              <span className="text-base sm:text-lg font-bold text-gray-900">iGabay</span>
+              <span className="text-base sm:text-lg font-bold text-white">iGabay</span>
             </div>
 
             <div className="hidden lg:block">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+              <h2 className="text-lg sm:text-xl font-semibold text-white">
                 {activeTab === 'dashboard'
                   ? 'Dashboard'
                   : activeTab === 'appointments'
@@ -221,7 +217,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
                   ? 'My Profile'
                   : 'Patient Portal'}
               </h2>
-              <p className="text-xs sm:text-sm text-gray-500">Patient Portal</p>
+              <p className="text-xs sm:text-sm text-[#DFF5FF]">Patient Portal</p>
             </div>
           </div>
 
@@ -236,7 +232,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
                 onChange={(e) => handleSearch(e.target.value)}
                 onFocus={() => searchQuery && setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#5356FF] focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500"
               />
               {showSuggestions && (
                 <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
@@ -263,7 +259,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
                             </div>
                             <div className="flex items-center gap-3">
                               {typeof s.distance === 'number' && (
-                                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">{s.distance.toFixed(1)} km</span>
+                                <span className="text-xs font-medium text-[#5356FF] bg-[#DFF5FF] px-2 py-1 rounded-full">{s.distance.toFixed(1)} km</span>
                               )}
                               <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.available ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{s.available ? 'Available' : 'Limited'}</span>
                             </div>
@@ -289,10 +285,10 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
 
             {/* Profile */}
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-[#67C6E3] text-[#5356FF] rounded-full flex items-center justify-center">
                 <User className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-700 hidden md:block">
+              <span className="text-sm font-medium text-white hidden md:block">
                 {user?.firstName || user?.user_metadata?.first_name || 'Patient'}
               </span>
             </div>
@@ -323,7 +319,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
               onChange={(e) => handleSearch(e.target.value)}
               onFocus={() => searchQuery && setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5356FF] focus:border-[#5356FF]"
               autoFocus
             />
             {showSuggestions && (
@@ -386,7 +382,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={markAllAsRead}
-                className="text-blue-600 hover:text-blue-700"
+                className="text-[#5356FF] hover:text-[#378CE7]"
               >
                 Mark all as read
               </Button>
@@ -407,7 +403,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
                   className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                     notification.read
                       ? 'bg-gray-50 border-gray-200'
-                      : 'bg-blue-50 border-blue-200'
+                      : 'bg-[#DFF5FF] border-[#5356FF]'
                   }`}
                 >
                   <div className="flex items-start space-x-3">
@@ -425,7 +421,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
                         {notification.message}
                       </p>
                       {!notification.read && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                        <div className="w-2 h-2 bg-[#5356FF] rounded-full mt-2"></div>
                       )}
                     </div>
                   </div>

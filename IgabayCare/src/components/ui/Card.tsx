@@ -3,19 +3,32 @@ import { ICardComponent, ICardHeaderComponent, ICardContentComponent, IMedicalCa
 import { useMedicalTheme } from '../../core/providers/MedicalThemeProvider';
 
 // Base card styles
-const getCardStyles = (shadow: string, border: boolean, interactive: boolean) => {
+const getCardStyles = (shadow: string, border: boolean, interactive: boolean, variant: string = 'default') => {
   const shadowClasses = {
     'none': '',
     'sm': 'shadow-sm',
     'md': 'shadow-md',
-    'lg': 'shadow-lg'
+    'lg': 'shadow-lg',
+    'xl': 'shadow-xl',
+    '2xl': 'shadow-2xl'
+  };
+  
+  const variantStyles = {
+    'default': 'bg-white',
+    'blue': 'bg-gradient-to-br from-blue-50 to-sky-50 border-blue-200',
+    'medical': 'bg-gradient-to-br from-sky-50 to-cyan-50 border-sky-200',
+    'clinical': 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200',
+    'glass': 'bg-white/80 backdrop-blur-sm border-white/20',
+    'dark': 'bg-gray-900 border-gray-700'
   };
   
   return [
-    'bg-white rounded-xl',
-    border ? 'border border-neutral-200' : '',
-    shadowClasses[shadow as keyof typeof shadowClasses] || 'shadow-sm',
-    interactive ? 'hover:shadow-md hover:border-primary-200 transition-all duration-200 cursor-pointer' : '',
+    variantStyles[variant as keyof typeof variantStyles] || variantStyles.default,
+    'rounded-2xl',
+    border ? 'border' : '',
+    shadowClasses[shadow as keyof typeof shadowClasses] || 'shadow-md',
+    interactive ? 'hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer' : '',
+    'transform transition-all duration-200'
   ].filter(Boolean).join(' ');
 };
 
@@ -38,10 +51,11 @@ export const Card: React.FC<ICardComponent> = ({
   interactive = false,
   padding = 'md',
   border = true,
-  shadow = 'sm'
+  shadow = 'sm',
+  variant = 'default'
 }) => {
   const cardClasses = [
-    getCardStyles(shadow, border, hover || interactive),
+    getCardStyles(shadow, border, hover || interactive, variant),
     getPaddingClasses(padding),
     className
   ].filter(Boolean).join(' ');

@@ -22,6 +22,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authService.getCurrentUser().then((currentUser) => {
       setUser(currentUser);
       setLoading(false);
+    }).catch((error) => {
+      console.error('Auth initialization error:', error);
+      // For development - fallback to login if Supabase is not configured
+      setLoading(false);
     });
 
     // Listen for auth changes
@@ -59,7 +63,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       await authService.signOut();
-      // User state will be updated by the auth state listener
+      // Immediately clear user state and loading
+      setUser(null);
+      setLoading(false);
     } catch (error) {
       setLoading(false);
       throw error;

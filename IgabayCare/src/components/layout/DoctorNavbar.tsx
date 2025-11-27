@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Search, LogOut, Stethoscope, Bell, Menu, X, Activity, ChevronDown } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { User, Search, LogOut, Stethoscope, X, Activity, ChevronDown } from 'lucide-react';
 import { DoctorNotificationDropdown } from '../doctor/DoctorNotificationDropdown';
 
 interface DoctorNavbarProps {
@@ -95,21 +94,21 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
 
   return (
     <>
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-[#378CE7] shadow-sm border-b border-[#5356FF] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between">
             {/* Left side - Logo and title */}
             <div className="flex items-center space-x-4 min-w-0">
               <div className="flex items-center space-x-3">
                 <div className="relative">
-                  <div className="p-2 bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 rounded-xl shadow-md">
+                  <div className="p-2 bg-gradient-to-br from-[#5356FF] to-[#378CE7] rounded-xl shadow-md">
                     <Stethoscope className="h-6 w-6 text-white" />
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 border-2 border-white rounded-full animate-pulse"></div>
                 </div>
                 <div className="hidden sm:block">
-                  <h1 className="text-xl font-bold text-gray-900 tracking-tight">iGabay Doctor</h1>
-                  <p className="text-xs text-blue-600 font-medium">Medical Practice Portal</p>
+                  <h1 className="text-xl font-bold text-white tracking-tight">iGabay Doctor</h1>
+                  <p className="text-xs text-[#DFF5FF] font-medium">Medical Practice Portal</p>
                 </div>
               </div>
               
@@ -117,10 +116,10 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
                 <div className="flex items-center space-x-2">
                   <Activity className="h-4 w-4 text-gray-400" />
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 truncate">
+                    <h2 className="text-lg font-semibold text-white truncate">
                       {getPageTitle()}
                     </h2>
-                    <p className="text-sm text-gray-500 truncate">{getPageDescription()}</p>
+                    <p className="text-sm text-[#DFF5FF] truncate">{getPageDescription()}</p>
                   </div>
                 </div>
               </div>
@@ -130,7 +129,7 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
             <div className="flex-1 max-w-lg mx-4 hidden md:block">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Search className={`h-4 w-4 transition-colors ${isSearchFocused ? 'text-blue-500' : 'text-gray-400'}`} />
+                  <Search className={`h-4 w-4 transition-colors ${isSearchFocused ? 'text-[#5356FF]' : 'text-gray-400'}`} />
                 </div>
                 <input
                   ref={searchRef}
@@ -140,7 +139,7 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
                   onChange={(e) => handleSearch(e.target.value)}
                   onFocus={() => setIsSearchFocused(true)}
                   onBlur={() => setIsSearchFocused(false)}
-                  className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500`}
+                  className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#5356FF] focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500`}
                 />
                 {searchQuery && (
                   <button
@@ -173,14 +172,14 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
                   className="flex items-center space-x-2 p-2 rounded-xl hover:bg-gray-100 transition-colors"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-sm">
+                  <div className="w-8 h-8 bg-gradient-to-br from-[#5356FF] to-[#378CE7] rounded-full flex items-center justify-center text-white font-medium text-sm shadow-sm">
                     {getDoctorInitials()}
                   </div>
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-700 truncate max-w-32">
+                    <p className="text-sm font-medium text-white truncate max-w-32">
                       {getDoctorName()}
                     </p>
-                    <p className="text-xs text-gray-500">Doctor</p>
+                    <p className="text-xs text-[#DFF5FF]">Doctor</p>
                   </div>
                   <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform hidden sm:block ${showProfileMenu ? 'rotate-180' : ''}`} />
                 </button>

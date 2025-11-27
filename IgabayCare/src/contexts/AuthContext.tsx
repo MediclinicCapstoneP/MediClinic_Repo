@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { User } from '../types';
+import { sessionManager } from '../utils/sessionManager';
 
 interface AuthContextType {
   user: User | null;
@@ -14,9 +15,67 @@ interface AuthContextType {
   availableRoles: string[];
   fetchUserProfile: (userId: string) => Promise<void>;
   fetchAvailableRoles: (userId: string) => Promise<void>;
+  error: Error | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Session storage keys for browser-specific session management
+ * Using sessionStorage instead of localStorage to support multiple browser sessions
+ */
+const SESSION_KEYS = {
+  activeRole: "mediclinic_active_role",
+  sessionCache: "mediclinic_session_cache",
+};
+
+/**
+ * Utility: save session to sessionStorage (browser-specific)
+ */
+const saveSessionToCache = (session: any | null) => {
+  try {
+    if (!session) {
+      sessionStorage.removeItem(SESSION_KEYS.sessionCache);
+      return;
+    }
+    sessionStorage.setItem(SESSION_KEYS.sessionCache, JSON.stringify(session));
+  } catch (err) {
+    console.warn("Failed to cache session:", err);
+  }
+};
+
+const loadSessionFromCache = (): any | null => {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEYS.sessionCache);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn("Failed to read cached session:", err);
+    return null;
+  }
+};
+
+const saveActiveRoleToSession = (role: 'patient' | 'clinic' | null) => {
+  try {
+    if (!role) {
+      sessionStorage.removeItem(SESSION_KEYS.activeRole);
+    } else {
+      sessionStorage.setItem(SESSION_KEYS.activeRole, role);
+    }
+  } catch (err) {
+    console.warn("Failed to persist active role:", err);
+  }
+};
+
+const loadActiveRoleFromSession = (): 'patient' | 'clinic' | null => {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEYS.activeRole);
+    if (!raw) return null;
+    return raw as 'patient' | 'clinic';
+  } catch {
+    return null;
+  }
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -31,140 +90,150 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
+  const [error, setError] = useState<Error | null>(null);
+  const [initializing, setInitializing] = useState(true);
 
+  // Use ref to avoid dependency loops
+  const supabaseUserRef = useRef<SupabaseUser | null>(null);
+
+  // Update ref when supabaseUser changes
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setSupabaseUser(session.user);
-        fetchUserProfile(session.user.id);
-        fetchAvailableRoles(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    supabaseUserRef.current = supabaseUser;
+  }, [supabaseUser]);
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state change event:', event);
-        if (session?.user) {
-          setSupabaseUser(session.user);
-          await fetchUserProfile(session.user.id);
-          await fetchAvailableRoles(session.user.id);
-        } else {
-          setSupabaseUser(null);
-          setUser(null);
-          setAvailableRoles([]);
+  const fetchUserProfile = useCallback(async (userId: string) => {
+    try {
+      console.log('[Auth] Fetching user profile for user ID:', userId);
+
+      // Run both queries in parallel
+      const [patientRes, clinicRes] = await Promise.all([
+        supabase.from('patients').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('clinics').select('*').eq('user_id', userId).maybeSingle(),
+      ]);
+
+      // If both exist, choose active role from sessionStorage or default to first
+      const roles: ('patient' | 'clinic')[] = [];
+      if (patientRes?.data) roles.push('patient');
+      if (clinicRes?.data) roles.push('clinic');
+
+      setAvailableRoles(roles);
+
+      // Determine active role: prefer sessionStorage, otherwise first available
+      const persisted = loadActiveRoleFromSession();
+      let activeRole: 'patient' | 'clinic' | undefined;
+      if (persisted && roles.includes(persisted)) {
+        activeRole = persisted;
+      } else if (roles.length > 0) {
+        activeRole = roles[0];
+        saveActiveRoleToSession(activeRole);
+      }
+
+      // Build user profile depending on role
+      if (activeRole === 'patient' && patientRes?.data) {
+        const p = patientRes.data;
+        setUser({
+          id: userId,
+          email: p.email ?? supabaseUserRef.current?.email ?? '',
+          role: 'patient',
+          createdAt: p.created_at ?? null,
+        });
+        console.log('[Auth] Patient profile set:', p);
+        return;
+      }
+
+      if (activeRole === 'clinic' && clinicRes?.data) {
+        const c = clinicRes.data;
+        setUser({
+          id: userId,
+          email: c.email ?? supabaseUserRef.current?.email ?? '',
+          role: 'clinic',
+          createdAt: c.created_at ?? null,
+        });
+        console.log('[Auth] Clinic profile set:', c);
+        return;
+      }
+
+      // No profile found: create a minimal fallback user
+      console.warn('[Auth] No profile found; creating minimal fallback user');
+      setUser({
+        id: userId,
+        email: supabaseUserRef.current?.email ?? '',
+        role: (roles.includes('patient') ? 'patient' : roles[0]) ?? 'patient',
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error('[Auth] fetchUserProfile error', err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      // Fallback minimal user to avoid indefinite loading
+      setUser((prev) =>
+        prev ?? {
+          id: userId,
+          email: supabaseUserRef.current?.email ?? '',
+          role: 'patient',
+          createdAt: new Date().toISOString(),
         }
-        // Only set loading to false after processing is complete
-        setLoading(false);
-      }
-    );
+      );
+    }
+  }, []); // Remove supabaseUser dependency
 
-    return () => subscription.unsubscribe();
+  const fetchAvailableRoles = useCallback(async (userId: string) => {
+    try {
+      console.log('[Auth] Fetching available roles for user ID:', userId);
+
+      const [patientRes, clinicRes] = await Promise.all([
+        supabase.from('patients').select('id').eq('user_id', userId).maybeSingle(),
+        supabase.from('clinics').select('id').eq('user_id', userId).maybeSingle(),
+      ]);
+
+      const roles: ('patient' | 'clinic')[] = [];
+      if (patientRes?.data) roles.push('patient');
+      if (clinicRes?.data) roles.push('clinic');
+
+      setAvailableRoles(roles);
+      console.log('[Auth] Available roles set:', roles);
+      return roles;
+    } catch (err: any) {
+      console.error('[Auth] fetchAvailableRoles error', err);
+      setAvailableRoles([]);
+      return [];
+    }
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      console.log('Fetching user profile for user ID:', userId);
-      
-      // Try to get patient profile first
-      const { data: patientProfile, error: patientError } = await supabase
-        .from('patients')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (patientProfile && !patientError) {
-        setUser({
-          id: userId,
-          email: patientProfile.email,
-          role: 'patient',
-          createdAt: patientProfile.created_at,
-        });
-        console.log('Patient profile set:', patientProfile);
-        return;
-      }
-      
-      // If no patient profile, try to get clinic profile
-      const { data: clinicProfile, error: clinicError } = await supabase
-        .from('clinics')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (clinicProfile && !clinicError) {
-        setUser({
-          id: userId,
-          email: clinicProfile.email,
-          role: 'clinic',
-          createdAt: clinicProfile.created_at,
-        });
-        console.log('Clinic profile set:', clinicProfile);
-        return;
-      }
-      
-      console.log('No profile found for user ID:', userId);
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-    }
-  };
-
-  const fetchAvailableRoles = async (userId: string) => {
-    try {
-      console.log('Fetching available roles for user ID:', userId);
-      // Fetch all profiles for this user to determine available roles
-      const roles = [];
-      
-      // Check if user has a patient profile
-      const { data: patientProfile } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('user_id', userId)
-        .single();
-      
-      if (patientProfile) {
-        roles.push('patient');
-      }
-      
-      // Check if user has a clinic profile
-      const { data: clinicProfile } = await supabase
-        .from('clinics')
-        .select('id')
-        .eq('user_id', userId)
-        .single();
-      
-      if (clinicProfile) {
-        roles.push('clinic');
-      }
-      
-      setAvailableRoles(roles);
-      console.log('Available roles set:', roles);
-    } catch (error) {
-      console.error('Error fetching available roles:', error);
-    }
-  };
-
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
+    setError(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
-    } catch (error) {
-      console.error('Login error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Login failed');
-    } finally {
-      // Loading state will be handled by auth state change listener
-    }
-  };
 
-  const register = async (email: string, password: string, role: 'patient' | 'clinic') => {
+      // Update cache if session present
+      const session = data?.session ?? null;
+      saveSessionToCache(session);
+      if (session?.user) {
+        setSupabaseUser(session.user);
+        sessionManager.setCurrentUserId(session.user.id);
+        // fetch profile + roles
+        await Promise.all([
+          fetchUserProfile(session.user.id),
+          fetchAvailableRoles(session.user.id),
+        ]);
+      }
+    } catch (err: any) {
+      console.error('[Auth] login error', err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchUserProfile, fetchAvailableRoles]);
+
+  const register = useCallback(async (email: string, password: string, role: 'patient' | 'clinic') => {
     setLoading(true);
+    setError(null);
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -172,73 +241,216 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) throw error;
-
-      if (data.user) {
-        // Create role-specific profile directly
-        if (role === 'patient') {
-          const { error: patientError } = await supabase
-            .from('patients')
-            .insert({
-              user_id: data.user.id,
-              first_name: '',
-              last_name: '',
-              email: email,
-            });
-
-          if (patientError) throw patientError;
-        } else if (role === 'clinic') {
-          const { error: clinicError } = await supabase
-            .from('clinics')
-            .insert({
-              user_id: data.user.id,
-              clinic_name: '',
-              email: email,
-            });
-
-          if (clinicError) throw clinicError;
-        }
+      if (!data?.user) {
+        throw new Error('No user returned from supabase signUp');
       }
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Registration failed');
-    } finally {
-      // Loading state will be handled by auth state change listener
-    }
-  };
 
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setSupabaseUser(null);
-      setAvailableRoles([]);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  const switchRole = async (role: 'patient' | 'clinic') => {
-    if (!supabaseUser) {
-      throw new Error('No user is currently signed in');
-    }
-    
-    if (!availableRoles.includes(role)) {
-      throw new Error(`User does not have a ${role} profile`);
-    }
-    
-    setLoading(true);
-    try {
-      // Update the local user state
-      if (user) {
-        setUser({ ...user, role });
+      // Create role-specific profile row
+      if (role === 'patient') {
+        const { error: pErr } = await supabase.from('patients').insert({
+          user_id: data.user.id,
+          first_name: '',
+          last_name: '',
+          email,
+        });
+        if (pErr) throw pErr;
+      } else {
+        const { error: cErr } = await supabase.from('clinics').insert({
+          user_id: data.user.id,
+          clinic_name: '',
+          email,
+        });
+        if (cErr) throw cErr;
       }
-    } catch (error) {
-      console.error('Role switch error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to switch role');
+
+      // Note: Supabase will usually send confirmation email if enabled.
+      // We'll cache session if available
+      const session = data.session ?? null;
+      saveSessionToCache(session);
+    } catch (err: any) {
+      console.error('[Auth] register error', err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      throw err;
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const logout = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await supabase.auth.signOut();
+      saveSessionToCache(null);
+      saveActiveRoleToSession(null);
+      setSupabaseUser(null);
+      setUser(null);
+      setAvailableRoles([]);
+      sessionManager.setCurrentUserId(null);
+    } catch (err: any) {
+      console.error('[Auth] logout error', err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const switchRole = useCallback(async (role: 'patient' | 'clinic') => {
+    if (!supabaseUser) throw new Error('No user signed in');
+    if (!availableRoles.includes(role))
+      throw new Error(`User does not have a '${role}' profile`);
+
+    setLoading(true);
+    try {
+      // Persist locally
+      saveActiveRoleToSession(role);
+
+      // Update local user object
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              role,
+            }
+          : prev
+      );
+    } catch (err: any) {
+      console.error('[Auth] switchRole error', err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [availableRoles, supabaseUser]);
+
+  useEffect(() => {
+    let mounted = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
+    let refreshInterval: number | null = null;
+
+    (async () => {
+      try {
+        // 1) Load cached session quickly to speed up initial render
+        const cached = loadSessionFromCache();
+        if (cached?.user && mounted) {
+          setSupabaseUser(cached.user as SupabaseUser);
+          sessionManager.setCurrentUserId(cached.user.id);
+        }
+
+        // 2) Ask Supabase for the canonical current session
+        const { data } = await supabase.auth.getSession();
+        const session = data.session;
+        saveSessionToCache(session ?? null);
+
+        if (session?.user && mounted) {
+          setSupabaseUser(session.user);
+          sessionManager.setCurrentUserId(session.user.id);
+          // fetch profile + roles in parallel
+          await Promise.all([
+            fetchUserProfile(session.user.id),
+            fetchAvailableRoles(session.user.id),
+          ]);
+        } else if (mounted) {
+          // no session
+          setSupabaseUser(null);
+          setUser(null);
+          setAvailableRoles([]);
+          sessionManager.setCurrentUserId(null);
+        }
+      } catch (err) {
+        console.error('[Auth] Initialization error', err);
+        setError(err instanceof Error ? err : new Error(String(err)));
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          setInitializing(false);
+        }
+      }
+
+      // 3) Subscribe to auth state changes
+      authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('[Auth] onAuthStateChange', event);
+        try {
+          if (event === 'SIGNED_OUT') {
+            saveSessionToCache(null);
+            saveActiveRoleToSession(null);
+            setSupabaseUser(null);
+            setUser(null);
+            setAvailableRoles([]);
+            sessionManager.setCurrentUserId(null);
+            setLoading(false);
+            return;
+          }
+
+          // For SIGNED_IN / TOKEN_REFRESHED / INITIAL_SESSION
+          if (session?.user) {
+            saveSessionToCache(session);
+            setSupabaseUser(session.user);
+            sessionManager.setCurrentUserId(session.user.id);
+            // Refresh profile + roles
+            await Promise.all([
+              fetchUserProfile(session.user.id),
+              fetchAvailableRoles(session.user.id),
+            ]);
+          } else {
+            // no user in session
+            setSupabaseUser(null);
+            setUser(null);
+            setAvailableRoles([]);
+            sessionManager.setCurrentUserId(null);
+          }
+        } catch (err) {
+          console.error('[Auth] auth state change handler error', err);
+          setError(err instanceof Error ? err : new Error(String(err)));
+        } finally {
+          setLoading(false);
+        }
+      }).data;
+
+      // 4) Setup periodic session re-validation (every 4 minutes)
+      refreshInterval = window.setInterval(async () => {
+        try {
+          const { data } = await supabase.auth.getSession();
+          const session = data.session;
+          // If session changed, update cache and states
+          const cached = loadSessionFromCache();
+          const cachedToken = cached?.access_token ?? null;
+          const newToken = session?.access_token ?? null;
+          if (newToken !== cachedToken) {
+            saveSessionToCache(session ?? null);
+            if (session?.user) {
+              setSupabaseUser(session.user);
+              sessionManager.setCurrentUserId(session.user.id);
+              // keep profile in sync
+              await Promise.all([
+                fetchUserProfile(session.user.id),
+                fetchAvailableRoles(session.user.id),
+              ]);
+            } else {
+              setSupabaseUser(null);
+              setUser(null);
+              setAvailableRoles([]);
+              sessionManager.setCurrentUserId(null);
+            }
+          }
+        } catch (err) {
+          console.warn('[Auth] periodic session check failed', err);
+        }
+      }, 1000 * 60 * 4); // every 4 minutes
+
+    })();
+
+    return () => {
+      mounted = false;
+      try {
+        authSubscription?.unsubscribe();
+      } catch {}
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [fetchUserProfile, fetchAvailableRoles]);
 
   const value = {
     user,
@@ -251,6 +463,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     availableRoles,
     fetchUserProfile,
     fetchAvailableRoles,
+    error,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

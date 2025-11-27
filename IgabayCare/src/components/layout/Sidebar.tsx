@@ -76,31 +76,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const getVariantStyles = () => {
-    if (isPatient) {
-      return {
-        primary: "bg-blue-600 hover:bg-blue-700",
-        secondary: "bg-blue-50 text-blue-700 hover:bg-blue-100",
-        active: "bg-blue-50 text-blue-700 border-blue-200",
-        icon: "bg-gradient-to-r from-blue-500 to-blue-600",
-        userIcon: "bg-blue-100 text-blue-600",
-      };
-    } else if (isDoctor) {
-      return {
-        primary: "bg-purple-600 hover:bg-purple-700",
-        secondary: "bg-purple-50 text-purple-700 hover:bg-purple-100",
-        active: "bg-purple-50 text-purple-700 border-purple-200",
-        icon: "bg-gradient-to-r from-purple-500 to-purple-600",
-        userIcon: "bg-purple-100 text-purple-600",
-      };
-    } else {
-      return {
-        primary: "bg-emerald-600 hover:bg-emerald-700",
-        secondary: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
-        active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        icon: "bg-gradient-to-r from-emerald-500 to-emerald-600",
-        userIcon: "bg-emerald-100 text-emerald-600",
-      };
-    }
+    // Apply the new color palette
+    return {
+      primary: 'bg-[#5356FF] hover:bg-[#378CE7]',
+      secondary: 'bg-[#DFF5FF] text-[#5356FF] hover:bg-[#67C6E3]',
+      active: 'bg-[#DFF5FF] text-[#5356FF] border-[#378CE7]',
+      icon: 'bg-gradient-to-r from-[#5356FF] to-[#378CE7]',
+      userIcon: 'bg-[#67C6E3] text-[#5356FF]',
+    };
   };
 
   const styles = getVariantStyles();
@@ -128,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           level === 0 ? "p-3" : "p-2 ml-4",
           isActive
             ? cn("border", styles.active)
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            : "text-[#DFF5FF] hover:bg-[#5356FF] hover:text-white"
         )}
       >
         <ItemIcon className={cn("h-5 w-5 flex-shrink-0", isActive ? "opacity-100" : "opacity-70")} />
@@ -212,27 +195,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const SidebarContent = () => (
     <div
       className={cn(
-        "bg-white shadow-xl border-r border-slate-200 flex flex-col h-full transition-all duration-300",
+        "bg-[#378CE7] shadow-xl border-r border-[#5356FF] flex flex-col h-full transition-all duration-300",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
       {/* Header */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-4 border-b border-[#5356FF]">
         <div className="flex items-center space-x-3">
           <div className={cn("p-2 rounded-lg shadow-sm flex-shrink-0", styles.icon)}>
             <Heart className="h-6 w-6 text-white" />
           </div>
           {!isCollapsed && (
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-slate-900 truncate">{title}</h1>
-              <p className="text-sm text-slate-500 truncate">{subtitle}</p>
+              <h1 className="text-xl font-bold text-white truncate">{title}</h1>
+              <p className="text-sm text-[#DFF5FF] truncate">{subtitle}</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Toggle Button - Only show on large screens */}
-      <div className="p-2 border-b border-slate-200 hidden md:block">
+      <div className="p-2 border-b border-[#5356FF] hidden md:block">
         <Button
           variant="ghost"
           size="sm"
@@ -255,15 +238,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </TooltipProvider>
 
       {/* User Profile Section */}
-      <div className="border-t border-slate-200 p-4">
+      <div className="border-t border-[#5356FF] p-4">
         <div className="flex items-center space-x-3">
           <div className={cn("p-2 rounded-lg flex-shrink-0", styles.userIcon)}>
             <Icon className="h-5 w-5" />
           </div>
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-slate-900 truncate">{userName || "User"}</p>
-              <p className="text-xs text-slate-500 truncate">{userEmail || "user@example.com"}</p>
+              <p className="text-sm font-medium text-white truncate">{userName || "User"}</p>
+              <p className="text-xs text-[#DFF5FF] truncate">{userEmail || "user@example.com"}</p>
             </div>
           )}
         </div>

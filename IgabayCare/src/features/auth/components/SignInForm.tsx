@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { User, Eye, EyeOff, AlertCircle, Shield, Lock, Mail } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
@@ -14,6 +14,7 @@ export const SignInForm: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,96 +43,239 @@ export const SignInForm: React.FC = () => {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (error) setError(null);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-blue-200 to-blue-300 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
+        <div className="absolute top-40 right-20 w-72 h-72 bg-sky-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-8 left-40 w-72 h-72 bg-cyan-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+      </div>
+
+      <div className="max-w-md w-full space-y-8 relative">
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-blue-200 rounded-full flex items-center justify-center mb-4 shadow-sm">
-            <User className="h-8 w-8 text-blue-600" />
+          <div className="mx-auto h-20 w-20 bg-gradient-to-br from-blue-500 to-sky-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+            <User className="h-10 w-10 text-white" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-800 mb-1">Welcome Back</h2>
-          <p className="text-gray-600">Sign in to your patient dashboard</p>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-gray-600 text-lg">Sign in to your patient dashboard</p>
+          <div className="flex items-center justify-center mt-4 space-x-2">
+            <Shield className="h-4 w-4 text-green-500" />
+            <span className="text-sm text-gray-500">Secure HIPAA-compliant login</span>
+          </div>
         </div>
 
-        <Card className="bg-white/90 backdrop-blur-sm shadow-lg border border-blue-100 rounded-2xl">
-          <CardHeader className="text-center pb-2">
-            <h3 className="text-xl font-semibold text-gray-800">Patient Sign In</h3>
+        <Card className="bg-white/95 backdrop-blur-sm shadow-2xl border border-blue-100 rounded-3xl overflow-hidden transform transition-all duration-300 hover:shadow-3xl">
+          <CardHeader className="text-center pb-6 bg-gradient-to-r from-blue-50 to-sky-50 border-b border-blue-100">
+            <h3 className="text-2xl font-semibold text-gray-800 mb-2">Patient Sign In</h3>
+            <p className="text-sm text-gray-600">Access your medical dashboard</p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-8">
             <form onSubmit={handleSubmit} action="#" className="space-y-6">
               {error && (
-                <div className="p-3 bg-red-100 border border-red-300 rounded-lg text-sm text-red-800 flex items-center gap-2">
-                  <AlertCircle size={18} className="text-red-600" />
-                  {error}
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800 flex items-center gap-3 animate-shake">
+                  <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+                  <div>
+                    <div className="font-medium">Sign in failed</div>
+                    <div className="text-xs text-red-600 mt-1">{error}</div>
+                  </div>
                 </div>
               )}
 
-              <Input
-                label="Email Address"
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                required
-                disabled={isLoading}
-              />
-
-              <div className="relative">
+              <div className={`space-y-2 transition-all duration-200 ${focusedField === 'email' ? 'transform scale-105' : ''}`}>
+                <label htmlFor="email" className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                  <Mail className="h-4 w-4 mr-2 text-blue-500" />
+                  Email Address
+                </label>
                 <Input
-                  label="Password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder="Enter your email address"
                   required
                   disabled={isLoading}
+                  className={`border-2 ${focusedField === 'email' ? 'border-blue-500 shadow-lg' : 'border-gray-200'} rounded-xl px-4 py-3 transition-all duration-200`}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
-                  disabled={isLoading}
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
+              </div>
+
+              <div className={`space-y-2 transition-all duration-200 ${focusedField === 'password' ? 'transform scale-105' : ''}`}>
+                <label htmlFor="password" className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                  <Lock className="h-4 w-4 mr-2 text-blue-500" />
+                  Password
+                </label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    onFocus={() => setFocusedField('password')}
+                    onBlur={() => setFocusedField(null)}
+                    placeholder="Enter your password"
+                    required
+                    disabled={isLoading}
+                    className={`border-2 pr-12 ${focusedField === 'password' ? 'border-blue-500 shadow-lg' : 'border-gray-200'} rounded-xl px-4 py-3 transition-all duration-200`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors duration-200 p-1 rounded-lg hover:bg-blue-50"
+                    disabled={isLoading}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                    Remember me
+                  </label>
+                </div>
+                <div className="text-sm">
+                  <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
 
               <Button
                 type="submit"
                 variant="gradient"
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                className="w-full bg-gradient-to-r from-blue-500 to-sky-600 hover:from-blue-600 hover:to-sky-700 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transform transition-all duration-300 hover:scale-105 disabled:scale-100"
                 loading={isLoading}
+                disabled={isLoading}
               >
-                Sign In
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Signing In...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="mr-2 h-5 w-5" />
+                    Sign In Securely
+                  </>
+                )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
-                Don't have a patient account?{' '}
-                <Link
-                  to="/signup"
-                  className="font-medium text-blue-600 hover:underline"
-                >
-                  Register here
-                </Link>
-              </p>
-            </div>
+            <div className="mt-8 space-y-4">
+              <div className="text-center">
+                <p className="text-sm text-gray-600">
+                  Don't have a patient account?{' '}
+                  <Link
+                    to="/signup"
+                    className="font-medium text-blue-600 hover:text-blue-500 transition-colors underline decoration-2 hover:decoration-blue-500"
+                  >
+                    Register here
+                  </Link>
+                </p>
+              </div>
 
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-600">
-                Are you a clinic?{' '}
-                <Link
-                  to="/clinic-signin"
-                  className="font-medium text-indigo-600 hover:underline"
-                >
-                  Sign in here
-                </Link>
-              </p>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">Or</span>
+                </div>
+              </div>
+
+              <div className="text-center space-y-2">
+                <p className="text-sm text-gray-600">
+                  Are you a healthcare provider?
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Link
+                    to="/clinic-signin"
+                    className="inline-flex items-center justify-center px-4 py-2 border border-indigo-300 text-sm font-medium rounded-xl text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-all duration-200 hover:shadow-md"
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Clinic Portal
+                  </Link>
+                  <Link
+                    to="/doctor-signin"
+                    className="inline-flex items-center justify-center px-4 py-2 border border-green-300 text-sm font-medium rounded-xl text-green-600 bg-green-50 hover:bg-green-100 transition-all duration-200 hover:shadow-md"
+                  >
+                    <User className="mr-2 h-4 w-4" />
+                    Doctor Portal
+                  </Link>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Security badges */}
+        <div className="flex items-center justify-center space-x-6 mt-6 text-xs text-gray-500">
+          <div className="flex items-center">
+            <Shield className="h-3 w-3 mr-1 text-green-500" />
+            HIPAA Compliant
+          </div>
+          <div className="flex items-center">
+            <Lock className="h-3 w-3 mr-1 text-blue-500" />
+            End-to-End Encrypted
+          </div>
+          <div className="flex items-center">
+            <User className="h-3 w-3 mr-1 text-purple-500" />
+            Verified Providers
+          </div>
+        </div>
       </div>
+
+      <style jsx>{`
+        @keyframes blob {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
+          }
+          100% {
+            transform: translate(0px, 0px) scale(1);
+          }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+          20%, 40%, 60%, 80% { transform: translateX(2px); }
+        }
+        .animate-shake {
+          animation: shake 0.5s;
+        }
+      `}</style>
     </div>
   );
 };

@@ -63,21 +63,21 @@ export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
 
   return (
     <>
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-[#378CE7] shadow-sm border-b border-[#5356FF] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Left side - Logo and title */}
           <div className="flex items-center space-x-4 min-w-0">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl shadow-sm">
+              <div className="p-2 bg-gradient-to-r from-[#5356FF] to-[#378CE7] rounded-xl shadow-sm">
                 <Building className="h-5 w-5 text-white" />
               </div>
               <div className="hidden md:block">
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">iGabay Clinic</h1>
-                <p className="text-xs sm:text-sm text-gray-500">Clinic Management Portal</p>
+                <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">iGabay Clinic</h1>
+                <p className="text-xs sm:text-sm text-[#DFF5FF]">Clinic Management Portal</p>
               </div>
             </div>
             <div className="hidden lg:block border-l border-gray-200 pl-4">
-              <h2 className="text-lg font-semibold text-gray-900 truncate">{getPageTitle()}</h2>
+              <h2 className="text-lg font-semibold text-white truncate">{getPageTitle()}</h2>
             </div>
           </div>
 
@@ -90,7 +90,7 @@ export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
                 placeholder="Search patients, appointments, doctors..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#5356FF] focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500"
               />
             </div>
           </div>
@@ -107,10 +107,10 @@ export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
 
             {/* Profile */}
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-[#67C6E3] text-[#5356FF] rounded-full flex items-center justify-center">
                 <Building className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-700 hidden sm:block">{getClinicDisplayName()}</span>
+              <span className="text-sm font-medium text-white hidden sm:block">{getClinicDisplayName()}</span>
             </div>
 
             {/* Logout Button */}

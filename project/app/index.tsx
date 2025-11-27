@@ -51,10 +51,11 @@ export default function SplashScreen() {
           // User is authenticated, redirect to appropriate dashboard
           const roleRoutes = {
             patient: '/(tabs)/patient',
-            clinic: '/(tabs)/doctor', // Clinic uses doctor interface for now
+            clinic: '/(tabs)/doctor', // Clinics use doctor interface
             doctor: '/(tabs)/doctor',
           };
-          router.replace(roleRoutes[user.role] as any || '/(auth)/login');
+          const targetRoute = roleRoutes[user.role] as any || '/(auth)/login';
+          router.replace(targetRoute);
         } else {
           // User not authenticated, go to login
           router.replace('/(auth)/login');

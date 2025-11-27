@@ -29,10 +29,11 @@ export function ProtectedRoute({
         // User doesn't have required role, redirect based on their role
         const roleRoutes = {
           patient: '/(tabs)/patient',
-          clinic: '/(tabs)/clinic',
+          clinic: '/(tabs)/doctor', // Clinics use doctor interface
           doctor: '/(tabs)/doctor',
         };
-        router.replace(roleRoutes[user.role] as any || '/(auth)/login');
+        const targetRoute = roleRoutes[user.role] as any || '/(auth)/login';
+        router.replace(targetRoute);
         return;
       }
     }

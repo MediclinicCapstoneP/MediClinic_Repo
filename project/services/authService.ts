@@ -1,5 +1,4 @@
 import { supabase, UserRole, UserMetadata, Patient, Clinic, Doctor } from '@/lib/supabase';
-import { Alert } from 'react-native';
 
 export interface AuthUser {
   id: string;
