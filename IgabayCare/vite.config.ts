@@ -18,9 +18,17 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          supabase: ['@supabase/supabase-js'],
+          charts: ['chart.js', 'react-chartjs-2'],
+          maps: ['leaflet', 'react-leaflet'],
+          radix: ['@radix-ui/react-tooltip', '@radix-ui/react-collapsible', '@radix-ui/react-scroll-area'],
+        },
       },
     },
+    chunkSizeWarningLimit: 1000,
   },
   base: '/',
 });
