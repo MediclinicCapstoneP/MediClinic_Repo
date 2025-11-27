@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -35,6 +36,7 @@ import { clinicService } from '../../../services/clinicService';
 import { appointmentService } from '../../../services/appointmentService';
 import { ClinicWithDetails, AppointmentWithDetails } from '../../../lib/supabase';
 import { AppointmentBookingModal } from '../../../components/appointment/AppointmentBookingModal';
+import { ClinicLocationMap } from '../../../components/maps/ClinicLocationMap';
 
 const quickActions = [
   { id: '1', title: 'Book Appointment', icon: Calendar, color: '#2563EB' },
@@ -50,18 +52,21 @@ const specialties = [
   { id: '4', name: 'Cardiology', icon: Heart, count: 15 },
 ];
 
-
 export default function PatientHomeScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const { user, signOut } = useAuth();
-  
-  // New state for real data and booking modal
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [nearbyClinics, setNearbyClinics] = useState<ClinicWithDetails[]>([]);
   const [recentAppointments, setRecentAppointments] = useState<AppointmentWithDetails[]>([]);
   const [selectedClinic, setSelectedClinic] = useState<ClinicWithDetails | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showLocationMap, setShowLocationMap] = useState(false);
+  const [stats, setStats] = useState({
+    upcomingAppointments: 0,
+    completedAppointments: 0,
+    totalClinics: 0,
+  });
 
   useEffect(() => {
     loadInitialData();
@@ -138,6 +143,11 @@ export default function PatientHomeScreen() {
   const handleClinicPress = (clinic: ClinicWithDetails) => {
     setSelectedClinic(clinic);
     setShowBookingModal(true);
+  };
+
+  const handleShowLocation = (clinic: ClinicWithDetails) => {
+    setSelectedClinic(clinic);
+    setShowLocationMap(true);
   };
 
   const handleBookingSuccess = (appointmentId: string) => {
@@ -316,12 +326,11 @@ export default function PatientHomeScreen() {
                 </TouchableOpacity>
               </View>
               {nearbyClinics.map((clinic) => (
-                <TouchableOpacity 
-                  key={clinic.id} 
-                  style={styles.clinicCard}
-                  onPress={() => handleClinicPress(clinic)}
-                >
-                  <View style={styles.clinicInfo}>
+                <View key={clinic.id} style={styles.clinicCard}>
+                  <TouchableOpacity 
+                    style={styles.clinicInfo}
+                    onPress={() => handleClinicPress(clinic)}
+                  >
                     <Text style={styles.clinicName}>{clinic.clinic_name}</Text>
                     <View style={styles.clinicDetails}>
                       <MapPin size={14} color="#6B7280" />
@@ -347,8 +356,15 @@ export default function PatientHomeScreen() {
                         )}
                       </View>
                     )}
-                  </View>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.locationButton}
+                    onPress={() => handleShowLocation(clinic)}
+                  >
+                    <Navigation size={16} color="#2563EB" />
+                    <Text style={styles.locationButtonText}>Show Location</Text>
+                  </TouchableOpacity>
+                </View>
               ))}
             </>
           )}
@@ -395,6 +411,35 @@ export default function PatientHomeScreen() {
           clinic={selectedClinic}
           onBookingSuccess={handleBookingSuccess}
         />  
+      )}
+
+      {/* Location Map Modal */}
+      {selectedClinic && (
+        <Modal
+          visible={showLocationMap}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => {
+            setShowLocationMap(false);
+            setSelectedClinic(null);
+          }}
+        >
+          <ClinicLocationMap
+            clinic={{
+              id: selectedClinic.id,
+              name: selectedClinic.clinic_name,
+              address: selectedClinic.address,
+              latitude: selectedClinic.latitude,
+              longitude: selectedClinic.longitude,
+              city: selectedClinic.city,
+              province: selectedClinic.state,
+            }}
+            onClose={() => {
+              setShowLocationMap(false);
+              setSelectedClinic(null);
+            }}
+          />
+        </Modal>
       )}
       </SafeAreaView>
     </LinearGradient>
@@ -675,5 +720,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  locationButtonText: {
+    fontSize: 14,
+    color: '#2563EB',
+    fontWeight: '500',
+    marginLeft: 6,
   },
 });
