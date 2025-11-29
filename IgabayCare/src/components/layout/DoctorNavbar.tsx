@@ -1,37 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Search, LogOut, Stethoscope, X, Activity, ChevronDown } from 'lucide-react';
+import { User, LogOut, Stethoscope, Activity, ChevronDown } from 'lucide-react';
 import { DoctorNotificationDropdown } from '../doctor/DoctorNotificationDropdown';
 
 interface DoctorNavbarProps {
   user: any;
-  onSearch: (query: string) => void;
   onSignOut: () => void;
   activeTab?: string;
 }
 
 export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
   user,
-  onSearch,
   onSignOut,
   activeTab = 'dashboard'
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    onSearch(query);
-  };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-    onSearch('');
-    searchRef.current?.focus();
-  };
 
   const getPageTitle = () => {
     switch (activeTab) {
@@ -125,44 +108,8 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
               </div>
             </div>
 
-            {/* Center - Enhanced Search Bar */}
-            <div className="flex-1 max-w-lg mx-4 hidden md:block">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Search className={`h-4 w-4 transition-colors ${isSearchFocused ? 'text-[#5356FF]' : 'text-gray-400'}`} />
-                </div>
-                <input
-                  ref={searchRef}
-                  type="text"
-                  placeholder="Search patients, appointments, prescriptions..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onBlur={() => setIsSearchFocused(false)}
-                  className={`w-full pl-10 pr-10 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#5356FF] focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500`}
-                />
-                {searchQuery && (
-                  <button
-                    onClick={clearSearch}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 hover:text-gray-600"
-                  >
-                    <X className="h-4 w-4 text-gray-400" />
-                  </button>
-                )}
-              </div>
-            </div>
-
             {/* Right side - Actions and user */}
             <div className="flex items-center space-x-1 lg:space-x-2">
-              {/* Mobile Search Toggle */}
-              <button
-                onClick={() => setShowMobileSearch(!showMobileSearch)}
-                className="md:hidden p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
-                title="Search"
-              >
-                {showMobileSearch ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
-              </button>
-              
               {/* Notifications */}
               <DoctorNotificationDropdown doctorUserId={user?.user?.id || user?.id} />
               
@@ -233,25 +180,6 @@ export const DoctorNavbar: React.FC<DoctorNavbarProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Mobile Search Bar */}
-          {showMobileSearch && (
-            <div className="md:hidden mt-3 pt-3 border-t border-gray-200">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search patients, appointments..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-sm placeholder-gray-500"
-                  autoFocus
-                />
-              </div>
-            </div>
-          )}
         </div>
       </header>
     </>

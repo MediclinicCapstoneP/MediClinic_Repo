@@ -8,6 +8,7 @@ import { AppointmentService } from '../../features/auth/utils/appointmentService
 import { patientService } from '../../features/auth/utils/patientService';
 import { authService } from '../../features/auth/utils/authService';
 import { doctorService, type DoctorProfile } from '../../features/auth/utils/doctorService';
+import { searchService, type SearchResult } from '../../services/searchService';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import { PaymentForm } from '../../components/patient/PaymentForm';
 import { PayMongoGCashPayment } from '../../components/patient/PayMongoGCashPayment';
@@ -16,6 +17,7 @@ import type { CreateAppointmentData, AppointmentType } from '../../types/appoint
 import type { ClinicService } from '../../types/clinicServices';
 import ClinicFilters from '../../components/patient/ClinicFilters';
 import { AppointmentBookingModal } from '../../components/patient/AppointmentBookingModal';
+import EnhancedSearchBar from '../../components/patient/EnhancedSearchBar';
 // NotificationDropdown now integrated in PatientNavbar
 // import { NotificationDropdown } from '../../components/patient/NotificationDropdown';
 import { ClinicMapModal } from '../../components/patient/ClinicMapModal';
@@ -211,6 +213,40 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
 
     fetchClinics();
   }, [getMockRating, getMinimumPrice]);
+
+  const handleSearchSelect = (result: SearchResult) => {
+    switch (result.type) {
+      case 'clinic':
+        const clinic = clinics.find(c => c.id === result.id);
+        if (clinic) {
+          setSelectedClinic(clinic);
+          setStep('clinic-details');
+        }
+        break;
+      
+      case 'doctor':
+        // Find the clinic for this doctor and navigate to it
+        if (result.clinicId) {
+          const clinic = clinics.find(c => c.id === result.clinicId);
+          if (clinic) {
+            setSelectedClinic(clinic);
+            setSelectedDoctorId(result.id);
+            setStep('book');
+          }
+        }
+        break;
+      
+      case 'service':
+        // Filter clinics by this service
+        const serviceFilters = {
+          ...filters,
+          services: [result.data as string]
+        };
+        setFilters(serviceFilters);
+        setFiltersApplied(true);
+        break;
+    }
+  };
 
   const handleClinicClick = (clinicId: string) => {
     const clinic = clinics.find(c => c.id === clinicId);
@@ -497,6 +533,15 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
 
   const renderClinicList = () => (
     <>
+      {/* Enhanced Search Bar */}
+      <div className="mb-6">
+        <EnhancedSearchBar 
+          onSearchSelect={handleSearchSelect}
+          placeholder="Search clinics, doctors, or services..."
+          className="max-w-2xl mx-auto"
+        />
+      </div>
+
       {/* Filter Component */}
       <ClinicFilters
         onFiltersChange={(newFilters) => {

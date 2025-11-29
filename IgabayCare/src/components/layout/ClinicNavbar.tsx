@@ -1,29 +1,21 @@
 import React, { useState } from 'react';
-import { Building, Search, LogOut } from 'lucide-react';
+import { Building, LogOut } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ClinicNotificationDropdown } from '../clinic/ClinicNotificationDropdown';
 
 interface ClinicNavbarProps {
   user: any;
-  onSearch: (query: string) => void;
   onSignOut: () => void;
   activeTab?: string;
 }
 
 export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
   user,
-  onSearch,
   onSignOut,
   activeTab = 'dashboard'
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    onSearch(query);
-  };
 
   const getPageTitle = () => {
     switch (activeTab) {
@@ -81,27 +73,8 @@ export const ClinicNavbar: React.FC<ClinicNavbarProps> = ({
             </div>
           </div>
 
-          {/* Center - Search Bar */}
-          <div className="flex-1 max-w-md mx-4 hidden md:block">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Search patients, appointments, doctors..."
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#5356FF] focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500"
-              />
-            </div>
-          </div>
-
           {/* Right side - Actions and user */}
           <div className="flex items-center space-x-2 lg:space-x-4">
-            {/* Mobile Search Button */}
-            <button className="md:hidden p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors" title="Search">
-              <Search className="h-5 w-5" />
-            </button>
-
             {/* Notifications */}
             <ClinicNotificationDropdown clinicUserId={user?.user?.id || user?.id} />
 

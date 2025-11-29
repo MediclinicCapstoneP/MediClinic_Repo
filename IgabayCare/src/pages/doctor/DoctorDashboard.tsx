@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Ca
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { roleBasedAuthService } from '../../features/auth/utils/roleBasedAuthService';
+import { useAuth } from '../../contexts/AuthContext';
 import { prescriptionService, PrescriptionWithPatient, CreatePrescriptionData } from '../../features/auth/utils/prescriptionService';
 import { doctorDashboardService, DoctorStats, DoctorActivity } from '../../features/auth/utils/doctorDashboardService';
 import { doctorService, DoctorProfile } from '../../features/auth/utils/doctorService';
@@ -48,7 +48,7 @@ interface Appointment {
 // Using PrescriptionWithPatient from prescriptionService instead of local interface
 
 export const DoctorDashboard: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: authUser, logout, loading: authLoading } = useAuth();
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [doctorStats, setDoctorStats] = useState<DoctorStats | null>(null);
   const [doctorActivity, setDoctorActivity] = useState<DoctorActivity[]>([]);
@@ -91,27 +91,33 @@ export const DoctorDashboard: React.FC = () => {
     const checkAuth = async () => {
       try {
         setLoading(true);
-        const user = await roleBasedAuthService.getCurrentUser();
-        if (!user || user.role !== 'doctor') {
-          // Clear any invalid session and redirect
-          await roleBasedAuthService.signOut();
+        
+        // Check if user is authenticated and is a doctor
+        if (!authUser) {
           navigate('/doctor-signin');
           return;
         }
-        setCurrentUser(user);
-        await loadDoctorData(user.user.id);
+        
+        if (authUser.role !== 'doctor') {
+          await logout();
+          navigate('/signin');
+          return;
+        }
+        
+        await loadDoctorData(authUser.id);
       } catch (error) {
         console.error('Auth check error:', error);
-        // Clear session on auth error and redirect
-        await roleBasedAuthService.signOut();
+        await logout();
         navigate('/doctor-signin');
       } finally {
         setLoading(false);
       }
     };
 
-    checkAuth();
-  }, [navigate]);
+    if (!authLoading) {
+      checkAuth();
+    }
+  }, [authUser, authLoading, navigate, logout]);
 
   const loadDoctorData = async (userId: string) => {
     try {
@@ -158,13 +164,13 @@ export const DoctorDashboard: React.FC = () => {
   };
 
   const handleSignOut = async () => {
-    try {
-      await roleBasedAuthService.signOut();
-      navigate('/');
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
-  };
+  try {
+    await logout();
+    navigate('/');
+  } catch (error) {
+    console.error('Sign out error:', error);
+  }
+};
 
   const handleMarkAsDone = (appointmentId: string) => {
     setAppointments(prev => 
@@ -966,13 +972,13 @@ export const DoctorDashboard: React.FC = () => {
       case 'patients':
         return <DoctorPatientRecords doctorId={doctorId} />;
       case 'profile':
-        return <DoctorManageProfile doctorId={doctorId} onProfileUpdate={() => loadDoctorData(currentUser?.user?.id)} />;
+        return <DoctorManageProfile doctorId={doctorId} onProfileUpdate={() => loadDoctorData(authUser?.id)} />;
       default:
         return <DoctorAppointments doctorId={doctorId} />;
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return <SkeletonDashboard />;
   }
 
@@ -987,7 +993,6 @@ export const DoctorDashboard: React.FC = () => {
       activeTab={activeTab}
       onTabChange={setActiveTab}
       user={currentUser}
-      onSearch={handleSearch}
       variant="doctor"
       showNavbar={true}
       onSignOut={() => setShowLogoutConfirm(true)}

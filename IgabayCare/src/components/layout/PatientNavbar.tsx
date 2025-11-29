@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, User, Search, Heart, LogOut, Calendar, Stethoscope } from 'lucide-react';
+import { Bell, User, Heart, LogOut, Calendar, Stethoscope } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { NotificationDropdown } from '../patient/NotificationDropdown';
-import { clinicService } from '../../features/auth/utils/clinicService';
 
 interface Notification {
   id: string;
@@ -17,27 +16,17 @@ interface Notification {
 
 interface PatientNavbarProps {
   user: any;
-  onSearch: (query: string) => void;
   onSignOut: () => void;
   activeTab?: string;
 }
 
 export const PatientNavbar: React.FC<PatientNavbarProps> = ({
   user,
-  onSearch,
   onSignOut,
   activeTab = 'dashboard'
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const clinicsCacheRef = useRef<any[] | null>(null);
-  const locationRef = useRef<{ lat: number; lng: number } | null>(null);
-  const debounceRef = useRef<number | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([
     {
       id: '1',
@@ -66,12 +55,6 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
   ]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    onSearch(query);
-    triggerSuggestions(query);
-  };
 
   const handleNotificationClick = (notificationId: string) => {
     setNotifications(prev =>
@@ -106,92 +89,6 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
     return date.toLocaleDateString();
   };
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
-  const fetchClinicsCache = async () => {
-    if (clinicsCacheRef.current) return clinicsCacheRef.current;
-    try {
-      let result;
-      try {
-        result = await clinicService.getClinicsWithServices();
-      } catch {
-        result = await clinicService.getPublicClinics();
-      }
-      const clinics = result.success ? (result.clinics || []) : [];
-      clinicsCacheRef.current = clinics;
-      return clinics;
-    } catch {
-      clinicsCacheRef.current = [];
-      return [];
-    }
-  };
-
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          locationRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        },
-        () => {}
-      );
-    }
-  }, []);
-
-  const buildSuggestions = (clinics: any[], query: string) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const loc = locationRef.current;
-    const results = clinics
-      .map((c) => {
-        const servicesList = [
-          ...(c.services || []),
-          ...(c.custom_services || []),
-          ...(c.specialties || []),
-          ...(c.custom_specialties || []),
-          ...((c.services_with_pricing || []).map((s: any) => s.service_name))
-        ];
-        const available = (c.services_with_pricing || []).some((s: any) => s.is_available);
-        const distance = loc && c.latitude && c.longitude
-          ? calculateDistance(loc.lat, loc.lng, Number(c.latitude), Number(c.longitude))
-          : undefined;
-        const topService = servicesList.find((s: string) => s.toLowerCase().includes(q)) || servicesList[0];
-        return { id: c.id, name: c.clinic_name, topService, available, distance, city: c.city };
-      })
-      .filter((r) => r.name?.toLowerCase().includes(q) || (r.topService || '').toLowerCase().includes(q))
-      .sort((a, b) => {
-        if (a.distance == null && b.distance == null) return a.name.localeCompare(b.name);
-        if (a.distance == null) return 1;
-        if (b.distance == null) return -1;
-        return a.distance - b.distance;
-      })
-      .slice(0, 8);
-    return results;
-  };
-
-  const triggerSuggestions = (query: string) => {
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    if (!query.trim()) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    debounceRef.current = window.setTimeout(async () => {
-      setLoadingSuggestions(true);
-      const clinics = await fetchClinicsCache();
-      const built = buildSuggestions(clinics, query);
-      setSuggestions(built);
-      setShowSuggestions(true);
-      setLoadingSuggestions(false);
-    }, 200);
-  };
-
   return (
     <>
       <header className="bg-[#378CE7] shadow-sm border-b border-[#5356FF] sticky top-0 z-40">
@@ -221,64 +118,8 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
             </div>
           </div>
 
-          {/* Center - Search Bar */}
-          <div className="flex-1 max-w-md mx-2 sm:mx-4 hidden lg:block">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Search clinics, services..."
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                onFocus={() => searchQuery && setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#5356FF] focus:shadow-md transition-all duration-200 text-sm placeholder-gray-500"
-              />
-              {showSuggestions && (
-                <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
-                  <div className="max-h-80 overflow-auto py-2">
-                    {loadingSuggestions ? (
-                      <div className="px-4 py-3 text-sm text-gray-500">Searching...</div>
-                    ) : suggestions.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-gray-500">No matching clinics</div>
-                    ) : (
-                      suggestions.map((s) => (
-                        <button
-                          key={s.id}
-                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50"
-                          onMouseDown={() => {
-                            setSearchQuery(s.name);
-                            onSearch(s.name);
-                            setShowSuggestions(false);
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{s.name}</p>
-                              <p className="text-xs text-gray-600">{s.topService || 'General services'}{s.city ? ` • ${s.city}` : ''}</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              {typeof s.distance === 'number' && (
-                                <span className="text-xs font-medium text-[#5356FF] bg-[#DFF5FF] px-2 py-1 rounded-full">{s.distance.toFixed(1)} km</span>
-                              )}
-                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.available ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{s.available ? 'Available' : 'Limited'}</span>
-                            </div>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Right side - Actions and user */}
           <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-4">
-            {/* Mobile Search Button */}
-            <button onClick={() => setShowSearch(true)} className="lg:hidden p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors" title="Search">
-              <Search className="h-5 w-5" />
-            </button>
 
             {/* Notifications */}
             <NotificationDropdown patientId={user?.id || ''} />
@@ -301,71 +142,6 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
         </div>
       </div>
       </header>
-
-      {/* Mobile Search Modal */}
-      <Modal
-        isOpen={showSearch}
-        onClose={() => setShowSearch(false)}
-        title="Search"
-        size="md"
-      >
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search clinics, services..."
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              onFocus={() => searchQuery && setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5356FF] focus:border-[#5356FF]"
-              autoFocus
-            />
-            {showSuggestions && (
-              <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
-                <div className="max-h-80 overflow-auto py-2">
-                  {loadingSuggestions ? (
-                    <div className="px-4 py-3 text-sm text-gray-500">Searching...</div>
-                  ) : suggestions.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-gray-500">No matching clinics</div>
-                  ) : (
-                    suggestions.map((s) => (
-                      <button
-                        key={s.id}
-                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50"
-                        onMouseDown={() => {
-                          setSearchQuery(s.name);
-                          onSearch(s.name);
-                          setShowSuggestions(false);
-                          setShowSearch(false);
-                        }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{s.name}</p>
-                            <p className="text-xs text-gray-600">{s.topService || 'General services'}{s.city ? ` • ${s.city}` : ''}</p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {typeof s.distance === 'number' && (
-                              <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">{s.distance.toFixed(1)} km</span>
-                            )}
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.available ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{s.available ? 'Available' : 'Limited'}</span>
-                          </div>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={() => setShowSearch(false)}>Search</Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Notifications Modal */}
       <Modal

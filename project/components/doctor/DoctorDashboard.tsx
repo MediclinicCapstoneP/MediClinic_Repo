@@ -12,6 +12,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase, AppointmentWithDetails, Doctor } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { DoctorAppointmentManagement } from './DoctorAppointmentManagement';
+import { DoctorPatientManagement } from './DoctorPatientManagement';
+import { DoctorScheduleManager } from './DoctorScheduleManager';
+import { DoctorPrescriptionManager } from './DoctorPrescriptionManager';
+import { DoctorMedicalRecords } from './DoctorMedicalRecords';
+import { DoctorAnalytics } from './DoctorAnalytics';
+import { DoctorProfileManager } from './DoctorProfileManager';
 
 const { width } = Dimensions.get('window');
 
@@ -25,6 +32,7 @@ interface DashboardStats {
 export const DoctorDashboard: React.FC = () => {
   const { user } = useAuth();
   const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [activeView, setActiveView] = useState<'dashboard' | 'appointments' | 'patients' | 'schedule' | 'prescriptions' | 'medical_records' | 'analytics' | 'profile'>('dashboard');
   const [stats, setStats] = useState<DashboardStats>({
     todayAppointments: 0,
     upcomingAppointments: 0,
@@ -376,27 +384,166 @@ export const DoctorDashboard: React.FC = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActionsContainer}>
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => setActiveView('appointments')}
+          >
             <Ionicons name="calendar-outline" size={24} color="#3B82F6" />
-            <Text style={styles.quickActionText}>View All Appointments</Text>
+            <Text style={styles.quickActionText}>Appointments</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => setActiveView('patients')}
+          >
             <Ionicons name="people-outline" size={24} color="#10B981" />
-            <Text style={styles.quickActionText}>Patient Records</Text>
+            <Text style={styles.quickActionText}>Patients</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard}>
-            <Ionicons name="bar-chart-outline" size={24} color="#F59E0B" />
-            <Text style={styles.quickActionText}>Reports</Text>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => setActiveView('schedule')}
+          >
+            <Ionicons name="time-outline" size={24} color="#F59E0B" />
+            <Text style={styles.quickActionText}>Schedule</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard}>
-            <Ionicons name="settings-outline" size={24} color="#8B5CF6" />
-            <Text style={styles.quickActionText}>Settings</Text>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => setActiveView('prescriptions')}
+          >
+            <Ionicons name="medical-outline" size={24} color="#8B5CF6" />
+            <Text style={styles.quickActionText}>Prescriptions</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => setActiveView('medical_records')}
+          >
+            <Ionicons name="folder-outline" size={24} color="#EF4444" />
+            <Text style={styles.quickActionText}>Records</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => setActiveView('analytics')}
+          >
+            <Ionicons name="bar-chart-outline" size={24} color="#059669" />
+            <Text style={styles.quickActionText}>Analytics</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={() => setActiveView('profile')}
+          >
+            <Ionicons name="person-outline" size={24} color="#7C3AED" />
+            <Text style={styles.quickActionText}>Profile</Text>
           </TouchableOpacity>
         </View>
       </View>
       </ScrollView>
     </LinearGradient>
   );
+
+  // Render different views based on activeView
+  if (activeView === 'appointments') {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <View style={styles.viewHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.viewTitle}>Appointments</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <DoctorAppointmentManagement />
+      </View>
+    );
+  }
+
+  if (activeView === 'patients') {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <View style={styles.viewHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.viewTitle}>Patients</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <DoctorPatientManagement />
+      </View>
+    );
+  }
+
+  if (activeView === 'schedule') {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <View style={styles.viewHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.viewTitle}>Schedule Management</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <DoctorScheduleManager />
+      </View>
+    );
+  }
+
+  if (activeView === 'prescriptions') {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <View style={styles.viewHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.viewTitle}>Prescriptions</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <DoctorPrescriptionManager />
+      </View>
+    );
+  }
+
+  if (activeView === 'medical_records') {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <View style={styles.viewHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.viewTitle}>Medical Records</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <DoctorMedicalRecords />
+      </View>
+    );
+  }
+
+  if (activeView === 'analytics') {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <View style={styles.viewHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.viewTitle}>Analytics & Reports</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <DoctorAnalytics />
+      </View>
+    );
+  }
+
+  if (activeView === 'profile') {
+    return (
+      <View style={styles.fullScreenContainer}>
+        <View style={styles.viewHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')}>
+            <Ionicons name="arrow-back" size={24} color="#666" />
+          </TouchableOpacity>
+          <Text style={styles.viewTitle}>Profile Management</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <DoctorProfileManager />
+      </View>
+    );
+  }
 };
 
 const styles = StyleSheet.create({
@@ -614,5 +761,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 8,
     textAlign: 'center',
+  },
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  viewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  viewTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
   },
 });

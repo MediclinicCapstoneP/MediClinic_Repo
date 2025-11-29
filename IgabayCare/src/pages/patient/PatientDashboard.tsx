@@ -9,7 +9,7 @@ import {
   Pill
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { authService } from '../../features/auth/utils/authService';
+import { useAuth } from '../../contexts/AuthContext';
 import PatientHome from './PatientHome';
 import { PatientProfileComponent } from './PatientProfile';
 import { PatientAppointments } from './PatientAppointments';
@@ -20,32 +20,24 @@ import { SkeletonDashboard } from '../../components/ui/Skeleton';
 
 const PatientDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const { user, logout, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const currentUser = await authService.getCurrentUser();
-        if (!currentUser) {
-          navigate('/signin');
-          return;
-        }
-        setUser(currentUser);
-      } catch (error) {
+    // Use auth context loading state, no need for separate auth check
+    if (!authLoading) {
+      if (!user) {
         navigate('/signin');
-      } finally {
-        setLoading(false);
+        return;
       }
-    };
-
-    checkAuth();
-  }, [navigate]);
+      setLoading(false);
+    }
+  }, [user, authLoading, navigate]);
 
   const handleSignOut = async () => {
     try {
-      await authService.signOut();
+      await logout();
       navigate('/');
     } catch (error) {
       console.error('Sign out error:', error);
@@ -110,7 +102,7 @@ const PatientDashboard: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return <SkeletonDashboard />;
   }
 
@@ -121,7 +113,6 @@ const PatientDashboard: React.FC = () => {
       onTabChange={setActiveTab}
       user={user}
       onSignOut={handleSignOut}
-      onSearch={handleSearch}
       variant="patient"
       showNavbar={true}
     >

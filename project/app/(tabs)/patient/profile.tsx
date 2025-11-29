@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { User, Settings, Bell, Shield, CircleHelp as HelpCircle, LogOut, ChevronRight, CreditCard as Edit } from 'lucide-react-native';
+import { useAuth } from '../../contexts/AuthContext';
 
 const menuItems = [
   { id: '1', title: 'Edit Profile', icon: Edit, color: '#2563EB' },
@@ -23,18 +24,41 @@ const menuItems = [
 ];
 
 export default function ProfileScreen() {
+  const { user, signOut } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [profileData, setProfileData] = useState({
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '+63 912 345 6789',
+    name: user?.profile?.data?.first_name ? `${user.profile.data.first_name} ${user.profile.data.last_name || ''}` : 'John Doe',
+    email: user?.email || 'john.doe@example.com',
+    phone: user?.profile?.data?.phone || '+63 912 345 6789',
     address: 'Makati City, Metro Manila',
     memberSince: 'January 2024',
   });
 
-  const handleLogout = () => {
-    router.replace('/(auth)/login');
+  const handleLogout = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              router.replace('/(auth)/login');
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSaveProfile = () => {
