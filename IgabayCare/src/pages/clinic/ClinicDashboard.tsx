@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Calendar, Users, UserCheck, Settings,UserCircle  } from 'lucide-react';
+import { Home, Calendar, Users, Settings, UserCircle } from 'lucide-react';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { ClinicHome } from './ClinicHome';
-import { ClinicAppointments } from '../../components/clinic/ClinicAppointments';
 import { ClinicDoctors } from './ClinicDoctors';
 import { ClinicPatients } from './ClinicPatients';
 import { ClinicSettings } from './ClinicSettings';
@@ -11,7 +10,6 @@ import { ManageClinic } from './ManageClinic';
 import { useAuth } from '../../contexts/AuthContext';
 import { clinicService } from '../../features/auth/utils/clinicService';
 import { useNavigate } from 'react-router-dom';
-import { SkeletonDashboard } from '../../components/ui/Skeleton';
 
 
 
@@ -20,6 +18,7 @@ export const ClinicDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [clinicProfile, setClinicProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -58,7 +57,7 @@ export const ClinicDashboard: React.FC = () => {
               state: clinicResult.clinic.state,
               status: clinicResult.clinic.status,
               user_metadata: {
-                ...authUser.user_metadata,
+                ...(authUser as any).user_metadata,
                 clinic_name: clinicResult.clinic.clinic_name
               }
             };
@@ -66,14 +65,15 @@ export const ClinicDashboard: React.FC = () => {
           } else {
             console.warn('No clinic profile found, using auth user data only');
             // If no clinic profile, try to extract clinic name from metadata
-            const clinicName = authUser.user_metadata?.clinic_name || 
-                             authUser.user_metadata?.first_name || 
+            const authUserAny = authUser as any;
+            const clinicName = authUserAny.user_metadata?.clinic_name || 
+                             authUserAny.user_metadata?.first_name || 
                              'My Clinic';
             setUser({
               ...authUser,
               clinic_name: clinicName,
               user_metadata: {
-                ...authUser.user_metadata,
+                ...(authUserAny.user_metadata || {}),
                 clinic_name: clinicName
               }
             });
@@ -98,24 +98,21 @@ export const ClinicDashboard: React.FC = () => {
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'doctors', label: 'Doctors', icon: Users },
-    // { id: 'patients', label: 'Registered Patients', icon: UserCheck },
     { id: 'manage', label: 'Manage Clinic', icon: Settings },
-    { id: 'settings', label: 'Profile', icon: UserCircle  },
+    { id: 'settings', label: 'Profile', icon: UserCircle },
   ];
 
   const handleSignOut = async () => {
+    console.log('[ClinicDashboard] Starting sign out');
     try {
       await logout();
+      console.log('[ClinicDashboard] Logout successful, navigating to home');
       navigate('/');
     } catch (error) {
-      console.error('Sign out error:', error);
+      console.error('[ClinicDashboard] Sign out error:', error);
+      // Even if logout fails, try to navigate away
       navigate('/');
     }
-  };
-
-  const handleSearch = (query: string) => {
-    // TODO: Implement search functionality for clinic dashboard
-    console.log('Clinic search query:', query);
   };
 
   const renderContent = () => {
@@ -156,7 +153,6 @@ export const ClinicDashboard: React.FC = () => {
       user={user}
       onSignOut={handleSignOut}
       variant="clinic"
-      searchPlaceholder="Search patients, appointments, or reports..."
       showNavbar={true}
     >
       {renderContent()}

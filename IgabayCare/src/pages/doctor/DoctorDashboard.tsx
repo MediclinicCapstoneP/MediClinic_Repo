@@ -164,13 +164,17 @@ export const DoctorDashboard: React.FC = () => {
   };
 
   const handleSignOut = async () => {
-  try {
-    await logout();
-    navigate('/');
-  } catch (error) {
-    console.error('Sign out error:', error);
-  }
-};
+    console.log('[DoctorDashboard] Starting sign out');
+    try {
+      await logout();
+      console.log('[DoctorDashboard] Logout successful, navigating to home');
+      navigate('/');
+    } catch (error) {
+      console.error('[DoctorDashboard] Sign out error:', error);
+      // Even if logout fails, try to navigate away
+      navigate('/');
+    }
+  };
 
   const handleMarkAsDone = (appointmentId: string) => {
     setAppointments(prev => 

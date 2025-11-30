@@ -4,6 +4,7 @@ export class SessionManager {
   private static instance: SessionManager;
   private currentUserId: string | null = null;
   private sessionCheckInterval: NodeJS.Timeout | null = null;
+  private isShuttingDown: boolean = false;
 
   private constructor() {
     this.startSessionMonitoring();
@@ -19,6 +20,7 @@ export class SessionManager {
   private startSessionMonitoring() {
     // Check session every 30 seconds
     this.sessionCheckInterval = setInterval(async () => {
+      if (this.isShuttingDown) return;
       await this.validateCurrentSession();
     }, 30000);
   }
@@ -54,8 +56,11 @@ export class SessionManager {
     console.log('Handling session conflict - clearing local state');
     this.currentUserId = null;
     
-    // Force page reload to reinitialize auth
-    window.location.reload();
+    // Instead of forcing reload, just clear session manager state
+    // Let the AuthContext handle the logout properly
+    if (!this.isShuttingDown) {
+      console.log('Session conflict detected - will be handled by AuthContext');
+    }
   }
 
   setCurrentUserId(userId: string | null) {
@@ -67,6 +72,7 @@ export class SessionManager {
   }
 
   cleanup() {
+    this.isShuttingDown = true;
     if (this.sessionCheckInterval) {
       clearInterval(this.sessionCheckInterval);
       this.sessionCheckInterval = null;

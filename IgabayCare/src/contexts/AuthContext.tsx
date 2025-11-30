@@ -277,20 +277,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(async () => {
+    console.log('[Auth] Starting logout process');
     setLoading(true);
     setError(null);
+    
     try {
-      await supabase.auth.signOut();
-      saveSessionToCache(null);
-      saveActiveRoleToSession(null);
+      // Clear local state first to prevent loading loops
       setSupabaseUser(null);
       setUser(null);
       setAvailableRoles([]);
       sessionManager.setCurrentUserId(null);
+      
+      // Clear session storage
+      saveSessionToCache(null);
+      saveActiveRoleToSession(null);
+      
+      // Then sign out from Supabase
+      await supabase.auth.signOut();
+      
+      console.log('[Auth] Logout completed successfully');
     } catch (err: any) {
       console.error('[Auth] logout error', err);
       setError(err instanceof Error ? err : new Error(String(err)));
-      throw err;
+      // Even if signOut fails, ensure local state is cleared
+      setSupabaseUser(null);
+      setUser(null);
+      setAvailableRoles([]);
+      sessionManager.setCurrentUserId(null);
+      saveSessionToCache(null);
+      saveActiveRoleToSession(null);
     } finally {
       setLoading(false);
     }
@@ -370,9 +385,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 3) Subscribe to auth state changes
       authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('[Auth] onAuthStateChange', event);
+        console.log('[Auth] onAuthStateChange', event, 'loading:', loading);
         try {
           if (event === 'SIGNED_OUT') {
+            console.log('[Auth] Handling SIGNED_OUT event');
             saveSessionToCache(null);
             saveActiveRoleToSession(null);
             setSupabaseUser(null);
@@ -385,6 +401,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // For SIGNED_IN / TOKEN_REFRESHED / INITIAL_SESSION
           if (session?.user) {
+            console.log('[Auth] Setting user from session change');
             saveSessionToCache(session);
             setSupabaseUser(session.user);
             sessionManager.setCurrentUserId(session.user.id);
@@ -395,6 +412,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ]);
           } else {
             // no user in session
+            console.log('[Auth] No user in session, clearing state');
             setSupabaseUser(null);
             setUser(null);
             setAvailableRoles([]);
@@ -410,6 +428,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 4) Setup periodic session re-validation (every 4 minutes)
       refreshInterval = window.setInterval(async () => {
+        if (!mounted || loading) return; // Skip if component is unmounted or loading
+        
         try {
           const { data } = await supabase.auth.getSession();
           const session = data.session;
@@ -418,6 +438,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const cachedToken = cached?.access_token ?? null;
           const newToken = session?.access_token ?? null;
           if (newToken !== cachedToken) {
+            console.log('[Auth] Session token changed, updating state');
             saveSessionToCache(session ?? null);
             if (session?.user) {
               setSupabaseUser(session.user);

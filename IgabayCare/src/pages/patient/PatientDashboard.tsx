@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { 
   User, 
   Calendar, 
-  MapPin, 
   History, 
   Home,
   Pill
 } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../contexts/AuthContext';
 import PatientHome from './PatientHome';
 import { PatientProfileComponent } from './PatientProfile';
@@ -36,16 +34,16 @@ const PatientDashboard: React.FC = () => {
   }, [user, authLoading, navigate]);
 
   const handleSignOut = async () => {
+    console.log('[PatientDashboard] Starting sign out');
     try {
       await logout();
+      console.log('[PatientDashboard] Logout successful, navigating to home');
       navigate('/');
     } catch (error) {
-      console.error('Sign out error:', error);
+      console.error('[PatientDashboard] Sign out error:', error);
+      // Even if logout fails, try to navigate away
+      navigate('/');
     }
-  };
-
-  const handleSearch = (query: string) => {
-    console.log('Patient search query:', query);
   };
 
   const navigationItems = [
@@ -81,7 +79,7 @@ const PatientDashboard: React.FC = () => {
     }
   ];
 
-  const patientId = user?.id || user?.user?.id || '';
+  const patientId = user?.id || '';
 
   const renderContent = () => {
     switch (activeTab) {

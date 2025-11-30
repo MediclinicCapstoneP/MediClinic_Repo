@@ -18,23 +18,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+    
     // Get initial session
     authService.getCurrentUser().then((currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
+      if (mounted) {
+        console.log('[Mobile Auth] Initial session loaded:', currentUser?.email);
+        setUser(currentUser);
+        setLoading(false);
+      }
     }).catch((error) => {
       console.error('Auth initialization error:', error);
       // For development - fallback to login if Supabase is not configured
-      setLoading(false);
+      if (mounted) {
+        setLoading(false);
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = authService.onAuthStateChange((user) => {
-      setUser(user);
-      setLoading(false);
+      if (mounted) {
+        console.log('[Mobile Auth] Auth state changed:', user?.email || 'null');
+        setUser(user);
+        setLoading(false);
+      }
     });
 
-    return () => subscription?.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -60,15 +73,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    console.log('[Mobile Auth] Starting sign out');
     setLoading(true);
     try {
-      await authService.signOut();
-      // Immediately clear user state and loading
+      // Clear user state first to prevent loading loops
       setUser(null);
-      setLoading(false);
+      
+      // Then sign out from auth service
+      await authService.signOut();
+      
+      console.log('[Mobile Auth] Logout completed successfully');
     } catch (error) {
+      console.error('[Mobile Auth] Sign out error:', error);
+      // Even if signOut fails, ensure user state is cleared
+      setUser(null);
+    } finally {
       setLoading(false);
-      throw error;
     }
   };
 
