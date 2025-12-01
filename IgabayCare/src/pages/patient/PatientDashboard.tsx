@@ -23,12 +23,16 @@ const PatientDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('home');
 
   useEffect(() => {
+    console.log('[PatientDashboard] Auth state check:', { authLoading, user: !!user, userId: user?.id });
+    
     // Use auth context loading state, no need for separate auth check
     if (!authLoading) {
       if (!user) {
+        console.log('[PatientDashboard] No user found, redirecting to signin');
         navigate('/signin');
         return;
       }
+      console.log('[PatientDashboard] User authenticated, setting loading to false');
       setLoading(false);
     }
   }, [user, authLoading, navigate]);

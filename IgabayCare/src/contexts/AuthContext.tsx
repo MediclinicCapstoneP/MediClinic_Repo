@@ -14,7 +14,7 @@ interface AuthContextType {
   switchRole: (role: 'patient' | 'clinic') => Promise<void>;
   availableRoles: string[];
   fetchUserProfile: (userId: string) => Promise<void>;
-  fetchAvailableRoles: (userId: string) => Promise<void>;
+  fetchAvailableRoles: (userId: string) => Promise<string[]>;
   error: Error | null;
 }
 
@@ -93,6 +93,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<Error | null>(null);
   const [initializing, setInitializing] = useState(true);
 
+  // Add timeout to prevent infinite loading
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading || initializing) {
+        console.warn('[Auth] Initialization timeout - forcing loading to false');
+        setLoading(false);
+        setInitializing(false);
+        // Don't clear user state on timeout - let the session check handle it
+      }
+    }, 15000); // Increased to 15 seconds
+
+    return () => clearTimeout(timeout);
+  }, [loading, initializing]);
+
   // Use ref to avoid dependency loops
   const supabaseUserRef = useRef<SupabaseUser | null>(null);
 
@@ -105,11 +119,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('[Auth] Fetching user profile for user ID:', userId);
 
-      // Run both queries in parallel
-      const [patientRes, clinicRes] = await Promise.all([
-        supabase.from('patients').select('*').eq('user_id', userId).maybeSingle(),
-        supabase.from('clinics').select('*').eq('user_id', userId).maybeSingle(),
-      ]);
+      // Run both queries in parallel with timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 8000)
+      );
+
+      const [patientRes, clinicRes] = await Promise.race([
+        Promise.all([
+          supabase.from('patients').select('*').eq('user_id', userId).maybeSingle(),
+          supabase.from('clinics').select('*').eq('user_id', userId).maybeSingle(),
+        ]),
+        timeoutPromise
+      ]) as [any, any];
 
       // If both exist, choose active role from sessionStorage or default to first
       const roles: ('patient' | 'clinic')[] = [];
@@ -163,16 +184,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (err: any) {
       console.error('[Auth] fetchUserProfile error', err);
+      // Create fallback user even on error to prevent redirect loop
+      const fallbackUser = {
+        id: userId,
+        email: supabaseUserRef.current?.email ?? '',
+        role: 'patient' as const, // Default to patient on error
+        createdAt: new Date().toISOString(),
+      };
+      console.log('[Auth] Creating fallback user due to error:', fallbackUser);
+      setUser(fallbackUser);
       setError(err instanceof Error ? err : new Error(String(err)));
-      // Fallback minimal user to avoid indefinite loading
-      setUser((prev) =>
-        prev ?? {
-          id: userId,
-          email: supabaseUserRef.current?.email ?? '',
-          role: 'patient',
-          createdAt: new Date().toISOString(),
-        }
-      );
     }
   }, []); // Remove supabaseUser dependency
 
@@ -180,10 +201,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('[Auth] Fetching available roles for user ID:', userId);
 
-      const [patientRes, clinicRes] = await Promise.all([
-        supabase.from('patients').select('id').eq('user_id', userId).maybeSingle(),
-        supabase.from('clinics').select('id').eq('user_id', userId).maybeSingle(),
-      ]);
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Roles fetch timeout')), 5000)
+      );
+
+      const [patientRes, clinicRes] = await Promise.race([
+        Promise.all([
+          supabase.from('patients').select('id').eq('user_id', userId).maybeSingle(),
+          supabase.from('clinics').select('id').eq('user_id', userId).maybeSingle(),
+        ]),
+        timeoutPromise
+      ]) as [any, any];
 
       const roles: ('patient' | 'clinic')[] = [];
       if (patientRes?.data) roles.push('patient');
@@ -194,8 +223,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return roles;
     } catch (err: any) {
       console.error('[Auth] fetchAvailableRoles error', err);
-      setAvailableRoles([]);
-      return [];
+      // Default to patient role on error to prevent issues
+      const defaultRoles = ['patient'];
+      setAvailableRoles(defaultRoles);
+      console.log('[Auth] Using default roles due to error:', defaultRoles);
+      return defaultRoles;
     }
   }, []);
 
@@ -361,11 +393,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (session?.user && mounted) {
           setSupabaseUser(session.user);
           sessionManager.setCurrentUserId(session.user.id);
-          // fetch profile + roles in parallel
-          await Promise.all([
-            fetchUserProfile(session.user.id),
-            fetchAvailableRoles(session.user.id),
-          ]);
+          // fetch profile + roles in parallel with error handling
+          try {
+            await Promise.all([
+              fetchUserProfile(session.user.id),
+              fetchAvailableRoles(session.user.id),
+            ]);
+          } catch (profileErr) {
+            console.error('[Auth] Error fetching profile/roles:', profileErr);
+            // Continue even if profile fetching fails
+            setError(profileErr instanceof Error ? profileErr : new Error(String(profileErr)));
+          }
         } else if (mounted) {
           // no session
           setSupabaseUser(null);
@@ -384,7 +422,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 3) Subscribe to auth state changes
-      authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
+      const { subscription } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('[Auth] onAuthStateChange', event, 'loading:', loading);
         try {
           if (event === 'SIGNED_OUT') {
@@ -405,11 +443,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             saveSessionToCache(session);
             setSupabaseUser(session.user);
             sessionManager.setCurrentUserId(session.user.id);
-            // Refresh profile + roles
-            await Promise.all([
-              fetchUserProfile(session.user.id),
-              fetchAvailableRoles(session.user.id),
-            ]);
+            // Refresh profile + roles with error handling
+            try {
+              await Promise.all([
+                fetchUserProfile(session.user.id),
+                fetchAvailableRoles(session.user.id),
+              ]);
+            } catch (profileErr) {
+              console.error('[Auth] Error fetching profile/roles in state change:', profileErr);
+              setError(profileErr instanceof Error ? profileErr : new Error(String(profileErr)));
+            }
           } else {
             // no user in session
             console.log('[Auth] No user in session, clearing state');
@@ -425,6 +468,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
         }
       }).data;
+      
+      authSubscription = subscription;
 
       // 4) Setup periodic session re-validation (every 4 minutes)
       refreshInterval = window.setInterval(async () => {

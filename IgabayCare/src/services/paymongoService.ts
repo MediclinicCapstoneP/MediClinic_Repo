@@ -89,12 +89,22 @@ class PayMongoService {
     this.publicKey = import.meta.env.VITE_PAYMONGO_PUBLIC_KEY || '';
     
     if (!this.secretKey || !this.publicKey) {
-      console.warn('PayMongo API keys not configured. Please set VITE_PAYMONGO_SECRET_KEY and VITE_PAYMONGO_PUBLIC_KEY');
+      console.error('PayMongo API keys not configured. Please set VITE_PAYMONGO_SECRET_KEY and VITE_PAYMONGO_PUBLIC_KEY in your .env file');
+      console.warn('Payment functionality will not work without proper API keys');
     }
   }
 
   private getAuthHeaders(useSecretKey = true): HeadersInit {
     const key = useSecretKey ? this.secretKey : this.publicKey;
+    
+    if (!key) {
+      console.error('❌ PayMongo API key not configured:', {
+        useSecretKey,
+        hasSecretKey: !!this.secretKey,
+        hasPublicKey: !!this.publicKey
+      });
+    }
+    
     return {
       'Authorization': `Basic ${btoa(key)}`,
       'Content-Type': 'application/json',
@@ -271,6 +281,14 @@ class PayMongoService {
    * Process GCash payment (complete workflow)
    */
   async processGCashPayment(request: GCashPaymentRequest): Promise<GCashPaymentResult> {
+    // Check if API keys are configured
+    if (!this.secretKey || !this.publicKey) {
+      return {
+        success: false,
+        error: 'PayMongo API keys not configured. Please contact support.'
+      };
+    }
+
     try {
       // Step 1: Create Payment Intent
       const intentResult = await this.createPaymentIntent(request);
@@ -338,9 +356,12 @@ class PayMongoService {
    * Handle payment return/callback
    */
   async handlePaymentReturn(paymentIntentId: string): Promise<GCashPaymentResult> {
+    console.log('🔍 Checking payment status for intent:', paymentIntentId);
+    
     const result = await this.getPaymentIntent(paymentIntentId);
     
     if (result.errors || !result.data) {
+      console.error('❌ Error retrieving payment intent:', result.errors);
       return {
         success: false,
         error: result.errors?.[0]?.detail || 'Failed to retrieve payment status'
@@ -348,13 +369,22 @@ class PayMongoService {
     }
 
     const paymentIntent = result.data;
-    const isSuccessful = paymentIntent.attributes.status === 'succeeded';
+    const status = paymentIntent.attributes.status;
+    const isSuccessful = status === 'succeeded';
+    
+    console.log('📊 Payment status:', {
+      id: paymentIntent.id,
+      status: status,
+      isSuccessful: isSuccessful,
+      amount: paymentIntent.attributes.amount / 100, // Convert from centavos
+      currency: paymentIntent.attributes.currency
+    });
 
     return {
       success: isSuccessful,
       payment_intent_id: paymentIntent.id,
-      status: paymentIntent.attributes.status,
-      error: isSuccessful ? undefined : 'Payment was not completed successfully'
+      status: status,
+      error: isSuccessful ? undefined : `Payment not completed. Current status: ${status}`
     };
   }
 }

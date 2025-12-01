@@ -4,9 +4,13 @@ import { User, Eye, EyeOff, AlertCircle, Shield, Lock, Mail } from 'lucide-react
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
-import { roleBasedAuthService } from '../utils/roleBasedAuthService';
+import { useAuth } from '../../../contexts/AuthContext';
 
-export const SignInForm: React.FC = () => {
+interface SignInFormProps {
+  onSuccess?: () => void;
+}
+
+export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -16,6 +20,7 @@ export const SignInForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { login, loading: authLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,19 +28,24 @@ export const SignInForm: React.FC = () => {
     setError(null);
 
     try {
-      console.log('Attempting patient sign in with email:', formData.email);
-      const result = await roleBasedAuthService.patient.signIn(formData);
-
-      if (result.success) {
-        console.log('Patient sign in successful');
-        navigate('/patient/dashboard');
-      } else {
-        console.error('Patient sign in failed:', result.error);
-        setError(result.error || 'Sign in failed');
-      }
-    } catch (err) {
+      console.log('Attempting sign in with email:', formData.email);
+      await login(formData.email, formData.password);
+      
+      console.log('Sign in successful, waiting for auth state to update...');
+      // Wait a moment for AuthContext to update the user state
+      setTimeout(() => {
+        console.log('Sign in successful, redirecting to dashboard');
+        // Call success callback if provided
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          // Default redirect to patient dashboard
+          navigate('/patient/dashboard');
+        }
+      }, 500); // 500ms delay to ensure auth state is updated
+    } catch (err: any) {
       console.error('Sign in error:', err);
-      setError('An unexpected error occurred');
+      setError(err.message || 'Sign in failed');
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +113,7 @@ export const SignInForm: React.FC = () => {
                   placeholder="Enter your email address"
                   required
                   disabled={isLoading}
+                  autoComplete="email"
                   className={`border-2 ${focusedField === 'email' ? 'border-blue-500 shadow-lg' : 'border-gray-200'} rounded-xl px-4 py-3 transition-all duration-200`}
                 />
               </div>
@@ -123,6 +134,7 @@ export const SignInForm: React.FC = () => {
                     placeholder="Enter your password"
                     required
                     disabled={isLoading}
+                    autoComplete="current-password"
                     className={`border-2 pr-12 ${focusedField === 'password' ? 'border-blue-500 shadow-lg' : 'border-gray-200'} rounded-xl px-4 py-3 transition-all duration-200`}
                   />
                   <button
@@ -159,8 +171,8 @@ export const SignInForm: React.FC = () => {
                 type="submit"
                 variant="gradient"
                 className="w-full bg-gradient-to-r from-blue-500 to-sky-600 hover:from-blue-600 hover:to-sky-700 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transform transition-all duration-300 hover:scale-105 disabled:scale-100"
-                loading={isLoading}
-                disabled={isLoading}
+                loading={isLoading || authLoading}
+                disabled={isLoading || authLoading}
               >
                 {isLoading ? (
                   <>
@@ -243,39 +255,7 @@ export const SignInForm: React.FC = () => {
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes blob {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
-          100% {
-            transform: translate(0px, 0px) scale(1);
-          }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
-          20%, 40%, 60%, 80% { transform: translateX(2px); }
-        }
-        .animate-shake {
-          animation: shake 0.5s;
-        }
-      `}</style>
+      {/* CSS-in-JS styles moved to inline for better compatibility */}
     </div>
   );
 };

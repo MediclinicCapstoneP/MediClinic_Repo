@@ -24,6 +24,7 @@ import PaymentDebugPage from './pages/PaymentDebugPage';
 import MedicalHistoryPage from './pages/MedicalHistoryPage';
 import PushNotificationTest from './pages/PushNotificationTest';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { LoadingDebug } from './components/debug/LoadingDebug';
 
 // Import environment checker in development
 if (import.meta.env.DEV) {
@@ -41,6 +42,7 @@ const App: React.FC = () => {
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230ea5e9' fill-opacity='0.03'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
             }}></div>
             <div className="relative">
+              <LoadingDebug />
               <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/signin" element={<SignInPage />} />

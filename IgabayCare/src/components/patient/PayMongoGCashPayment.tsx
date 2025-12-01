@@ -96,10 +96,16 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
   // Handle redirect to GCash
   const handleGCashRedirect = () => {
     if (paymentResult?.redirect_url) {
-      window.open(paymentResult.redirect_url, '_blank');
+      // Open in new tab for better UX
+      const popup = window.open(paymentResult.redirect_url, 'gcash_payment', 'width=500,height=600,scrollbars=yes,resizable=yes');
       
       // Start polling for payment status
       startPaymentStatusPolling();
+      
+      // Fallback if popup is blocked
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        window.open(paymentResult.redirect_url, '_blank');
+      }
     }
   };
 
@@ -107,29 +113,56 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
   const startPaymentStatusPolling = () => {
     if (!paymentResult?.payment_intent_id) return;
 
+    let pollCount = 0;
+    const maxPolls = 200; // 200 polls * 3 seconds = 10 minutes max
+
     const pollInterval = setInterval(async () => {
       try {
+        pollCount++;
+        
+        // Stop polling after max attempts
+        if (pollCount > maxPolls) {
+          clearInterval(pollInterval);
+          setError('Payment verification timed out. Please check your payment status.');
+          onPaymentError('Payment verification timed out');
+          return;
+        }
+
         const statusResult = await paymongoService.handlePaymentReturn(paymentResult.payment_intent_id!);
+        
+        console.log(`🔄 Poll attempt ${pollCount}:`, statusResult);
         
         if (statusResult.success && statusResult.status === 'succeeded') {
           clearInterval(pollInterval);
           sessionStorage.removeItem('paymongo_payment_intent_id');
           sessionStorage.removeItem('paymongo_appointment_id');
+          console.log('✅ Payment successful!');
           onPaymentSuccess(paymentResult.payment_intent_id!);
-        } else if (statusResult.status === 'canceled' || statusResult.error) {
+        } else if (statusResult.status === 'canceled') {
           clearInterval(pollInterval);
-          setError('Payment was cancelled or failed');
-          onPaymentError('Payment was not completed');
+          setError('Payment was cancelled');
+          onPaymentError('Payment was cancelled');
+        } else if (statusResult.status === 'failed') {
+          clearInterval(pollInterval);
+          setError('Payment failed');
+          onPaymentError('Payment failed');
+        } else if (statusResult.error) {
+          clearInterval(pollInterval);
+          setError(`Payment error: ${statusResult.error}`);
+          onPaymentError(statusResult.error);
+        } else {
+          // Still processing - continue polling
+          console.log(`⏳ Payment still processing: ${statusResult.status}`);
         }
+        // Continue polling for other statuses (processing, awaiting_payment_method, etc.)
       } catch (err) {
         console.error('Payment status polling error:', err);
+        // Don't stop polling on network errors, continue trying
       }
     }, 3000); // Poll every 3 seconds
 
-    // Stop polling after 10 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval);
-    }, 600000);
+    // Store interval reference for cleanup
+    (window as any).paymentPollInterval = pollInterval;
   };
 
   // Check for returning payment on component mount
@@ -147,12 +180,22 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
             sessionStorage.removeItem('paymongo_payment_intent_id');
             sessionStorage.removeItem('paymongo_appointment_id');
             onPaymentSuccess(paymentIntentId);
+          } else if (result.status === 'canceled' || result.status === 'failed') {
+            sessionStorage.removeItem('paymongo_payment_intent_id');
+            sessionStorage.removeItem('paymongo_appointment_id');
+            setError('Payment was cancelled or failed');
+            onPaymentError('Payment was not completed');
           } else {
-            setError('Payment verification failed');
+            // Still processing, check again after delay
+            setTimeout(() => {
+              checkReturnPayment();
+            }, 2000);
+            return; // Don't set loading to false yet
           }
         } catch (err) {
           console.error('Payment return check error:', err);
           setError('Failed to verify payment status');
+          onPaymentError('Payment verification failed');
         } finally {
           setLoading(false);
         }
@@ -160,7 +203,14 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
     };
 
     checkReturnPayment();
-  }, [onPaymentSuccess]);
+    
+    // Cleanup polling interval on unmount
+    return () => {
+      if ((window as any).paymentPollInterval) {
+        clearInterval((window as any).paymentPollInterval);
+      }
+    };
+  }, [onPaymentSuccess, onPaymentError]);
 
   if (showRedirect && paymentResult) {
     return (
@@ -208,13 +258,22 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
           <Button variant="outline" onClick={onBack}>
             Cancel Payment
           </Button>
-          <Button 
-            variant="ghost" 
-            onClick={() => startPaymentStatusPolling()}
-            className="text-blue-600"
-          >
-            Check Payment Status
-          </Button>
+          <div className="space-x-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => startPaymentStatusPolling()}
+              className="text-blue-600"
+            >
+              Check Status
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.reload()}
+              className="text-gray-600"
+            >
+              Start Over
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -276,6 +335,9 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
             <div className="border-t pt-2 flex justify-between font-semibold">
               <span>Total Amount</span>
               <span>₱{(amount + (amount * 0.025)).toFixed(2)}</span>
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              *Processing fee will be added during payment
             </div>
           </div>
         </CardContent>

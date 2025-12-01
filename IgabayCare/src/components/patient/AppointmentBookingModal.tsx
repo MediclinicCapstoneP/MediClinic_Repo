@@ -206,9 +206,10 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
   const handleProceedToGCashPayment = () => {
     if (!selectedDate || !selectedTime) return;
+    const cost = calculateAppointmentCost();
     const appointmentDetails = {
       appointment_id: `temp_${Date.now()}`,
-      ...calculateAppointmentCost(),
+      ...cost,
       selectedDate,
       selectedTime,
       appointmentType,

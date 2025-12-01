@@ -148,8 +148,8 @@ export class AppointmentService {
       let query = supabase
         .from(this.TABLE_NAME)
         .select('*')
-        .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true });
+        .order('appointment_date', { ascending: false })
+        .order('appointment_time', { ascending: false });
 
       // Apply filters
       if (filters.patient_id) {
@@ -269,8 +269,8 @@ export class AppointmentService {
             email
           )
         `)
-        .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true });
+        .order('appointment_date', { ascending: false })
+        .order('appointment_time', { ascending: false });
 
       // Apply filters
       if (filters.patient_id) {
@@ -529,8 +529,8 @@ export class AppointmentService {
           patient:patients(id, first_name, last_name, email, phone),
           clinic:clinics(id, clinic_name, address, city, state)
         `)
-        .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true });
+        .order('appointment_date', { ascending: false })
+        .order('appointment_time', { ascending: false });
 
       // Apply filters
       if (filters.patient_id) {
@@ -579,8 +579,8 @@ export class AppointmentService {
         let fallbackQuery = supabase
           .from(this.TABLE_NAME)
           .select('*')
-          .order('appointment_date', { ascending: true })
-          .order('appointment_time', { ascending: true });
+          .order('appointment_date', { ascending: false })
+          .order('appointment_time', { ascending: false });
 
         // Apply same filters to fallback query
         if (filters.patient_id) {

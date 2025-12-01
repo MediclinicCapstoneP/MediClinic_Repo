@@ -15,4 +15,4 @@ const SignInPage: React.FC = () => {
   );
 };
 
-export default SignInPage; 
+export default SignInPage;
