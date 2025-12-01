@@ -44,7 +44,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: getStorage(),
     autoRefreshToken: true,
-    persistSession: typeof window !== 'undefined', // Only persist in browser environments
+    persistSession: true, // Always persist session for React Native
     detectSessionInUrl: Platform.OS === 'web',
   },
 });

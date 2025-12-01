@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.3)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const loadingProgressAnim = useRef(new Animated.Value(0)).current;
   const { user, loading } = useAuth();
 
   useEffect(() => {
@@ -27,22 +27,12 @@ export default function SplashScreen() {
       }),
     ]).start();
 
-    // Pulse animation
-    const pulseAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulseAnimation.start();
+    // Start loading progress animation
+    Animated.timing(loadingProgressAnim, {
+      toValue: 1,
+      duration: 1500,
+      useNativeDriver: false,
+    }).start();
 
     // Navigate based on auth state after shorter delay
     const timer = setTimeout(() => {
@@ -65,7 +55,6 @@ export default function SplashScreen() {
 
     return () => {
       clearTimeout(timer);
-      pulseAnimation.stop();
     };
   }, [user, loading]);
 
@@ -83,16 +72,9 @@ export default function SplashScreen() {
           },
         ]}
       >
-        <Animated.View
-          style={[
-            styles.logoContainer,
-            {
-              transform: [{ scale: pulseAnim }],
-            },
-          ]}
-        >
+        <View style={styles.logoContainer}>
           <Heart size={64} color="#FFFFFF" fill="#FFFFFF" />
-        </Animated.View>
+        </View>
         
         <Text style={styles.appName}>MediClinic</Text>
         <Text style={styles.tagline}>Your Health, Our Priority</Text>
@@ -103,7 +85,11 @@ export default function SplashScreen() {
               style={[
                 styles.loadingProgress,
                 {
-                  opacity: fadeAnim,
+                  width: loadingProgressAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                    extrapolate: 'clamp',
+                  }),
                 },
               ]}
             />
@@ -164,9 +150,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   loadingProgress: {
-    flex: 1,
+    height: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 2,
+    position: 'absolute',
+    left: 0,
+    top: 0,
   },
   loadingText: {
     fontSize: 14,

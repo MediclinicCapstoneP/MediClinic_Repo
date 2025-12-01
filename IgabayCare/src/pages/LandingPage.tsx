@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from "../components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/Card";
-import { Heart, Shield, Users, ArrowRight, Stethoscope, Calendar, MessageCircle, Star, CheckCircle, Activity, Award, Clock } from "lucide-react";
+import { Heart, Shield, Users, ArrowRight, Stethoscope, Calendar, Star, CheckCircle, Activity, Award, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 
@@ -29,12 +29,6 @@ const LandingPage = () => {
       title: "Digital Health Records",
       description: "Comprehensive electronic health records with seamless provider integration",
       color: "bg-gradient-clinical"
-    },
-    {
-      icon: Heart,
-      title: "Telehealth Ready",
-      description: "Built-in video consultations with secure messaging and file sharing",
-      color: "bg-gradient-primary"
     }
   ];
 
@@ -65,32 +59,7 @@ const LandingPage = () => {
     }
   ];
 
-  const medicalStats = [
-    {
-      value: "500+",
-      label: "Verified Medical Centers",
-      icon: Award,
-      description: "Accredited healthcare facilities"
-    },
-    {
-      value: "10K+",
-      label: "Satisfied Patients",
-      icon: Users,
-      description: "Patients served monthly"
-    },
-    {
-      value: "24/7",
-      label: "Medical Support",
-      icon: Clock,
-      description: "Round-the-clock assistance"
-    },
-    {
-      value: "99.9%",
-      label: "System Uptime",
-      icon: Shield,
-      description: "Reliable healthcare platform"
-    }
-  ];
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 text-foreground relative overflow-hidden">
@@ -133,24 +102,16 @@ const LandingPage = () => {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 text-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-50/40 via-sky-50/40 to-cyan-50/40 rounded-3xl"></div>
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 rounded-3xl"
+          style={{ backgroundImage: 'url(/Images/gettyimages-638362318-612x612.jpg)' }}
+        ></div>
         <div className="absolute top-10 left-10 w-20 h-20 bg-gradient-to-br from-blue-200 to-sky-200 rounded-full blur-xl opacity-30 animate-blob"></div>
         <div className="absolute bottom-10 right-10 w-32 h-32 bg-gradient-to-br from-sky-200 to-cyan-200 rounded-full blur-xl opacity-30 animate-blob animation-delay-2000"></div>
         <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-gradient-to-br from-cyan-200 to-blue-200 rounded-full blur-lg opacity-30 animate-blob animation-delay-4000"></div>
 
         <div className="relative max-w-5xl mx-auto">
-          <div className="animate-bounce-gentle mb-8">
-            <div className="inline-flex items-center gap-3 bg-white/90 text-blue-700 px-6 py-3 rounded-full text-sm font-medium shadow-lg border border-blue-200 backdrop-blur-sm">
-              <div className="flex items-center">
-                <Award className="h-4 w-4 text-cyan-600 mr-1" />
-                <span className="text-cyan-700 font-semibold">HIPAA Compliant</span>
-              </div>
-              <div className="w-px h-4 bg-blue-300"></div>
-              <div className="flex items-center">
-                <Shield className="h-4 w-4 text-blue-600 mr-1" />
-                <span>Trusted by 500+ Clinics</span>
-              </div>
-            </div>
-          </div>
+          
           
           <h1 className="text-5xl md:text-7xl font-bold text-foreground mb-6 animate-slide-up leading-tight">
             Professional Healthcare,{" "}
@@ -160,8 +121,7 @@ const LandingPage = () => {
           </h1>
           
           <p className="text-xl text-neutral-600 mb-8 max-w-3xl mx-auto animate-slide-up leading-relaxed">
-            Connect patients with verified healthcare providers through our secure, 
-            HIPAA-compliant platform. Streamline appointments, manage health records, 
+            Connect patients with verified healthcare providers through our secure appointment booking system, manage health records, 
             and deliver exceptional patient care.
           </p>
           
@@ -186,36 +146,11 @@ const LandingPage = () => {
               <span>Learn About Security</span>
             </Link>
           </Button>
-          <Button 
-            variant="medical" 
-            size="lg" 
-            onClick={() => navigate("/chat")} 
-            className="text-lg px-8 py-4 bg-gradient-to-r from-sky-500 to-cyan-600 hover:from-sky-600 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105"
-          >
-            <MessageCircle className="mr-2 h-5 w-5" />
-            Try AI Assistant
-          </Button>
+          
         </div>
 
           {/* Trust indicators */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16">
-            {medicalStats.map((stat, index) => (
-              <div 
-                key={index} 
-                className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-neutral-200 shadow-sm hover:shadow-md transition-all duration-300"
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div className="flex items-center justify-center mb-2">
-                  <div className="p-2 bg-gradient-primary rounded-lg">
-                    <stat.icon className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-                <div className="text-2xl font-bold text-neutral-900 mb-1">{stat.value}</div>
-                <div className="text-sm font-medium text-neutral-700 mb-1">{stat.label}</div>
-                <div className="text-xs text-neutral-500">{stat.description}</div>
-              </div>
-            ))}
-          </div>
+          
         </div>
       </section>
 
@@ -235,7 +170,7 @@ const LandingPage = () => {
               Enterprise-grade features designed for modern healthcare delivery
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="flex flex-wrap justify-center gap-8 max-w-4xl mx-auto">
             {features.map((feature, index) => (
               <div
                 key={index}
@@ -246,7 +181,7 @@ const LandingPage = () => {
                 onMouseEnter={() => setHoveredFeature(index)}
                 onMouseLeave={() => setHoveredFeature(null)}
               >
-                <Card className="text-center transition-all duration-300 bg-white border border-neutral-200 shadow-medical-card group animate-fade-in h-full">
+                <Card className="text-center transition-all duration-300 bg-white border border-neutral-200 shadow-medical-card group animate-fade-in h-full w-80">
                   <CardHeader className="pb-4">
                     <div className={`mx-auto p-4 ${feature.color} rounded-2xl w-fit shadow-lg group-hover:scale-110 transition-transform duration-300 mb-4`}>
                       <feature.icon className="h-8 w-8 text-white" />
@@ -265,36 +200,6 @@ const LandingPage = () => {
             ))}
           </div>
           
-          {/* Additional feature highlights */}
-          <div className="mt-16 bg-gradient-to-r from-primary-50 to-medical-50 rounded-2xl p-8 border border-primary-200">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-neutral-900 mb-2">Why Healthcare Providers Choose Us</h3>
-              <p className="text-neutral-600">Built specifically for medical professionals and healthcare organizations</p>
-            </div>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="bg-clinical-100 p-3 rounded-full w-12 h-12 mx-auto mb-3 flex items-center justify-center">
-                  <Shield className="h-6 w-6 text-clinical-600" />
-                </div>
-                <h4 className="font-semibold text-neutral-900 mb-1">HIPAA Compliance</h4>
-                <p className="text-sm text-neutral-600">Full compliance with healthcare data protection standards</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-primary-100 p-3 rounded-full w-12 h-12 mx-auto mb-3 flex items-center justify-center">
-                  <Clock className="h-6 w-6 text-primary-600" />
-                </div>
-                <h4 className="font-semibold text-neutral-900 mb-1">Real-time Sync</h4>
-                <p className="text-sm text-neutral-600">Instant updates across all devices and platforms</p>
-              </div>
-              <div className="text-center">
-                <div className="bg-medical-100 p-3 rounded-full w-12 h-12 mx-auto mb-3 flex items-center justify-center">
-                  <Award className="h-6 w-6 text-medical-600" />
-                </div>
-                <h4 className="font-semibold text-neutral-900 mb-1">Medical Grade</h4>
-                <p className="text-sm text-neutral-600">Meets healthcare industry standards and regulations</p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -408,22 +313,7 @@ const LandingPage = () => {
             </p>
           </div>
           
-          <div className="grid md:grid-cols-4 gap-8 text-center">
-            {medicalStats.map((stat, index) => (
-              <div key={index} className="animate-float" style={{ animationDelay: `${index * 0.5}s` }}>
-                <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-6 border border-white/30">
-                  <div className="flex items-center justify-center mb-4">
-                    <div className="p-3 bg-white/20 rounded-xl">
-                      <stat.icon className="h-6 w-6 text-white" />
-                    </div>
-                  </div>
-                  <div className="text-4xl font-bold text-white mb-2">{stat.value}</div>
-                  <div className="text-white/90 font-medium mb-1">{stat.label}</div>
-                  <div className="text-sm text-white/70">{stat.description}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          
           
           <div className="mt-16 text-center">
             <Button 

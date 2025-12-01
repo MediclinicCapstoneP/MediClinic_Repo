@@ -9,9 +9,11 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
+import { Image } from 'react-native';
 import { User, Edit, LogOut, ChevronDown } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { router } from 'expo-router';
+import { Patient, Clinic, Doctor } from '../lib/supabase';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -29,9 +31,21 @@ export default function UserProfileDropdown({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
-  const userName = (user?.profile as any)?.data?.first_name && (user?.profile as any)?.data?.last_name
-    ? `${(user?.profile as any)?.data?.first_name} ${(user?.profile as any)?.data?.last_name}`
-    : (user?.profile as any)?.data?.first_name || 'Patient';
+  let userName = 'User';
+  let avatarUrl: string | undefined;
+  if (user?.role === 'patient' && user.profile?.data) {
+    const p = user.profile.data as Patient;
+    userName = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Patient';
+    avatarUrl = p.profile_pic_url || undefined;
+  } else if ((user?.role === 'doctor') && user.profile?.data) {
+    const d = user.profile.data as Doctor;
+    userName = d.full_name || 'Doctor';
+    avatarUrl = d.profile_picture_url || d.profile_picture_path || undefined;
+  } else if ((user?.role === 'clinic') && user.profile?.data) {
+    const c = user.profile.data as Clinic;
+    userName = c.clinic_name || 'Clinic';
+    avatarUrl = c.profile_pic_url || undefined;
+  }
 
   const userInitials = userName
     .split(' ')
@@ -78,15 +92,7 @@ export default function UserProfileDropdown({
     if (onEditProfile) {
       onEditProfile();
     } else {
-      // Navigate to appropriate home screen based on user role
-      if (user?.role === 'patient') {
-        router.push('/(tabs)/patient');
-      } else if (user?.role === 'doctor' || user?.role === 'clinic') {
-        router.push('/(tabs)/doctor');
-      } else {
-        // Fallback to patient home for unknown roles
-        router.push('/(tabs)/patient');
-      }
+      router.push('/(tabs)/profile');
     }
   };
 
@@ -125,9 +131,13 @@ export default function UserProfileDropdown({
   return (
     <>
       <TouchableOpacity style={styles.profileButton} onPress={toggleDropdown}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{userInitials}</Text>
-        </View>
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{userInitials}</Text>
+          </View>
+        )}
         <ChevronDown 
           size={16} 
           color="#6B7280" 
@@ -159,9 +169,13 @@ export default function UserProfileDropdown({
             ]}
           >
             <View style={styles.dropdownHeader}>
-              <View style={styles.dropdownAvatar}>
-                <Text style={styles.dropdownAvatarText}>{userInitials}</Text>
-              </View>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.dropdownAvatarImage} />
+              ) : (
+                <View style={styles.dropdownAvatar}>
+                  <Text style={styles.dropdownAvatarText}>{userInitials}</Text>
+                </View>
+              )}
               <View style={styles.userInfo}>
                 <Text style={styles.signedInText}>Signed in as</Text>
                 <Text style={styles.userName}>{userName}</Text>
@@ -171,7 +185,7 @@ export default function UserProfileDropdown({
             <View style={styles.divider} />
 
             <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
-              <User size={18} color="#6B7280" />
+              <Edit size={18} color="#6B7280" />
               <Text style={styles.menuItemText}>Edit Profile</Text>
             </TouchableOpacity>
 
@@ -203,6 +217,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 6,
+  },
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 6,
+    backgroundColor: '#E5E7EB',
   },
   avatarText: {
     color: '#FFFFFF',
@@ -246,6 +267,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  dropdownAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: '#E5E7EB',
   },
   dropdownAvatarText: {
     color: '#FFFFFF',

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +16,14 @@ export function ProtectedRoute({
   redirectTo = '/(auth)/login'
 }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
+
+  const dependencies = useMemo(() => ({
+    userId: user?.id,
+    userRole: user?.role,
+    loading,
+    allowedRoles,
+    redirectTo,
+  }), [user?.id, user?.role, loading, allowedRoles, redirectTo]);
 
   useEffect(() => {
     if (!loading) {
@@ -37,7 +45,7 @@ export function ProtectedRoute({
         return;
       }
     }
-  }, [user, loading, allowedRoles, redirectTo]);
+  }, [dependencies.userId, dependencies.userRole, dependencies.loading, dependencies.allowedRoles, dependencies.redirectTo, user, redirectTo]);
 
   if (loading) {
     return (

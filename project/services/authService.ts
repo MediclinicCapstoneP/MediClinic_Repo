@@ -93,7 +93,7 @@ class AuthService {
       return {
         id: user.id,
         email: user.email!,
-        role: user.user_metadata?.role || 'patient',
+        role: profile?.role || 'patient',
         profile,
       };
     } catch (error) {
@@ -190,7 +190,7 @@ class AuthService {
         callback({
           id: session.user.id,
           email: session.user.email!,
-          role: session.user.user_metadata?.role || 'patient',
+          role: profile?.role || 'patient',
           profile,
         });
       } else {

@@ -16,6 +16,13 @@ interface CreateAppointmentData {
   notes?: string;
   status: string;
   patient_name?: string;
+  // Payment fields
+  payment_method?: string;
+  payment_status?: string;
+  payment_intent_id?: string;
+  total_amount?: number;
+  consultation_fee?: number;
+  booking_fee?: number;
 }
 
 export const appointmentBookingService = {
@@ -184,6 +191,13 @@ export const appointmentBookingService = {
         patient_notes: appointmentData.patient_notes,
         // Add patient name
         patient_name: patientName,
+        // Add payment fields if provided
+        ...(appointmentData.payment_method && { payment_method: appointmentData.payment_method }),
+        ...(appointmentData.payment_status && { payment_status: appointmentData.payment_status }),
+        ...(appointmentData.payment_intent_id && { payment_intent_id: appointmentData.payment_intent_id }),
+        ...(appointmentData.total_amount && { total_amount: appointmentData.total_amount }),
+        ...(appointmentData.consultation_fee && { consultation_fee: appointmentData.consultation_fee }),
+        ...(appointmentData.booking_fee && { booking_fee: appointmentData.booking_fee }),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

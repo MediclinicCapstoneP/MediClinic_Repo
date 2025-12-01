@@ -5,9 +5,8 @@ import { appointmentManagementAPI } from '../../features/auth/utils/appointmentM
 import { AppointmentNotificationService } from '../../services/appointmentNotificationService';
 import { supabase } from '../../supabaseClient';
 import type { AppointmentType } from '../../types/appointments';
-import GCashPayment from '../payment/GCashPayment'; // Using real Adyen integration
-import { adyenPaymentService } from '../../services/adyenPaymentService';
-import type { PaymentResponse } from '../../types/payment';
+import { PayMongoGCashPayment } from './PayMongoGCashPayment';
+import { paymongoService } from '../../services/paymongoService';
 import { X, ChevronLeft, ChevronRight, Clock, CheckCircle } from 'lucide-react';
 
 interface AppointmentBookingModalProps {
@@ -219,33 +218,60 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
     setShowGCashPayment(true);
   };
 
-
-
-  const handleGCashPaymentComplete = async (result: any) => {
+  const handleGCashPaymentComplete = async (paymentIntentId: string) => {
     setShowGCashPayment(false);
     
     if (!selectedDate || !selectedTime) return;
     
-    // Use the comprehensive appointment booking API with Adyen GCash payment
+    // Use the appointment booking service with PayMongo payment
     const dateStr = selectedDate.toISOString().split('T')[0];
     const composedNotes = buildComposedNotes(patientNotes, selectedServices);
     
-    const bookingResult = await appointmentManagementAPI.completeAppointmentBooking({
-      patientId,
-      clinicId: clinic.id,
-      appointmentDate: dateStr,
-      appointmentTime: selectedTime + ':00',
-      appointmentType,
-      patientNotes: composedNotes,
-      paymentMethod: 'gcash',
-      paymentProvider: 'adyen',
-      externalPaymentId: result.pspReference || result.paymentId || 'adyen_payment',
-      totalAmount: calculateAppointmentCost().total_amount,
-      consultationFee: calculateAppointmentCost().consultation_fee,
-      bookingFee: calculateAppointmentCost().booking_fee
+    const bookingResult = await appointmentBookingService.createAppointment({
+      patient_id: patientId,
+      clinic_id: clinic.id,
+      appointment_date: dateStr,
+      appointment_time: selectedTime + ':00',
+      appointment_type: appointmentType,
+      patient_notes: composedNotes,
+      status: 'confirmed', // Set as confirmed since payment is completed
+      payment_method: 'gcash',
+      payment_status: 'paid',
+      payment_intent_id: paymentIntentId,
+      total_amount: calculateAppointmentCost().total_amount,
+      consultation_fee: calculateAppointmentCost().consultation_fee,
+      booking_fee: calculateAppointmentCost().booking_fee
     });
 
-    if (bookingResult.success) {
+    if (bookingResult.success && bookingResult.appointment) {
+      // Get patient details for notification
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('first_name, last_name')
+        .eq('id', patientId)
+        .single();
+
+      const patientName = patient ? `${patient.first_name} ${patient.last_name}` : 'Patient';
+
+      // Send notification to clinic about new appointment
+      await AppointmentNotificationService.notifyClinicOfNewAppointment({
+        appointmentId: bookingResult.appointment.id,
+        patientId: patientId,
+        clinicId: clinic.id,
+        appointmentDate: dateStr,
+        appointmentTime: selectedTime,
+        patientName: patientName,
+        clinicName: clinic.clinic_name
+      });
+
+      // Create patient notification
+      await appointmentBookingService.createAppointmentNotification(
+        patientId,
+        clinic.clinic_name,
+        dateStr,
+        selectedTime
+      );
+
       setBookingSuccess(true);
       onAppointmentBooked?.();
       setTimeout(() => {
@@ -260,9 +286,9 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
     }
   };
 
-  const handleGCashPaymentError = (error: any) => {
+  const handleGCashPaymentError = (error: string) => {
     console.error('GCash payment error:', error);
-    alert(`Payment failed: ${error.error || error.message || 'Payment processing failed'}`);
+    alert(`Payment failed: ${error}`);
   };
 
   const handleGCashPaymentCancel = () => {
@@ -650,7 +676,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         </div>
       </div>
       
-      {/* Adyen GCash Payment Modal */}
+      {/* PayMongo GCash Payment Modal */}
       {showGCashPayment && appointmentData && patientData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -665,15 +691,17 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
                 </button>
               </div>
               
-              <GCashPayment
-                patientId={patientId}
-                clinicId={clinic.id}
-                appointmentId={appointmentData.appointment_id}
+              <PayMongoGCashPayment
                 amount={appointmentData.total_amount}
-                currency="PHP"
+                description="Appointment booking payment"
+                appointmentId={appointmentData.appointment_id}
+                clinicId={clinic.id}
+                patientName={`${patientData.first_name} ${patientData.last_name}`}
+                patientEmail={patientData.email}
+                patientPhone={patientData.phone || '09XXXXXXXXX'}
                 onPaymentSuccess={handleGCashPaymentComplete}
                 onPaymentError={handleGCashPaymentError}
-                onPaymentCancel={handleGCashPaymentCancel}
+                onBack={handleGCashPaymentCancel}
               />
             </div>
           </div>

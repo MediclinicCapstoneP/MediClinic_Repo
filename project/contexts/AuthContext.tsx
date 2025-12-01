@@ -19,30 +19,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    
-    // Get initial session
-    authService.getCurrentUser().then((currentUser) => {
-      if (mounted) {
-        console.log('[Mobile Auth] Initial session loaded:', currentUser?.email);
-        setUser(currentUser);
-        setLoading(false);
-      }
-    }).catch((error) => {
-      console.error('Auth initialization error:', error);
-      // For development - fallback to login if Supabase is not configured
-      if (mounted) {
-        setLoading(false);
-      }
+
+    const { data: { subscription } } = authService.onAuthStateChange((nextUser) => {
+      if (!mounted) return;
+      setUser(nextUser);
+      setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = authService.onAuthStateChange((user) => {
-      if (mounted) {
-        console.log('[Mobile Auth] Auth state changed:', user?.email || 'null');
-        setUser(user);
-        setLoading(false);
-      }
-    });
+    (async () => {
+      const current = await authService.getCurrentUser();
+      if (!mounted) return;
+      setUser(current);
+      setLoading(false);
+    })();
 
     return () => {
       mounted = false;
@@ -54,8 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const result = await authService.signIn(email, password);
+      console.log('[Mobile Auth] Sign in successful:', result);
       // User state will be updated by the auth state listener
     } catch (error) {
+      console.error('Sign in error:', error);
+      console.error('Error details:', error.message, error.stack);
       setLoading(false);
       throw error;
     }
@@ -65,8 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       await authService.signUp(email, password, role, profileData);
+      console.log('[Mobile Auth] Sign up successful');
       // User state will be updated by the auth state listener
     } catch (error) {
+      console.error('Sign up error:', error);
+      console.error('Error details:', error.message, error.stack);
       setLoading(false);
       throw error;
     }
@@ -85,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[Mobile Auth] Logout completed successfully');
     } catch (error) {
       console.error('[Mobile Auth] Sign out error:', error);
+      console.error('Error details:', error.message, error.stack);
       // Even if signOut fails, ensure user state is cleared
       setUser(null);
     } finally {
@@ -93,7 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    await authService.resetPassword(email);
+    try {
+      await authService.resetPassword(email);
+      console.log('[Mobile Auth] Password reset successful');
+    } catch (error) {
+      console.error('Password reset error:', error);
+      console.error('Error details:', error.message, error.stack);
+    }
   };
 
   const value = {
