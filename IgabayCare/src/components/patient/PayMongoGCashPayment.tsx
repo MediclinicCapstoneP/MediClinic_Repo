@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -35,6 +35,9 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [paymentResult, setPaymentResult] = useState<GCashPaymentResult | null>(null);
   const [showRedirect, setShowRedirect] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
+  const [pollCount, setPollCount] = useState(0);
+  const [isPolling, setIsPolling] = useState(false);
   const [patientInfo, setPatientInfo] = useState({
     name: patientName,
     email: patientEmail,
@@ -113,48 +116,64 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
   const startPaymentStatusPolling = () => {
     if (!paymentResult?.payment_intent_id) return;
 
-    let pollCount = 0;
+    setIsPolling(true);
+    let currentPollCount = 0;
     const maxPolls = 200; // 200 polls * 3 seconds = 10 minutes max
 
     const pollInterval = setInterval(async () => {
       try {
-        pollCount++;
+        currentPollCount++;
+        setPollCount(currentPollCount);
         
         // Stop polling after max attempts
-        if (pollCount > maxPolls) {
+        if (currentPollCount > maxPolls) {
           clearInterval(pollInterval);
-          setError('Payment verification timed out. Please check your payment status.');
+          setIsPolling(false);
+          setError('Payment verification timed out. Please check your payment status or try again.');
           onPaymentError('Payment verification timed out');
           return;
         }
 
         const statusResult = await paymongoService.handlePaymentReturn(paymentResult.payment_intent_id!);
         
-        console.log(`🔄 Poll attempt ${pollCount}:`, statusResult);
+        console.log(`🔄 Poll attempt ${currentPollCount}:`, statusResult);
+        console.log(`🔍 Poll status check - success: ${statusResult.success}, status: ${statusResult.status}`);
+        setPaymentStatus(statusResult.status);
         
         if (statusResult.success && statusResult.status === 'succeeded') {
+          console.log('✅ Polling confirmed payment succeeded, triggering success callback');
           clearInterval(pollInterval);
+          setIsPolling(false);
           sessionStorage.removeItem('paymongo_payment_intent_id');
           sessionStorage.removeItem('paymongo_appointment_id');
           console.log('✅ Payment successful!');
           onPaymentSuccess(paymentResult.payment_intent_id!);
         } else if (statusResult.status === 'canceled') {
           clearInterval(pollInterval);
+          setIsPolling(false);
           setError('Payment was cancelled');
           onPaymentError('Payment was cancelled');
         } else if (statusResult.status === 'failed') {
           clearInterval(pollInterval);
+          setIsPolling(false);
           setError('Payment failed');
           onPaymentError('Payment failed');
         } else if (statusResult.error) {
           clearInterval(pollInterval);
+          setIsPolling(false);
           setError(`Payment error: ${statusResult.error}`);
           onPaymentError(statusResult.error);
+        } else if (statusResult.status === 'awaiting_next_action') {
+          // Payment requires user action on GCash app
+          console.log(`⏳ Payment awaiting user action on GCash: ${statusResult.status}`);
+          // Don't stop polling, user might complete the payment later
+        } else if (statusResult.status === 'processing') {
+          // Payment is being processed
+          console.log(`⏳ Payment is processing: ${statusResult.status}`);
         } else {
           // Still processing - continue polling
           console.log(`⏳ Payment still processing: ${statusResult.status}`);
         }
-        // Continue polling for other statuses (processing, awaiting_payment_method, etc.)
       } catch (err) {
         console.error('Payment status polling error:', err);
         // Don't stop polling on network errors, continue trying
@@ -174,18 +193,33 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
       if (paymentIntentId && appointmentId) {
         setLoading(true);
         try {
+          console.log('🔍 Checking payment return for intent:', paymentIntentId);
           const result = await paymongoService.handlePaymentReturn(paymentIntentId);
           
+          console.log('📊 Payment return result:', result);
+          
+          // Double-check the status before proceeding
           if (result.success && result.status === 'succeeded') {
+            console.log('✅ Payment confirmed as succeeded, triggering success callback');
             sessionStorage.removeItem('paymongo_payment_intent_id');
             sessionStorage.removeItem('paymongo_appointment_id');
             onPaymentSuccess(paymentIntentId);
           } else if (result.status === 'canceled' || result.status === 'failed') {
+            console.log('❌ Payment cancelled or failed:', result.status);
             sessionStorage.removeItem('paymongo_payment_intent_id');
             sessionStorage.removeItem('paymongo_appointment_id');
             setError('Payment was cancelled or failed');
             onPaymentError('Payment was not completed');
+          } else if (result.status === 'awaiting_next_action') {
+            console.log('⏳ Payment awaiting user action on GCash app');
+            setError('Payment not completed. Current status: awaiting_next_action');
+            // Don't call onPaymentError, just continue waiting
+            setTimeout(() => {
+              checkReturnPayment();
+            }, 3000); // Check every 3 seconds
+            return; // Don't set loading to false yet
           } else {
+            console.log('⏳ Payment still processing:', result.status);
             // Still processing, check again after delay
             setTimeout(() => {
               checkReturnPayment();
@@ -225,19 +259,62 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
               Click the button below to open GCash and complete your payment of ₱{amount.toFixed(2)}
             </p>
             
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-              <div className="flex items-start">
-                <AlertCircle className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-yellow-800">
-                  <p className="font-medium mb-1">Important:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>You will be redirected to GCash to complete the payment</li>
-                    <li>Please complete the payment within 10 minutes</li>
-                    <li>Do not close this window until payment is confirmed</li>
-                  </ul>
+            {paymentStatus === 'awaiting_next_action' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start">
+                  {isPolling ? (
+                    <Loader2 className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0 animate-spin" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">
+                      {isPolling ? 'Checking Payment Status...' : 'Payment Awaiting Your Action:'}
+                    </p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Please open your GCash app to complete the payment</li>
+                      <li>Check for pending payment notifications in GCash</li>
+                      <li>This page will automatically detect when payment is completed</li>
+                      <li>Poll attempts: {pollCount}/200 (≈{Math.floor(pollCount * 3 / 60)} minutes elapsed)</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {paymentStatus && paymentStatus !== 'awaiting_next_action' && paymentStatus !== 'succeeded' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start">
+                  {isPolling ? (
+                    <Loader2 className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0 animate-spin" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium mb-1">
+                      {isPolling ? 'Checking Payment Status...' : `Payment Status: ${paymentStatus}`}
+                    </p>
+                    <p className="text-xs mt-1">Checking payment status... Attempt {pollCount}/200</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!paymentStatus && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium mb-1">Important:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>You will be redirected to GCash to complete the payment</li>
+                      <li>Please complete the payment within 10 minutes</li>
+                      <li>Do not close this window until payment is confirmed</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Button 
               onClick={handleGCashRedirect}
@@ -259,13 +336,21 @@ export const PayMongoGCashPayment: React.FC<PayMongoGCashPaymentProps> = ({
             Cancel Payment
           </Button>
           <div className="space-x-2">
-            <Button 
-              variant="ghost" 
-              onClick={() => startPaymentStatusPolling()}
-              className="text-blue-600"
-            >
-              Check Status
-            </Button>
+            {paymentStatus === 'awaiting_next_action' && (
+              <Button 
+                variant="ghost" 
+                onClick={() => startPaymentStatusPolling()}
+                className="text-blue-600"
+                disabled={isPolling}
+              >
+                {isPolling ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                {isPolling ? 'Checking...' : 'Check Again'}
+              </Button>
+            )}
             <Button 
               variant="outline" 
               onClick={() => window.location.reload()}

@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Bell, User, Heart, LogOut, Calendar, Stethoscope } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { NotificationDropdown } from '../patient/NotificationDropdown';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Notification {
   id: string;
@@ -25,6 +26,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
   onSignOut,
   activeTab = 'dashboard'
 }) => {
+  const { supabaseUser } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([
@@ -122,7 +124,7 @@ export const PatientNavbar: React.FC<PatientNavbarProps> = ({
           <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-4">
 
             {/* Notifications */}
-            <NotificationDropdown patientId={user?.id || ''} />
+            <NotificationDropdown patientId={supabaseUser?.id || ''} />
 
             {/* Profile */}
             <div className="flex items-center space-x-2">

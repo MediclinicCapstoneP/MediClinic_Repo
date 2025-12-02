@@ -39,18 +39,7 @@ export class AppointmentNotificationService {
         appointment_id: data.appointmentId,
         title: 'New Appointment Booking',
         message: `${data.patientName} has booked an appointment for ${data.appointmentDate} at ${data.appointmentTime}. Please assign a doctor to this appointment.`,
-        type: 'appointment_confirmed',
-        priority: 'normal',
-        action_url: `/clinic/appointments/${data.appointmentId}`,
-        action_text: 'Assign Doctor',
-        metadata: {
-          appointment_id: data.appointmentId,
-          patient_id: data.patientId,
-          patient_name: data.patientName,
-          appointment_date: data.appointmentDate,
-          appointment_time: data.appointmentTime,
-          requires_doctor_assignment: true
-        }
+        type: 'appointment_confirmed'
       });
 
       return { success, error };

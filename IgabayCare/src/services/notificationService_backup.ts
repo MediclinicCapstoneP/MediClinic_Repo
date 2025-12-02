@@ -167,48 +167,6 @@ export class NotificationService {
 
       if (error) {
         console.warn('RPC function not available, falling back to direct update:', error.message);
-        
-        // Fallback to direct update with error handling
-        const { error: updateError } = await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('user_id', userId)
-          .eq('is_read', false);
-
-        if (updateError) {
-          console.error('Error marking all notifications as read (fallback):', updateError);
-          
-          // Handle specific updated_at field error
-          if (updateError.message?.includes('updated_at') || updateError.code === '42703') {
-            console.warn('Database trigger trying to update non-existent updated_at field, but notifications were likely marked as read');
-            return { success: true }; // Consider it successful since the is_read update probably worked
-          }
-          
-          return { success: false, error: updateError.message };
-        }
-
-        console.log(`Marked notifications as read for user: ${userId} (fallback method)`);
-        return { success: true };
-      }
-
-      // Log the number of notifications marked as read for debugging
-      console.log(`Marked ${updatedCount || 0} notifications as read for user: ${userId}`);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error in markAllAsRead:', error);
-      return { success: false, error: 'Failed to mark all notifications as read' };
-    }
-  }
-
-  /**
-   * Create a new notification
-   */
-  static async createNotification(params: CreateNotificationParams): Promise<{ notification?: Notification; error?: string }> {
-    try {
-      // First try RPC function to bypass RLS
-      const { data, error } = await supabase
-        .rpc('create_notification_bypass_rls', {
           p_user_id: params.user_id,
           p_appointment_id: params.appointment_id || null,
           p_title: params.title,
@@ -477,6 +435,31 @@ export class NotificationService {
     } catch (error) {
       console.error('Error in getAppointmentNotifications:', error);
       return { notifications: [], error: 'Failed to fetch appointment notifications' };
+    }
+  }
+
+  /**
+   * Check if user should receive a specific type of notification
+   */
+  static async shouldReceiveNotification(
+    userId: string,
+    notificationType: 'appointment_completed' | 'appointment_reminder' | 'appointment_confirmed' | 'review_request',
+    deliveryMethod: 'email' | 'push' | 'sms'
+  ): Promise<{ shouldReceive: boolean; error?: string }> {
+    try {
+      const { preferences, error } = await this.getNotificationPreferences(userId);
+      
+      if (error || !preferences) {
+        return { shouldReceive: false, error };
+      }
+
+      const prefKey = `${deliveryMethod}_${notificationType}` as keyof NotificationPreferences;
+      const shouldReceive = Boolean(preferences[prefKey]);
+
+      return { shouldReceive };
+    } catch (error) {
+      console.error('Error in shouldReceiveNotification:', error);
+      return { shouldReceive: false, error: 'Failed to check notification preferences' };
     }
   }
 }

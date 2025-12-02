@@ -235,9 +235,22 @@ export const appointmentBookingService = {
     patientId: string,
     clinicName: string,
     appointmentDate: string,
-    appointmentTime: string
+    appointmentTime: string,
+    appointmentId?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      // Get patient's user_id from the patients table
+      const { data: patient, error: patientError } = await supabase
+        .from('patients')
+        .select('user_id')
+        .eq('id', patientId)
+        .single();
+
+      if (patientError || !patient?.user_id) {
+        console.error('❌ Error getting patient user_id:', patientError);
+        return { success: false, error: 'Patient user account not found' };
+      }
+
       const formattedDate = new Date(appointmentDate).toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
@@ -254,13 +267,12 @@ export const appointmentBookingService = {
       const { error } = await supabase
         .from('notifications')
         .insert([{
-          user_id: patientId,
-          user_type: 'patient',
+          user_id: patient.user_id, // Use the patient's user_id, not patient record ID
+          appointment_id: appointmentId || null, // Use appointment ID if provided
           title: 'Appointment Confirmed',
           message: `Your appointment at ${clinicName} has been scheduled for ${formattedDate} at ${formattedTime}`,
-          type: 'appointment_confirmation',
-          is_read: false,
-          created_at: new Date().toISOString()
+          type: 'appointment_confirmed',
+          is_read: false
         }]);
 
       if (error) {
@@ -268,11 +280,72 @@ export const appointmentBookingService = {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Appointment notification created');
+      console.log('✅ Appointment notification created for user:', patient.user_id);
       return { success: true };
     } catch (error) {
       console.error('❌ Error creating notification:', error);
       return { success: false, error: 'Failed to create notification' };
+    }
+  },
+
+  /**
+   * Create payment success notification
+   */
+  async createPaymentSuccessNotification(
+    patientId: string,
+    clinicName: string,
+    appointmentDate: string,
+    appointmentTime: string,
+    amount: number,
+    appointmentId?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Get patient's user_id from the patients table
+      const { data: patient, error: patientError } = await supabase
+        .from('patients')
+        .select('user_id')
+        .eq('id', patientId)
+        .single();
+
+      if (patientError || !patient?.user_id) {
+        console.error('❌ Error getting patient user_id for payment notification:', patientError);
+        return { success: false, error: 'Patient user account not found' };
+      }
+
+      const formattedDate = new Date(appointmentDate).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const formattedTime = new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      const { error } = await supabase
+        .from('notifications')
+        .insert([{
+          user_id: patient.user_id, // Use the patient's user_id, not patient record ID
+          appointment_id: appointmentId || null, // Use appointment ID if provided
+          title: 'Payment Successful',
+          message: `Payment of ₱${amount.toFixed(2)} for your appointment at ${clinicName} on ${formattedDate} at ${formattedTime} has been successfully processed.`,
+          type: 'system', // Use 'system' type for payment notifications since 'payment_successful' is not in the allowed list
+          is_read: false
+        }]);
+
+      if (error) {
+        console.error('❌ Error creating payment notification:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Payment success notification created for user:', patient.user_id);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error creating payment notification:', error);
+      return { success: false, error: 'Failed to create payment notification' };
     }
   },
 

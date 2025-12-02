@@ -121,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Run both queries in parallel with timeout
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 8000)
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 20000)
       );
 
       const [patientRes, clinicRes] = await Promise.race([
@@ -203,7 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Roles fetch timeout')), 5000)
+        setTimeout(() => reject(new Error('Roles fetch timeout')), 15000)
       );
 
       const [patientRes, clinicRes] = await Promise.race([

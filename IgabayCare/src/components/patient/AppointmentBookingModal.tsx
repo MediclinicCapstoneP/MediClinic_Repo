@@ -45,6 +45,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const [appointmentData, setAppointmentData] = useState<any>(null);
   const [patientData, setPatientData] = useState<any>(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [notificationSent, setNotificationSent] = useState(false);
 
   // Services selection state
   const [servicesOptions, setServicesOptions] = useState<string[]>([]);
@@ -169,12 +170,26 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         });
 
         // Create patient notification (existing functionality)
-        await appointmentBookingService.createAppointmentNotification(
+        const notificationResult = await appointmentBookingService.createAppointmentNotification(
           patientId,
           clinic.clinic_name,
           dateStr,
-          selectedTime
+          selectedTime,
+          result.appointment.id // Pass the appointment ID
         );
+
+        if (notificationResult.success) {
+          setNotificationSent(true);
+          console.log('✅ Appointment notification created successfully');
+          console.log('📧 Notification details:', {
+            title: 'Appointment Confirmed',
+            message: `Your appointment at ${clinic.clinic_name} has been scheduled for ${dateStr} at ${selectedTime}`,
+            type: 'appointment_confirmed',
+            appointment_id: result.appointment.id
+          });
+        } else {
+          console.warn('⚠️ Appointment notification failed to send');
+        }
 
         setBookingSuccess(true);
         onAppointmentBooked?.();
@@ -186,6 +201,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
           setSelectedTime('');
           setPatientNotes('');
           setBookingSuccess(false);
+          setNotificationSent(false);
         }, 2000);
       } else {
         alert(`Failed to book appointment: ${result.error}`);
@@ -223,6 +239,33 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
     setShowGCashPayment(false);
     
     if (!selectedDate || !selectedTime) return;
+    
+    // Double-check payment status before proceeding
+    console.log('🔍 Double-checking payment status before creating appointment:', paymentIntentId);
+    const paymentCheck = await paymongoService.handlePaymentReturn(paymentIntentId);
+    
+    if (!paymentCheck.success || paymentCheck.status !== 'succeeded') {
+      console.error('❌ Payment verification failed:', paymentCheck);
+      setError(`Payment verification failed: ${paymentCheck.error || 'Payment not completed'}`);
+      setShowGCashPayment(true); // Show payment component again
+      return;
+    }
+    
+    console.log('✅ Payment verified as succeeded, proceeding with appointment creation');
+    
+    // Check if appointment already exists for this payment intent to prevent duplicates
+    const { data: existingAppointment, error: checkError } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('payment_intent_id', paymentIntentId)
+      .maybeSingle();
+      
+    if (existingAppointment) {
+      console.log('⚠️ Appointment already exists for this payment intent:', existingAppointment.id);
+      setError('Appointment already created for this payment. Please check your appointments.');
+      onClose();
+      return;
+    }
     
     // Use the appointment booking service with PayMongo payment
     const dateStr = selectedDate.toISOString().split('T')[0];
@@ -266,12 +309,30 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
       });
 
       // Create patient notification
-      await appointmentBookingService.createAppointmentNotification(
+      const notificationResult = await appointmentBookingService.createAppointmentNotification(
         patientId,
         clinic.clinic_name,
         dateStr,
-        selectedTime
+        selectedTime,
+        bookingResult.appointment.id // Pass the appointment ID
       );
+
+      // Create payment success notification
+      const paymentNotificationResult = await appointmentBookingService.createPaymentSuccessNotification(
+        patientId,
+        clinic.clinic_name,
+        dateStr,
+        selectedTime,
+        calculateAppointmentCost().total_amount,
+        bookingResult.appointment.id // Pass the appointment ID
+      );
+
+      if (notificationResult.success && paymentNotificationResult.success) {
+        setNotificationSent(true);
+        console.log('✅ All notifications sent successfully');
+      } else {
+        console.warn('⚠️ Some notifications failed to send');
+      }
 
       setBookingSuccess(true);
       onAppointmentBooked?.();
@@ -281,6 +342,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         setSelectedTime('');
         setPatientNotes('');
         setBookingSuccess(false);
+        setNotificationSent(false);
       }, 2000);
     } else {
       alert(`Payment confirmation failed: ${bookingResult.error}`);
@@ -637,9 +699,12 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
                       Cancel
                     </Button>
                     {bookingSuccess ? (
-                      <div className="flex items-center justify-center text-green-600 bg-green-50 px-4 py-2 rounded-lg">
+                      <div className="flex flex-col items-center justify-center text-green-600 bg-green-50 px-4 py-3 rounded-lg">
                         <CheckCircle className="h-5 w-5 mr-2" />
                         <span className="font-medium">Appointment Booked Successfully!</span>
+                        {notificationSent && (
+                          <span className="text-xs text-green-500 mt-1">✓ Notifications sent</span>
+                        )}
                       </div>
                     ) : (
                       <>
