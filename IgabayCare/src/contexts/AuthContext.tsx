@@ -7,11 +7,11 @@ import { sessionManager } from '../utils/sessionManager';
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, role: 'patient' | 'clinic') => Promise<void>;
+  register: (email: string, password: string, role: 'patient' | 'clinic' | 'doctor') => Promise<void>;
   logout: () => void;
   loading: boolean;
   supabaseUser: SupabaseUser | null;
-  switchRole: (role: 'patient' | 'clinic') => Promise<void>;
+  switchRole: (role: 'patient' | 'clinic' | 'doctor') => Promise<void>;
   availableRoles: string[];
   fetchUserProfile: (userId: string) => Promise<void>;
   fetchAvailableRoles: (userId: string) => Promise<string[]>;
@@ -55,7 +55,7 @@ const loadSessionFromCache = (): any | null => {
   }
 };
 
-const saveActiveRoleToSession = (role: 'patient' | 'clinic' | null) => {
+const saveActiveRoleToSession = (role: 'patient' | 'clinic' | 'doctor' | null) => {
   try {
     if (!role) {
       sessionStorage.removeItem(SESSION_KEYS.activeRole);
@@ -67,11 +67,11 @@ const saveActiveRoleToSession = (role: 'patient' | 'clinic' | null) => {
   }
 };
 
-const loadActiveRoleFromSession = (): 'patient' | 'clinic' | null => {
+const loadActiveRoleFromSession = (): 'patient' | 'clinic' | 'doctor' | null => {
   try {
     const raw = sessionStorage.getItem(SESSION_KEYS.activeRole);
     if (!raw) return null;
-    return raw as 'patient' | 'clinic';
+    return raw as 'patient' | 'clinic' | 'doctor';
   } catch {
     return null;
   }
@@ -119,29 +119,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('[Auth] Fetching user profile for user ID:', userId);
 
-      // Run both queries in parallel with timeout
+      // Run all three queries in parallel with timeout
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Profile fetch timeout')), 20000)
       );
 
-      const [patientRes, clinicRes] = await Promise.race([
+      const [patientRes, clinicRes, doctorRes] = await Promise.race([
         Promise.all([
           supabase.from('patients').select('*').eq('user_id', userId).maybeSingle(),
           supabase.from('clinics').select('*').eq('user_id', userId).maybeSingle(),
+          supabase.from('doctors').select('*').eq('user_id', userId).maybeSingle(),
         ]),
         timeoutPromise
-      ]) as [any, any];
+      ]) as [any, any, any];
 
-      // If both exist, choose active role from sessionStorage or default to first
-      const roles: ('patient' | 'clinic')[] = [];
+      // If profiles exist, choose active role from sessionStorage or default to first
+      const roles: ('patient' | 'clinic' | 'doctor')[] = [];
       if (patientRes?.data) roles.push('patient');
       if (clinicRes?.data) roles.push('clinic');
+      if (doctorRes?.data) roles.push('doctor');
 
       setAvailableRoles(roles);
 
       // Determine active role: prefer sessionStorage, otherwise first available
       const persisted = loadActiveRoleFromSession();
-      let activeRole: 'patient' | 'clinic' | undefined;
+      let activeRole: 'patient' | 'clinic' | 'doctor' | undefined;
       if (persisted && roles.includes(persisted)) {
         activeRole = persisted;
       } else if (roles.length > 0) {
@@ -171,6 +173,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: c.created_at ?? null,
         });
         console.log('[Auth] Clinic profile set:', c);
+        return;
+      }
+
+      if (activeRole === 'doctor' && doctorRes?.data) {
+        const d = doctorRes.data;
+        setUser({
+          id: userId,
+          email: d.email ?? supabaseUserRef.current?.email ?? '',
+          role: 'doctor',
+          createdAt: d.created_at ?? null,
+        });
+        console.log('[Auth] Doctor profile set:', d);
         return;
       }
 
@@ -206,17 +220,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTimeout(() => reject(new Error('Roles fetch timeout')), 15000)
       );
 
-      const [patientRes, clinicRes] = await Promise.race([
+      const [patientRes, clinicRes, doctorRes] = await Promise.race([
         Promise.all([
           supabase.from('patients').select('id').eq('user_id', userId).maybeSingle(),
           supabase.from('clinics').select('id').eq('user_id', userId).maybeSingle(),
+          supabase.from('doctors').select('id').eq('user_id', userId).maybeSingle(),
         ]),
         timeoutPromise
-      ]) as [any, any];
+      ]) as [any, any, any];
 
-      const roles: ('patient' | 'clinic')[] = [];
+      const roles: ('patient' | 'clinic' | 'doctor')[] = [];
       if (patientRes?.data) roles.push('patient');
       if (clinicRes?.data) roles.push('clinic');
+      if (doctorRes?.data) roles.push('doctor');
 
       setAvailableRoles(roles);
       console.log('[Auth] Available roles set:', roles);
@@ -263,7 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [fetchUserProfile, fetchAvailableRoles]);
 
-  const register = useCallback(async (email: string, password: string, role: 'patient' | 'clinic') => {
+  const register = useCallback(async (email: string, password: string, role: 'patient' | 'clinic' | 'doctor') => {
     setLoading(true);
     setError(null);
     try {
@@ -286,13 +302,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email,
         });
         if (pErr) throw pErr;
-      } else {
+      } else if (role === 'clinic') {
         const { error: cErr } = await supabase.from('clinics').insert({
           user_id: data.user.id,
           clinic_name: '',
           email,
         });
         if (cErr) throw cErr;
+      } else if (role === 'doctor') {
+        const { error: dErr } = await supabase.from('doctors').insert({
+          user_id: data.user.id,
+          full_name: '',
+          email,
+          specialization: '',
+          license_number: '',
+          status: 'active',
+        });
+        if (dErr) throw dErr;
       }
 
       // Note: Supabase will usually send confirmation email if enabled.
@@ -343,7 +369,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const switchRole = useCallback(async (role: 'patient' | 'clinic') => {
+  const switchRole = useCallback(async (role: 'patient' | 'clinic' | 'doctor') => {
     if (!supabaseUser) throw new Error('No user signed in');
     if (!availableRoles.includes(role))
       throw new Error(`User does not have a '${role}' profile`);

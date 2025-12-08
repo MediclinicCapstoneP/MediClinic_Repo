@@ -225,15 +225,15 @@ export const DoctorDashboard: React.FC = () => {
   };
 
   const confirmPrescription = async () => {
-    if (selectedPatient && selectedAppointment && currentUser?.user?.id) {
+    if (selectedPatient && selectedAppointment && authUser?.id) {
       try {
         // Create multiple prescriptions for each medication
         const prescriptionsToCreate: CreatePrescriptionData[] = prescriptionData.medications
           .filter((med, index) => med.trim() && prescriptionData.dosage[index]?.trim())
           .map((medication, index) => ({
             patient_id: selectedPatient.id,
-            doctor_id: currentUser.user.id,
-            clinic_id: currentUser.user.clinic_id || '',
+            doctor_id: authUser.id,
+            clinic_id: doctorProfile?.clinic_id || '',
             medication_name: medication.trim(),
             dosage: prescriptionData.dosage[index]?.trim() || '',
             frequency: prescriptionData.frequency[index]?.trim() || 'As needed',
@@ -253,7 +253,7 @@ export const DoctorDashboard: React.FC = () => {
         
         if (result.success) {
           // Reload prescriptions
-          const prescriptionsResult = await prescriptionService.getPrescriptionsByDoctor(currentUser.user.id);
+          const prescriptionsResult = await prescriptionService.getPrescriptionsByDoctor(authUser.id);
           if (prescriptionsResult.success && prescriptionsResult.prescriptions) {
             setPrescriptions(prescriptionsResult.prescriptions);
           }
@@ -929,11 +929,11 @@ export const DoctorDashboard: React.FC = () => {
           <CardContent className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <Input value={currentUser?.name || 'Dr. John Doe'} disabled />
+              <Input value={doctorProfile ? `${doctorProfile.first_name} ${doctorProfile.last_name}` : 'Dr. John Doe'} disabled />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <Input value={currentUser?.email || 'doctor@example.com'} disabled />
+              <Input value={authUser?.email || 'doctor@example.com'} disabled />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
@@ -996,7 +996,7 @@ export const DoctorDashboard: React.FC = () => {
       navigationItems={navigationItems}
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      user={currentUser}
+      user={authUser}
       variant="doctor"
       showNavbar={true}
       onSignOut={() => setShowLogoutConfirm(true)}

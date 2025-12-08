@@ -1,9 +1,9 @@
 export interface User {
   id: string;
   email: string;
-  role: 'patient' | 'clinic';
+  role: 'patient' | 'clinic' | 'doctor';
   createdAt: string;
-  profile?: PatientProfile | ClinicProfile;
+  profile?: PatientProfile | ClinicProfile | DoctorProfile;
 }
 
 export interface PatientProfile {
@@ -33,6 +33,30 @@ export interface ClinicProfile {
   operatingHours: OperatingHours;
   verified: boolean;
   doctors: Doctor[];
+}
+
+export interface DoctorProfile {
+  id: string;
+  userId: string;
+  clinicId: string;
+  fullName: string;
+  specialization: string;
+  email: string;
+  phone?: string;
+  licenseNumber: string;
+  yearsExperience?: number;
+  availability?: string;
+  status: 'active' | 'on-leave' | 'inactive';
+  rating: number;
+  totalPatients: number;
+  profilePictureUrl?: string;
+  profilePicturePath?: string;
+  username?: string;
+  isClinicCreated: boolean;
+  emailVerified: boolean;
+  lastLogin?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Doctor {
