@@ -82,12 +82,6 @@ export const EnhancedFloatingChatButton: React.FC<EnhancedFloatingChatButtonProp
             <div className="absolute top-0 right-0 w-2 h-2 bg-green-500 rounded-full"></div>
           )}
           
-          {/* Notification Badge */}
-          {notificationCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center animate-pulse">
-              {notificationCount}
-            </span>
-          )}
 
           {/* Tooltip */}
           <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">

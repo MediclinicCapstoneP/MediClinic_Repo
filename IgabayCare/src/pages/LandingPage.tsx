@@ -361,7 +361,7 @@ const LandingPage = () => {
               <h3 className="font-semibold mb-4 text-white flex items-center">
                 <Users className="h-4 w-4 mr-2" />
                 Platform
-              </h3>
+              </h3> 
               <ul className="space-y-2 text-sm text-neutral-300">
                 <li className="hover:text-primary-400 transition-colors cursor-pointer">For Patients</li>
                 <li className="hover:text-primary-400 transition-colors cursor-pointer">For Clinics</li>
@@ -396,14 +396,6 @@ const LandingPage = () => {
           <div className="border-t border-neutral-800 mt-12 pt-8">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="flex items-center space-x-6">
-                <span className="text-xs text-neutral-500 flex items-center">
-                  <Shield className="h-3 w-3 mr-2" />
-                  SOC 2 Certified
-                </span>
-                <span className="text-xs text-neutral-500 flex items-center">
-                  <Award className="h-3 w-3 mr-2" />
-                  Medical Grade
-                </span>
               </div>
             </div>
           </div>
