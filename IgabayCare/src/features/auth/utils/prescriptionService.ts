@@ -182,6 +182,25 @@ class PrescriptionService {
     }
   }
 
+  async updatePrescriptionStatus(id: string, status: 'active' | 'completed' | 'cancelled' | 'expired'): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from('prescriptions')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Supabase error updating prescription status:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating prescription status:', error);
+      return { success: false, error: 'Failed to update prescription status' };
+    }
+  }
+
   async deletePrescription(id: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabase

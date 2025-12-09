@@ -4,7 +4,7 @@ import { User, Eye, EyeOff, AlertCircle, Shield, Lock, Mail } from 'lucide-react
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
-import { useAuth } from '../../../contexts/AuthContext';
+import { roleBasedAuthService } from '../utils/roleBasedAuthService';
 
 interface SignInFormProps {
   onSuccess?: () => void;
@@ -20,7 +20,6 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { login, loading: authLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,13 +27,14 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess }) => {
     setError(null);
 
     try {
-      console.log('Attempting sign in with email:', formData.email);
-      await login(formData.email, formData.password);
+      console.log('Attempting patient sign in with email:', formData.email);
+      const result = await roleBasedAuthService.patient.signIn({
+        email: formData.email,
+        password: formData.password
+      });
       
-      console.log('Sign in successful, waiting for auth state to update...');
-      // Wait a moment for AuthContext to update the user state
-      setTimeout(() => {
-        console.log('Sign in successful, redirecting to dashboard');
+      if (result.success) {
+        console.log('Patient sign in successful, redirecting to dashboard');
         // Call success callback if provided
         if (onSuccess) {
           onSuccess();
@@ -42,7 +42,9 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess }) => {
           // Default redirect to patient dashboard
           navigate('/patient/dashboard');
         }
-      }, 500); // 500ms delay to ensure auth state is updated
+      } else {
+        setError(result.error || 'Sign in failed');
+      }
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError(err.message || 'Sign in failed');
@@ -171,8 +173,8 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess }) => {
                 type="submit"
                 variant="gradient"
                 className="w-full bg-gradient-to-r from-blue-500 to-sky-600 hover:from-blue-600 hover:to-sky-700 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transform transition-all duration-300 hover:scale-105 disabled:scale-100"
-                loading={isLoading || authLoading}
-                disabled={isLoading || authLoading}
+                loading={isLoading}
+                disabled={isLoading}
               >
                 <Shield className="mr-2 h-5 w-5" />
                 Sign In Securely

@@ -44,7 +44,7 @@ export interface IThemeProvider {
 }
 
 export interface IVariantComponent extends IBaseComponent {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'medical' | 'danger' | 'gradient';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'medical' | 'danger' | 'gradient' | 'success' | 'warning' | 'info';
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
