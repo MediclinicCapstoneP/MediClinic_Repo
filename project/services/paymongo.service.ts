@@ -64,22 +64,30 @@ export interface CheckoutSession {
   };
 }
 
+interface CustomerInfo {
+  email?: string;
+  name?: string;
+  phone?: string;
+  address?: {
+    line1: string;
+    line2: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+  };
+}
+
+interface CheckoutSessionOptions {
+  paymentMethodTypes?: string[];
+  customerInfo?: CustomerInfo;
+  metadata?: Record<string, string>;
+}
+
 export const createCheckoutSession = async (
   amount: number,
   description: string,
-  customerInfo?: {
-    email?: string;
-    name?: string;
-    phone?: string;
-    address?: {
-      line1: string;
-      line2: string;
-      city: string;
-      state: string;
-      postal_code: string;
-      country: string;
-    };
-  }
+  options: CheckoutSessionOptions = {}
 ): Promise<CheckoutSession> => {
   if (!PAYMONGO_SECRET_KEY) {
     const errorMsg = 'PayMongo secret key is not configured. Please set EXPO_PUBLIC_PAYMONGO_SECRET_KEY in your environment variables.';
@@ -88,6 +96,12 @@ export const createCheckoutSession = async (
   }
 
   console.log('Creating PayMongo checkout session with amount:', amount);
+
+  const {
+    paymentMethodTypes = ['card', 'gcash', 'grab_pay'],
+    customerInfo,
+    metadata,
+  } = options;
 
   const response = await fetch(`${API_URL}/checkout_sessions`, {
     method: 'POST',
@@ -100,7 +114,7 @@ export const createCheckoutSession = async (
       data: {
         attributes: {
           amount: amount * 100, // Convert to centavos
-          payment_method_types: ['card', 'gcash', 'grab_pay'],
+          payment_method_types: paymentMethodTypes,
           currency: 'PHP',
           description,
           send_email_receipt: false,
@@ -145,6 +159,7 @@ export const createCheckoutSession = async (
           metadata: {
             source: 'igabaycare_app',
             type: 'appointment_payment',
+            ...(metadata || {}),
           },
         },
       },

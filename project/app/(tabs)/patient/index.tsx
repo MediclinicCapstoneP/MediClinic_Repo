@@ -256,9 +256,14 @@ export default function PatientHomeScreen() {
                     style={styles.quickActionCard}
                     onPress={() => {
                       if (action.title === 'Book Appointment') {
-                        router.push('/(tabs)/patient/booking' as any);
+                        router.push('/(tabs)/patient/clinics' as any);
+                      } else if (action.title === 'Find Clinics') {
+                        router.push('/(tabs)/patient/clinics' as any);
+                      } else if (action.title === 'My History') {
+                        router.push('/(tabs)/patient/history' as any);
+                      } else if (action.title === 'Prescriptions') {
+                        router.push('/(tabs)/patient/prescriptions' as any);
                       }
-                      // Remove Find Clinics navigation for now
                     }}
                   >
                     <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}15` }]}>

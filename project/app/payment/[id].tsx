@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import PaymentWebView from '../../components/payment/PaymentWebView';
@@ -35,7 +35,14 @@ export default function PaymentScreen() {
         // Create a checkout session with PayMongo
         const checkoutSession = await createCheckoutSession(
           amount, 
-          params.description || 'Payment for appointment'
+          params.description || 'Payment for appointment',
+          {
+            paymentMethodTypes: ['gcash'],
+            metadata: {
+              appointment_reference: params.id || '',
+              description: params.description || '',
+            },
+          }
         );
         
         console.log('Checkout session created:', checkoutSession);

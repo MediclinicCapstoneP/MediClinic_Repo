@@ -7,6 +7,7 @@ import {
   TextInput,
   StyleSheet,
   Modal as RNModal,
+  ActivityIndicator,
 } from 'react-native';
 import { 
   Calendar,
@@ -19,8 +20,10 @@ import {
 } from 'lucide-react-native';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
+import PaymentWebView from '../payment/PaymentWebView';
 import { useAuth } from '../../contexts/AuthContext';
 import { appointmentService } from '../../services/appointmentService';
+import { createCheckoutSession } from '../../services/paymongo.service';
 import { ClinicWithDetails, AppointmentType, PaymentMethod, supabase } from '../../lib/supabase';
 
 interface AppointmentBookingModalProps {
@@ -30,7 +33,7 @@ interface AppointmentBookingModalProps {
   onBookingSuccess?: (appointmentId: string) => void;
 }
 
-type BookingStep = 'details' | 'payment' | 'confirmation';
+type BookingStep = 'details' | 'payment' | 'checkout' | 'confirmation';
 
 interface BookingData {
   date: string;
@@ -58,9 +61,6 @@ const appointmentTypes: { value: AppointmentType; label: string; duration: numbe
 
 const paymentMethods: { value: PaymentMethod; label: string; icon: string }[] = [
   { value: 'gcash', label: 'GCash', icon: '📱' },
-  { value: 'paymaya', label: 'PayMaya', icon: '💳' },
-  { value: 'card', label: 'Credit/Debit Card', icon: '💳' },
-  { value: 'grabpay', label: 'GrabPay', icon: '🚗' },
 ];
 
 export function AppointmentBookingModal({
@@ -92,6 +92,8 @@ export function AppointmentBookingModal({
   const [createdAppointmentId, setCreatedAppointmentId] = useState<string>('');
   const [transactionNumber, setTransactionNumber] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [checkoutReference, setCheckoutReference] = useState<string | null>(null);
 
   // Load available time slots when date changes
   useEffect(() => {
@@ -306,7 +308,7 @@ export function AppointmentBookingModal({
     }
   };
 
-  const handlePayment = async () => {
+  const handleStartPayment = async () => {
     if (!createdAppointmentId) {
       setError('No appointment to process payment for');
       return;
@@ -316,28 +318,89 @@ export function AppointmentBookingModal({
       setLoading(true);
       setError(null);
 
+      const session = await createCheckoutSession(
+        bookingData.totalAmount,
+        `${clinic.clinic_name} Appointment`,
+        {
+          paymentMethodTypes: ['gcash'],
+          metadata: {
+            appointment_id: createdAppointmentId,
+            clinic_id: clinic.id,
+            appointment_date: bookingData.date,
+            appointment_time: bookingData.time,
+            patient_id: user?.profile?.data?.id || '',
+          },
+        }
+      );
+
+      const url = session?.attributes?.checkout_url;
+
+      if (!url) {
+        throw new Error('Checkout URL was not provided by PayMongo');
+      }
+
+      setCheckoutUrl(url);
+      setCheckoutReference(session?.attributes?.reference_number || session.id || null);
+      setCurrentStep('checkout');
+    } catch (error) {
+      console.error('Error initializing PayMongo checkout:', error);
+      const message = error instanceof Error ? error.message : 'Payment initialization failed';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCheckoutSuccess = async () => {
+    if (!createdAppointmentId) {
+      setError('No appointment to finalize payment for');
+      setCurrentStep('payment');
+      return;
+    }
+
+    try {
+      setLoading(true);
       const response = await appointmentService.processPayment({
         appointment_id: createdAppointmentId,
         payment_method: selectedPaymentMethod,
         amount: bookingData.totalAmount,
       });
 
-      if (response.success && response.transactionNumber) {
-        setTransactionNumber(response.transactionNumber);
+      if (response.success) {
+        setTransactionNumber(response.transactionNumber || checkoutReference || '');
         setCurrentStep('confirmation');
-        
+        setError(null);
+
         if (onBookingSuccess) {
           onBookingSuccess(createdAppointmentId);
         }
       } else {
-        setError(response.error || 'Payment failed');
+        setError(response.error || 'Failed to record payment');
+        setCurrentStep('payment');
       }
     } catch (error) {
-      console.error('Error processing payment:', error);
-      setError('Payment processing failed');
+      console.error('Error finalizing payment:', error);
+      setError('An unexpected error occurred while finalizing payment');
+      setCurrentStep('payment');
     } finally {
       setLoading(false);
+      setCheckoutUrl(null);
+      setCheckoutReference(null);
     }
+  };
+
+  const handleCheckoutError = (message: string) => {
+    console.error('PayMongo checkout error:', message);
+    setError(message || 'Payment failed. Please try again.');
+    setCheckoutUrl(null);
+    setCheckoutReference(null);
+    setCurrentStep('payment');
+  };
+
+  const handleCheckoutClose = () => {
+    setCheckoutUrl(null);
+    setCheckoutReference(null);
+    setCurrentStep('payment');
   };
 
   const resetModal = () => {
@@ -356,6 +419,8 @@ export function AppointmentBookingModal({
     setSelectedPaymentMethod('gcash');
     setCreatedAppointmentId('');
     setTransactionNumber('');
+    setCheckoutUrl(null);
+    setCheckoutReference(null);
     setError(null);
     setLoading(false);
   };
@@ -578,13 +643,50 @@ export function AppointmentBookingModal({
           style={styles.backButton}
         />
         <Button
-          title="Pay Now"
-          onPress={handlePayment}
+          title="Pay with GCash"
+          onPress={handleStartPayment}
           loading={loading}
+          disabled={loading}
           style={styles.payButton}
         />
       </View>
     </ScrollView>
+  );
+
+  const renderCheckoutStep = () => (
+    <View style={styles.checkoutContainer}>
+      <Text style={styles.checkoutTitle}>Pay with GCash</Text>
+      <Text style={styles.checkoutSubtitle}>
+        Complete your payment securely via PayMongo.
+      </Text>
+
+      <View style={styles.checkoutSummary}>
+        <Text style={styles.checkoutSummaryLabel}>Amount Due</Text>
+        <Text style={styles.checkoutSummaryValue}>{formatCurrency(bookingData.totalAmount)}</Text>
+      </View>
+
+      <View style={styles.checkoutWebview}>
+        {checkoutUrl ? (
+          <PaymentWebView
+            url={checkoutUrl}
+            onSuccess={handleCheckoutSuccess}
+            onError={handleCheckoutError}
+            onClose={handleCheckoutClose}
+          />
+        ) : (
+          <View style={styles.checkoutLoading}>
+            <ActivityIndicator size="large" color="#2563EB" />
+          </View>
+        )}
+      </View>
+
+      <Button
+        title="Cancel Payment"
+        onPress={handleCheckoutClose}
+        variant="outline"
+        style={styles.checkoutCancelButton}
+      />
+    </View>
   );
 
   const renderConfirmationStep = () => (
@@ -649,6 +751,7 @@ export function AppointmentBookingModal({
 
       {currentStep === 'details' && renderDetailsStep()}
       {currentStep === 'payment' && renderPaymentStep()}
+      {currentStep === 'checkout' && renderCheckoutStep()}
       {currentStep === 'confirmation' && renderConfirmationStep()}
       
       {renderCalendar()}

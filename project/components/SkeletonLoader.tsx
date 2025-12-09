@@ -136,6 +136,38 @@ export const SkeletonPatientCard: React.FC = () => (
   </View>
 );
 
+export const SkeletonPrescriptionCard: React.FC = () => (
+  <View style={styles.prescriptionCard}>
+    <View style={styles.prescriptionHeader}>
+      <View style={styles.medicationInfo}>
+        <View style={styles.medicationNameContainer}>
+          <SkeletonBox width={20} height={20} borderRadius={10} style={{ marginRight: 8 }} />
+          <SkeletonBox width="60%" height={16} />
+        </View>
+        <SkeletonBox width="40%" height={14} style={{ marginLeft: 28 }} />
+      </View>
+      <SkeletonBox width={60} height={24} borderRadius={12} />
+    </View>
+    <View style={styles.prescriptionDetails}>
+      <SkeletonBox width="70%" height={12} style={{ marginBottom: 4 }} />
+      <SkeletonBox width="80%" height={12} style={{ marginBottom: 4 }} />
+      <SkeletonBox width="60%" height={12} style={{ marginBottom: 4 }} />
+      <SkeletonBox width="50%" height={12} style={{ marginBottom: 4 }} />
+      <SkeletonBox width="65%" height={12} />
+    </View>
+    <View style={styles.prescriptionFooter}>
+      <View style={styles.refillInfo}>
+        <SkeletonBox width="40%" height={12} style={{ marginBottom: 2 }} />
+        <SkeletonBox width="35%" height={10} />
+      </View>
+      <View style={styles.actionButtons}>
+        <SkeletonBox width={32} height={32} borderRadius={16} />
+        <SkeletonBox width={32} height={32} borderRadius={16} />
+      </View>
+    </View>
+  </View>
+);
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
@@ -247,5 +279,48 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
+  },
+  prescriptionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  prescriptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  medicationInfo: {
+    flex: 1,
+  },
+  medicationNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  prescriptionDetails: {
+    marginBottom: 12,
+  },
+  prescriptionFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  refillInfo: {
+    flex: 1,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
 });
