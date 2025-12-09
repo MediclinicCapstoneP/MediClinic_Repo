@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
 import { appointmentBookingService } from '../../features/auth/utils/appointmentBookingService';
-import { appointmentManagementAPI } from '../../features/auth/utils/appointmentManagementAPI';
 import { AppointmentNotificationService } from '../../services/appointmentNotificationService';
 import { supabase } from '../../supabaseClient';
 import type { AppointmentType } from '../../types/appointments';
-import { PayMongoGCashPayment } from './PayMongoGCashPayment';
 import { paymongoService } from '../../services/paymongoService';
 import { X, ChevronLeft, ChevronRight, Clock, CheckCircle } from 'lucide-react';
 
@@ -41,8 +39,6 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const [loading, setLoading] = useState(false);
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('consultation');
   const [patientNotes, setPatientNotes] = useState('');
-  const [showGCashPayment, setShowGCashPayment] = useState(false);
-  const [appointmentData, setAppointmentData] = useState<any>(null);
   const [patientData, setPatientData] = useState<any>(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
@@ -220,143 +216,71 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
     return { consultation_fee: baseFee, booking_fee: bookingFee, total_amount: baseFee + bookingFee };
   };
 
-  const handleProceedToGCashPayment = () => {
+  const handleProceedToGCashPayment = async () => {
     if (!selectedDate || !selectedTime) return;
-    const cost = calculateAppointmentCost();
-    const appointmentDetails = {
-      appointment_id: `temp_${Date.now()}`,
-      ...cost,
-      selectedDate,
-      selectedTime,
-      appointmentType,
-      patientNotes: buildComposedNotes(patientNotes, selectedServices)
-    };
-    setAppointmentData(appointmentDetails);
-    setShowGCashPayment(true);
-  };
-
-  const handleGCashPaymentComplete = async (paymentIntentId: string) => {
-    setShowGCashPayment(false);
-    
-    if (!selectedDate || !selectedTime) return;
-    
-    // Double-check payment status before proceeding
-    console.log('🔍 Double-checking payment status before creating appointment:', paymentIntentId);
-    const paymentCheck = await paymongoService.handlePaymentReturn(paymentIntentId);
-    
-    if (!paymentCheck.success || paymentCheck.status !== 'succeeded') {
-      console.error('❌ Payment verification failed:', paymentCheck);
-      setError(`Payment verification failed: ${paymentCheck.error || 'Payment not completed'}`);
-      setShowGCashPayment(true); // Show payment component again
-      return;
-    }
-    
-    console.log('✅ Payment verified as succeeded, proceeding with appointment creation');
-    
-    // Check if appointment already exists for this payment intent to prevent duplicates
-    const { data: existingAppointment, error: checkError } = await supabase
-      .from('appointments')
-      .select('id')
-      .eq('payment_intent_id', paymentIntentId)
-      .maybeSingle();
+    setLoading(true);
+    try {
+      const cost = calculateAppointmentCost();
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      const composedNotes = buildComposedNotes(patientNotes, selectedServices);
       
-    if (existingAppointment) {
-      console.log('⚠️ Appointment already exists for this payment intent:', existingAppointment.id);
-      setError('Appointment already created for this payment. Please check your appointments.');
-      onClose();
-      return;
-    }
-    
-    // Use the appointment booking service with PayMongo payment
-    const dateStr = selectedDate.toISOString().split('T')[0];
-    const composedNotes = buildComposedNotes(patientNotes, selectedServices);
-    
-    const bookingResult = await appointmentBookingService.createAppointment({
-      patient_id: patientId,
-      clinic_id: clinic.id,
-      appointment_date: dateStr,
-      appointment_time: selectedTime + ':00',
-      appointment_type: appointmentType,
-      patient_notes: composedNotes,
-      status: 'confirmed', // Set as confirmed since payment is completed
-      payment_method: 'gcash',
-      payment_status: 'paid',
-      payment_intent_id: paymentIntentId,
-      total_amount: calculateAppointmentCost().total_amount,
-      consultation_fee: calculateAppointmentCost().consultation_fee,
-      booking_fee: calculateAppointmentCost().booking_fee
-    });
-
-    if (bookingResult.success && bookingResult.appointment) {
-      // Get patient details for notification
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('first_name, last_name')
-        .eq('id', patientId)
-        .single();
-
-      const patientName = patient ? `${patient.first_name} ${patient.last_name}` : 'Patient';
-
-      // Send notification to clinic about new appointment
-      await AppointmentNotificationService.notifyClinicOfNewAppointment({
-        appointmentId: bookingResult.appointment.id,
-        patientId: patientId,
-        clinicId: clinic.id,
-        appointmentDate: dateStr,
-        appointmentTime: selectedTime,
-        patientName: patientName,
-        clinicName: clinic.clinic_name
+      // Create checkout session (payment first, booking later)
+      const successUrl = `${window.location.origin}/patient/payment-return`;
+      
+      const checkoutResult = await paymongoService.processCheckoutSessionPayment({
+        amount: cost.total_amount,
+        description: `Appointment booking at ${clinic.clinic_name}`,
+        patient_name: patientData ? `${patientData.first_name} ${patientData.last_name}` : 'Patient',
+        patient_email: patientData?.email || '',
+        patient_phone: patientData?.phone || '09XXXXXXXXX',
+        success_url: successUrl,
+        clinic_id: clinic.id,
+        clinic_name: clinic.clinic_name,
+        appointment_date: dateStr,
+        appointment_time: selectedTime,
+        appointment_type: appointmentType,
+        patient_notes: composedNotes,
+        consultation_fee: cost.consultation_fee,
+        booking_fee: cost.booking_fee,
+        patient_id: patientId,
+        metadata: {
+          selected_services: selectedServices.join(',')
+        }
       });
 
-      // Create patient notification
-      const notificationResult = await appointmentBookingService.createAppointmentNotification(
-        patientId,
-        clinic.clinic_name,
-        dateStr,
-        selectedTime,
-        bookingResult.appointment.id // Pass the appointment ID
-      );
-
-      // Create payment success notification
-      const paymentNotificationResult = await appointmentBookingService.createPaymentSuccessNotification(
-        patientId,
-        clinic.clinic_name,
-        dateStr,
-        selectedTime,
-        calculateAppointmentCost().total_amount,
-        bookingResult.appointment.id // Pass the appointment ID
-      );
-
-      if (notificationResult.success && paymentNotificationResult.success) {
-        setNotificationSent(true);
-        console.log('✅ All notifications sent successfully');
+      if (checkoutResult.success && checkoutResult.checkout_url) {
+        // Store booking data in sessionStorage for after payment
+        const bookingData = {
+          patient_id: patientId,
+          clinic_id: clinic.id,
+          appointment_date: dateStr,
+          appointment_time: selectedTime + ':00',
+          appointment_type: appointmentType,
+          patient_notes: composedNotes,
+          consultation_fee: cost.consultation_fee,
+          booking_fee: cost.booking_fee,
+          total_amount: cost.total_amount,
+          selected_services: selectedServices
+        };
+        
+        sessionStorage.setItem('pending_booking_data', JSON.stringify(bookingData));
+        sessionStorage.setItem('checkout_session_id', checkoutResult.checkout_session_id || '');
+        
+        // Redirect to checkout URL
+        window.location.href = checkoutResult.checkout_url;
       } else {
-        console.warn('⚠️ Some notifications failed to send');
+        alert(checkoutResult.error || 'Failed to initiate payment. Please try again.');
       }
-
-      setBookingSuccess(true);
-      onAppointmentBooked?.();
-      setTimeout(() => {
-        onClose();
-        setSelectedDate(null);
-        setSelectedTime('');
-        setPatientNotes('');
-        setBookingSuccess(false);
-        setNotificationSent(false);
-      }, 2000);
-    } else {
-      alert(`Payment confirmation failed: ${bookingResult.error}`);
+    } catch (error) {
+      console.error('Error initiating GCash payment:', error);
+      alert('Failed to initiate payment. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleGCashPaymentError = (error: string) => {
-    console.error('GCash payment error:', error);
-    alert(`Payment failed: ${error}`);
-  };
-
-  const handleGCashPaymentCancel = () => {
-    setShowGCashPayment(false);
-  };
+  // Note: handleGCashPaymentComplete, handleGCashPaymentError, and handleGCashPaymentCancel
+  // are no longer needed since we're using checkout sessions which redirect to PaymentReturn page
 
   // -------- Month nav ----------
   const navigateMonth = (dir: 'prev' | 'next') => {
@@ -385,12 +309,14 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
       // Load clinic services to offer as selectable options
       if (clinic?.id) {
-        supabase
-          .from('clinics')
-          .select('services, custom_services')
-          .eq('id', clinic.id)
-          .single()
-          .then(({ data }) => {
+        (async () => {
+          try {
+            const { data } = await supabase
+              .from('clinics')
+              .select('services, custom_services')
+              .eq('id', clinic.id)
+              .single();
+            
             const combined = [
               ...(Array.isArray(data?.services) ? data!.services : []),
               ...(Array.isArray(data?.custom_services) ? data!.custom_services : []),
@@ -398,8 +324,10 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
               .map((s: any) => (typeof s === 'string' ? s : String(s)))
               .filter(Boolean);
             setServicesOptions(Array.from(new Set(combined)).sort());
-          })
-          .catch(() => setServicesOptions([]));
+          } catch {
+            setServicesOptions([]);
+          }
+        })();
       }
 
       // Reset selections when opening
@@ -742,37 +670,6 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         </div>
       </div>
       
-      {/* PayMongo GCash Payment Modal */}
-      {showGCashPayment && appointmentData && patientData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold">Complete Payment - {clinic.clinic_name}</h3>
-                <button
-                  onClick={handleGCashPaymentCancel}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <PayMongoGCashPayment
-                amount={appointmentData.total_amount}
-                description="Appointment booking payment"
-                appointmentId={appointmentData.appointment_id}
-                clinicId={clinic.id}
-                patientName={`${patientData.first_name} ${patientData.last_name}`}
-                patientEmail={patientData.email}
-                patientPhone={patientData.phone || '09XXXXXXXXX'}
-                onPaymentSuccess={handleGCashPaymentComplete}
-                onPaymentError={handleGCashPaymentError}
-                onBack={handleGCashPaymentCancel}
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

@@ -1,15 +1,21 @@
-import { supabase } from '../supabase';
+import { supabase, UserRole } from '../supabase';
 
+// Notification interface matching the actual database schema
 export interface Notification {
   id: string;
   user_id: string;
   title: string;
   message: string;
-  type: 'appointment' | 'payment' | 'reminder' | 'system';
-  read: boolean;
+  type: string; // 'appointment' | 'payment' | 'reminder' | 'system'
+  is_read: boolean;
   created_at: string;
-  updated_at: string;
-  data?: any; // Additional metadata
+  appointment_id?: string;
+  user_type?: string | null;
+  action_url?: string | null;
+  metadata?: any;
+  expires_at?: string | null;
+  // Frontend compatibility - maps to is_read
+  read: boolean;
 }
 
 export interface GetNotificationsParams {
@@ -22,11 +28,21 @@ export interface GetNotificationsParams {
 
 export interface CreateNotificationParams {
   user_id: string;
+  user_type?: string | null;
   title: string;
   message: string;
-  type: 'appointment' | 'payment' | 'reminder' | 'system';
-  data?: any;
+  type: string;
+  appointment_id?: string;
+  action_url?: string | null;
+  metadata?: any;
+  expires_at?: string | null;
 }
+
+// Transform DB notification to include read property for frontend compatibility
+const transformNotification = (dbNotification: any): Notification => ({
+  ...dbNotification,
+  read: dbNotification.is_read === true || dbNotification.is_read === 'true',
+});
 
 export class NotificationService {
   async getNotifications(params: GetNotificationsParams) {
@@ -42,7 +58,7 @@ export class NotificationService {
       }
 
       if (params.read !== undefined) {
-        query = query.eq('read', params.read);
+        query = query.eq('is_read', params.read);
       }
 
       if (params.limit) {
@@ -60,9 +76,11 @@ export class NotificationService {
         return { success: false, error: error.message };
       }
 
+      const notifications = (data || []).map(transformNotification);
+
       return {
         success: true,
-        notifications: data as Notification[],
+        notifications,
       };
     } catch (error) {
       console.error('Error in getNotifications:', error);
@@ -72,18 +90,37 @@ export class NotificationService {
 
   async createNotification(params: CreateNotificationParams) {
     try {
+      const notificationData: any = {
+        user_id: params.user_id,
+        title: params.title,
+        message: params.message,
+        type: params.type,
+        is_read: false,
+      };
+
+      if (params.user_type !== undefined) {
+        notificationData.user_type = params.user_type;
+      }
+
+      if (params.appointment_id) {
+        notificationData.appointment_id = params.appointment_id;
+      }
+
+      if (params.action_url !== undefined) {
+        notificationData.action_url = params.action_url;
+      }
+
+      if (params.metadata !== undefined) {
+        notificationData.metadata = params.metadata;
+      }
+
+      if (params.expires_at !== undefined) {
+        notificationData.expires_at = params.expires_at;
+      }
+
       const { data, error } = await supabase
         .from('notifications')
-        .insert([
-          {
-            user_id: params.user_id,
-            title: params.title,
-            message: params.message,
-            type: params.type,
-            data: params.data,
-            read: false,
-          },
-        ])
+        .insert([notificationData])
         .select()
         .single();
 
@@ -94,7 +131,7 @@ export class NotificationService {
 
       return {
         success: true,
-        notification: data as Notification,
+        notification: transformNotification(data),
       };
     } catch (error) {
       console.error('Error in createNotification:', error);
@@ -106,7 +143,7 @@ export class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true, updated_at: new Date().toISOString() })
+        .update({ is_read: true })
         .eq('id', notificationId);
 
       if (error) {
@@ -125,9 +162,9 @@ export class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true, updated_at: new Date().toISOString() })
+        .update({ is_read: true })
         .eq('user_id', userId)
-        .eq('read', false);
+        .eq('is_read', false);
 
       if (error) {
         console.error('Error marking all notifications as read:', error);
@@ -166,7 +203,7 @@ export class NotificationService {
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('read', false);
+        .eq('is_read', false);
 
       if (error) {
         console.error('Error fetching unread count:', error);
@@ -199,14 +236,11 @@ export class NotificationService {
 
     return this.createNotification({
       user_id: userId,
+      user_type: 'patient',
       title: `Appointment ${type}`,
       message: messages[type],
       type: 'appointment',
-      data: {
-        appointment_id: appointmentId,
-        appointment_type: type,
-        ...appointmentDetails,
-      },
+      appointment_id: appointmentId,
     });
   }
 
@@ -224,24 +258,20 @@ export class NotificationService {
 
     return this.createNotification({
       user_id: userId,
+      user_type: 'patient',
       title: `Payment ${type}`,
       message: messages[type],
       type: 'payment',
-      data: {
-        payment_id: paymentId,
-        payment_type: type,
-        amount,
-      },
     });
   }
 
-  async createSystemNotification(userId: string, title: string, message: string, data?: any) {
+  async createSystemNotification(userId: string, title: string, message: string, userType: string = 'patient') {
     return this.createNotification({
       user_id: userId,
+      user_type: userType,
       title,
       message,
       type: 'system',
-      data,
     });
   }
 
@@ -258,7 +288,7 @@ export class NotificationService {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          callback(payload.new as Notification);
+          callback(transformNotification(payload.new));
         }
       )
       .subscribe();

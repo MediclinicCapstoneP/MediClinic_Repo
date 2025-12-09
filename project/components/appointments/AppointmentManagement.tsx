@@ -311,13 +311,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
         </View>
       )}
 
-      {appointment.symptoms && (
-        <View style={styles.symptomsContainer}>
-          <Text style={styles.symptomsLabel}>Symptoms:</Text>
-          <Text style={styles.symptomsText}>{appointment.symptoms}</Text>
-        </View>
-      )}
-
+      
       {appointment.total_amount && (
         <View style={styles.amountContainer}>
           <Text style={styles.amountLabel}>Total Amount:</Text>
@@ -525,20 +519,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
-  symptomsContainer: {
-    marginBottom: 8,
-  },
-  symptomsLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  symptomsText: {
-    fontSize: 14,
-    color: '#374151',
-    marginTop: 2,
-  },
-  amountContainer: {
+    amountContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

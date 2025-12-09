@@ -370,14 +370,50 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
           };
         })
         .filter((med, index) => {
-          if (!med.medication_name || !med.strength) {
-            if (med.medication_name || med.strength) {
+          // Ensure medication_name is not null, undefined, or empty string
+          const medicationName = med.medication_name?.trim() || '';
+          const strength = med.strength?.trim() || '';
+          
+          const hasValidName = medicationName !== '';
+          const hasValidStrength = strength !== '';
+          
+          if (!hasValidName || !hasValidStrength) {
+            if (hasValidName || hasValidStrength) {
               validationErrors.push(`Medication ${index + 1}: Both name and strength are required`);
             }
             return false;
           }
           return true;
-        });
+        })
+        .map(med => {
+          // Ensure all required fields are properly set
+          const medicationName = med.medication_name?.trim() || '';
+          const strength = med.strength?.trim() || '';
+          const dosage = med.dosage?.trim() || strength; // Use strength as dosage if dosage is empty
+          
+          if (!medicationName) {
+            console.error('❌ Medication name is empty after filtering:', med);
+            return null;
+          }
+          
+          return {
+            ...med,
+            medication_name: medicationName, // Ensure it's trimmed and not empty
+            strength: strength,
+            dosage: dosage,
+            frequency: med.frequency?.trim() || 'As needed',
+            duration: med.duration?.trim() || '7 days',
+            special_instructions: med.special_instructions?.trim() || '',
+            quantity_prescribed: med.quantity_prescribed || 30,
+            refills_allowed: med.refills_allowed || 0,
+            refills_used: med.refills_used || 0,
+            timing: med.timing || '',
+            form: med.form || 'tablet',
+            generic_name: med.generic_name || '',
+            status: 'active'
+          };
+        })
+        .filter(med => med !== null); // Remove any null entries
 
       if (validMedications.length === 0) {
         validationErrors.push('At least one complete medication entry is required');
@@ -421,9 +457,28 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         general_instructions: 'Take medications as prescribed. Complete the full course even if symptoms improve. Contact your doctor if you experience any adverse effects or if symptoms persist or worsen.'
       };
 
+      // Final validation - ensure all medications have medication_name
+      const finalMedications = validMedications.filter(med => {
+        if (!med || !med.medication_name || med.medication_name.trim() === '') {
+          console.error('❌ Filtering out medication with empty name:', med);
+          return false;
+        }
+        return true;
+      });
+      
+      if (finalMedications.length === 0) {
+        alert('⚠️ No valid medications to prescribe. Please ensure all medications have a name and dosage.');
+        return;
+      }
+      
       console.log('📊 Creating prescription with data:');
       console.log('Prescription:', JSON.stringify(enhancedPrescription, null, 2));
-      console.log('Medications:', JSON.stringify(validMedications, null, 2));
+      console.log('Medications:', JSON.stringify(finalMedications.map(m => ({
+        medication_name: m.medication_name,
+        strength: m.strength,
+        dosage: m.dosage,
+        frequency: m.frequency
+      })), null, 2));
       console.log('Doctor ID:', doctorId);
       console.log('Appointment details:', {
         appointment_id: selectedAppointment.appointment_id,
@@ -451,16 +506,76 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
       }
 
       // Create the enhanced prescription with medications
-      const result = await prescriptionService.createNewPrescription(enhancedPrescription, validMedications);
+      const result = await prescriptionService.createNewPrescription(enhancedPrescription, finalMedications);
       
       console.log('Prescription service result:', result);
       
       if (result.success) {
         console.log('✅ Prescription created successfully:', result.prescription);
         
+        // Add to patient medical history
+        try {
+          const medicationList = validMedications.map(m => 
+            `${m.medication_name} - ${m.dosage}, ${m.frequency}${m.duration ? ` for ${m.duration}` : ''}`
+          ).join('; ');
+
+          const { error: historyError } = await supabase
+            .from('medical_records')
+            .insert([{
+              patient_id: selectedAppointment.patient_id,
+              doctor_id: doctorId,
+              clinic_id: selectedAppointment.clinic_id,
+              appointment_id: selectedAppointment.appointment_id || selectedAppointment.id,
+              visit_date: new Date().toISOString().split('T')[0],
+              chief_complaint: consultationNotes || selectedAppointment.doctor_notes || 'Prescription issued',
+              diagnosis: enhancedPrescription.diagnosis || 'Prescription medications prescribed',
+              treatment: medicationList,
+              notes: `Prescription issued with ${validMedications.length} medication(s). ${enhancedPrescription.general_instructions || ''}`,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }]);
+
+          if (historyError) {
+            console.warn('⚠️ Failed to add to medical history (non-critical):', historyError);
+          } else {
+            console.log('✅ Added prescription to patient medical history');
+          }
+        } catch (historyError) {
+          console.warn('⚠️ Error adding to medical history (non-critical):', historyError);
+        }
+
+        // Send notification to patient
+        try {
+          // Get patient's user_id
+          const { data: patientData } = await supabase
+            .from('patients')
+            .select('user_id')
+            .eq('id', selectedAppointment.patient_id)
+            .single();
+
+          if (patientData?.user_id) {
+            const { NotificationService } = await import('../../services/notificationService');
+            
+            const medicationNames = validMedications.map(m => m.medication_name).join(', ');
+            const prescriptionNumber = result.prescription?.prescription_number || 'N/A';
+            
+            await NotificationService.createNotification({
+              user_id: patientData.user_id,
+              appointment_id: selectedAppointment.appointment_id || selectedAppointment.id,
+              title: 'New Prescription Available',
+              message: `Your doctor has prescribed: ${medicationNames}. Prescription #: ${prescriptionNumber}. Please check your prescriptions in the patient portal.`,
+              type: 'medical'
+            });
+            
+            console.log('✅ Notification sent to patient');
+          }
+        } catch (notifError) {
+          console.warn('⚠️ Failed to send notification (non-critical):', notifError);
+        }
+        
         // Show success message with prescription number
         const prescriptionNumber = result.prescription?.prescription_number || 'N/A';
-        alert(`Prescription created successfully!\n\nPrescription #: ${prescriptionNumber}\nMedications: ${validMedications.length}\n\nThe patient can now view this prescription in their patient portal.`);
+        alert(`Prescription created successfully!\n\nPrescription #: ${prescriptionNumber}\nMedications: ${validMedications.length}\n\nThe patient has been notified and can view this prescription in their patient portal.`);
         
         // Reload appointments and close modal
         await loadAppointments();
@@ -879,11 +994,16 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
                             </div>
                             <div className="min-w-0">
                               <div className="text-sm font-medium text-gray-900 truncate">
-                                {appointment.patient_name || 
-                                 (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 'Unknown Patient')}
+                                {appointment.patient_name && appointment.patient_name.trim() !== '' 
+                                  ? appointment.patient_name
+                                  : (appointment.patient 
+                                      ? `${appointment.patient.first_name || ''} ${appointment.patient.last_name || ''}`.trim() || 'Unknown Patient'
+                                      : 'Unknown Patient')}
                               </div>
                               <div className="text-sm text-gray-500 truncate">
-                                {appointment.patient?.email || 'No email'}
+                                {appointment.patient_email && appointment.patient_email.trim() !== ''
+                                  ? appointment.patient_email
+                                  : (appointment.patient?.email || 'No email')}
                               </div>
                             </div>
                           </div>
@@ -955,11 +1075,16 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-base font-medium text-gray-900 truncate">
-                          {appointment.patient_name || 
-                           (appointment.patient ? `${appointment.patient.first_name} ${appointment.patient.last_name}` : 'Unknown Patient')}
+                          {appointment.patient_name && appointment.patient_name.trim() !== ''
+                            ? appointment.patient_name
+                            : (appointment.patient 
+                                ? `${appointment.patient.first_name || ''} ${appointment.patient.last_name || ''}`.trim() || 'Unknown Patient'
+                                : 'Unknown Patient')}
                         </h3>
                         <p className="text-sm text-gray-500 truncate">
-                          {appointment.patient?.email || 'No email provided'}
+                          {appointment.patient_email && appointment.patient_email.trim() !== ''
+                            ? appointment.patient_email
+                            : (appointment.patient?.email || 'No email provided')}
                         </p>
                         {appointment.patient?.phone && (
                           <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">

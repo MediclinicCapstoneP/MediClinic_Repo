@@ -195,7 +195,10 @@ export const appointmentBookingService = {
         ...(appointmentData.payment_method && { payment_method: appointmentData.payment_method }),
         ...(appointmentData.payment_status && { payment_status: appointmentData.payment_status }),
         ...(appointmentData.payment_intent_id && { payment_intent_id: appointmentData.payment_intent_id }),
-        ...(appointmentData.total_amount && { total_amount: appointmentData.total_amount }),
+        ...(appointmentData.total_amount && { 
+          total_amount: appointmentData.total_amount,
+          payment_amount: appointmentData.total_amount // Also set payment_amount from total_amount
+        }),
         ...(appointmentData.consultation_fee && { consultation_fee: appointmentData.consultation_fee }),
         ...(appointmentData.booking_fee && { booking_fee: appointmentData.booking_fee }),
         created_at: new Date().toISOString(),

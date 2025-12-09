@@ -5,18 +5,17 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   StyleSheet,
+  Modal as RNModal,
 } from 'react-native';
 import { 
   Calendar,
   Clock,
-  User,
-  CreditCard,
   CheckCircle,
   AlertCircle,
   ChevronDown,
   MapPin,
+  X,
 } from 'lucide-react-native';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
@@ -37,7 +36,6 @@ interface BookingData {
   date: string;
   time: string;
   appointmentType: AppointmentType;
-  symptoms: string;
   notes: string;
   duration: number;
   consultationFee: number;
@@ -81,7 +79,6 @@ export function AppointmentBookingModal({
     date: new Date().toISOString().split('T')[0],
     time: '',
     appointmentType: 'consultation',
-    symptoms: '',
     notes: '',
     duration: 30,
     consultationFee: 500,
@@ -94,6 +91,7 @@ export function AppointmentBookingModal({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('gcash');
   const [createdAppointmentId, setCreatedAppointmentId] = useState<string>('');
   const [transactionNumber, setTransactionNumber] = useState<string>('');
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Load available time slots when date changes
   useEffect(() => {
@@ -135,6 +133,107 @@ export function AppointmentBookingModal({
   const handleDateChange = (date: string) => {
     setBookingData(prev => ({ ...prev, date, time: '' }));
     setError(null);
+  };
+
+  const handleCalendarDateSelect = (date: Date) => {
+    const dateString = date.toISOString().split('T')[0];
+    handleDateChange(dateString);
+    setShowCalendar(false);
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days = [];
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    return days;
+  };
+
+  const renderCalendar = () => {
+    const currentDate = new Date(bookingData.date);
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const days = getDaysInMonth(currentDate);
+    
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    return (
+      <RNModal
+        visible={showCalendar}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCalendar(false)}
+      >
+        <View style={styles.calendarOverlay}>
+          <View style={styles.calendarContainer}>
+            <View style={styles.calendarHeader}>
+              <Text style={styles.calendarTitle}>
+                {monthNames[month]} {year}
+              </Text>
+              <TouchableOpacity onPress={() => setShowCalendar(false)}>
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.calendarDaysHeader}>
+              {dayNames.map((day) => (
+                <Text key={day} style={styles.calendarDayHeader}>
+                  {day}
+                </Text>
+              ))}
+            </View>
+            
+            <View style={styles.calendarDaysGrid}>
+              {days.map((day, index) => {
+                if (day === null) {
+                  return <View key={`empty-${index}`} style={styles.calendarEmptyDay} />;
+                }
+                
+                const isSelected = day === currentDate.getDate();
+                const isToday = new Date().getDate() === day && 
+                                new Date().getMonth() === month && 
+                                new Date().getFullYear() === year;
+                
+                return (
+                  <TouchableOpacity
+                    key={day}
+                    style={[
+                      styles.calendarDay,
+                      isSelected && styles.calendarDaySelected,
+                      isToday && !isSelected && styles.calendarDayToday,
+                    ]}
+                    onPress={() => handleCalendarDateSelect(new Date(year, month, day))}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      isSelected && styles.calendarDayTextSelected,
+                      isToday && !isSelected && styles.calendarDayTextToday,
+                    ]}>
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </RNModal>
+    );
   };
 
   const handleTimeSelect = (timeSlot: any) => {
@@ -186,7 +285,6 @@ export function AppointmentBookingModal({
         appointment_time: bookingData.time,
         appointment_type: bookingData.appointmentType,
         duration_minutes: bookingData.duration,
-        symptoms: bookingData.symptoms,
         patient_notes: bookingData.notes,
         consultation_fee: bookingData.consultationFee,
         booking_fee: bookingData.bookingFee,
@@ -248,7 +346,6 @@ export function AppointmentBookingModal({
       date: new Date().toISOString().split('T')[0],
       time: '',
       appointmentType: 'consultation',
-      symptoms: '',
       notes: '',
       duration: 30,
       consultationFee: 500,
@@ -297,15 +394,21 @@ export function AppointmentBookingModal({
       {/* Date Selection */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Select Date</Text>
-        <View style={styles.datePickerContainer}>
+        <TouchableOpacity 
+          style={styles.datePickerContainer}
+          onPress={() => setShowCalendar(true)}
+        >
           <Calendar size={20} color="#2563EB" style={styles.inputIcon} />
-          <TextInput
-            style={styles.dateInput}
-            value={bookingData.date}
-            onChangeText={handleDateChange}
-            placeholder="YYYY-MM-DD"
-          />
-        </View>
+          <Text style={styles.dateInput}>
+            {bookingData.date ? new Date(bookingData.date).toLocaleDateString('en-US', {
+              weekday: 'short',
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            }) : 'Select Date'}
+          </Text>
+          <ChevronDown size={20} color="#6B7280" />
+        </TouchableOpacity>
       </View>
 
       {/* Time Selection */}
@@ -377,19 +480,6 @@ export function AppointmentBookingModal({
             </TouchableOpacity>
           ))}
         </View>
-      </View>
-
-      {/* Symptoms/Reason */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Symptoms or Reason for Visit</Text>
-        <TextInput
-          style={styles.textArea}
-          value={bookingData.symptoms}
-          onChangeText={(text) => setBookingData(prev => ({ ...prev, symptoms: text }))}
-          placeholder="Please describe your symptoms or reason for visit..."
-          multiline
-          numberOfLines={3}
-        />
       </View>
 
       {/* Additional Notes */}
@@ -560,6 +650,8 @@ export function AppointmentBookingModal({
       {currentStep === 'details' && renderDetailsStep()}
       {currentStep === 'payment' && renderPaymentStep()}
       {currentStep === 'confirmation' && renderConfirmationStep()}
+      
+      {renderCalendar()}
     </Modal>
   );
 }
@@ -614,6 +706,77 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#1F2937',
+  },
+  // Calendar styles
+  calendarOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxWidth: 320,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  calendarTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  calendarDaysHeader: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  calendarDayHeader: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  calendarDaysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarEmptyDay: {
+    width: '14.28%',
+    height: 40,
+  },
+  calendarDay: {
+    width: '14.28%',
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  calendarDaySelected: {
+    backgroundColor: '#2563EB',
+  },
+  calendarDayToday: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#2563EB',
+  },
+  calendarDayText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  calendarDayTextSelected: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  calendarDayTextToday: {
+    color: '#2563EB',
+    fontWeight: '600',
   },
   loadingContainer: {
     padding: 20,

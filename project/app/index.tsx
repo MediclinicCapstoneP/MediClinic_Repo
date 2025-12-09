@@ -7,25 +7,16 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.3)).current;
   const loadingProgressAnim = useRef(new Animated.Value(0)).current;
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    // Start animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 3,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Start fade-in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
 
     // Start loading progress animation
     Animated.timing(loadingProgressAnim, {
@@ -68,7 +59,6 @@ export default function SplashScreen() {
           styles.content,
           {
             opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
           },
         ]}
       >

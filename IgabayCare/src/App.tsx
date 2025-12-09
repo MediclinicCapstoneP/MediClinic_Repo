@@ -8,6 +8,7 @@ import ClinicSignInPage from './features/auth/pages/ClinicSignInPage';
 import ClinicSignUpPage from './features/auth/pages/ClinicSignUpPage';
 import AuthCallback from './features/auth/pages/AuthCallback';
 import PatientDashboard from './pages/patient/PatientDashboard';
+import PaymentReturn from './pages/patient/PaymentReturn';
 import { ClinicDashboard } from './pages/clinic/ClinicDashboard';
 // Voiceflow chatbot now integrated via HTML script - removing old FloatingChatBot
 // import { FloatingChatBot } from './components/ui/FloatingChatBot';
@@ -53,6 +54,7 @@ const App: React.FC = () => {
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/patient/dashboard" element={<PatientDashboard />} />
                 <Route path="/patient/medical-history" element={<MedicalHistoryPage />} />
+                <Route path="/patient/payment-return" element={<PaymentReturn />} />
                 <Route path="/clinic/dashboard" element={<ClinicDashboard />} />
                 <Route path="/doctors-dashboard" element={<DoctorDashboard />} />
                 {/* Debug route - remove in production */}

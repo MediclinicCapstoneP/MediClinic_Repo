@@ -5,7 +5,6 @@ import {
   AppointmentStatus,
   PaymentMethod,
   PaymentStatus,
-  ClinicWithDetails,
 } from '../lib/supabase';
 
 export interface CreateAppointmentData {
@@ -478,47 +477,93 @@ class AppointmentService {
       // Generate mock transaction number for now
       const transactionNumber = `TXN${Date.now()}${Math.random().toString(36).substr(2, 5)}`;
 
-      // Create payment record in transactions table
-      const { data: payment, error: paymentError } = await supabase
-        .from('transactions')
-        .insert([{
-          appointment_id: paymentRequest.appointment_id,
-          amount: paymentRequest.amount,
+      // Update appointment with payment details directly
+      const { data: appointment, error: updateError } = await supabase
+        .from('appointments')
+        .update({
+          payment_status: 'paid',
+          status: 'confirmed',
+          payment_amount: paymentRequest.amount,
           payment_method: paymentRequest.payment_method,
-          status: 'completed',
-          transaction_id: transactionNumber,
-          created_at: new Date().toISOString(),
-          clinic_id: null, // Will be set from appointment
-          patient_id: null // Will be set from appointment
-        }])
+          payment_intent_id: transactionNumber, // Using transaction number as payment_intent_id
+          payment_date: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', paymentRequest.appointment_id)
         .select()
         .single();
 
-      if (paymentError) {
-        console.error('Error creating payment:', paymentError);
+      if (updateError) {
+        console.error('Error updating appointment payment status:', updateError);
         return {
           success: false,
           error: 'Failed to process payment',
         };
       }
 
-      // Update appointment payment status
-      const { error: updateError } = await supabase
-        .from('appointments')
-        .update({
-          payment_status: 'paid',
-          status: 'payment_confirmed',
-          payment_id: payment.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', paymentRequest.appointment_id);
+      // Create notification for successful payment
+      if (appointment) {
+        // Get patient's user_id from the patients table
+        const { data: patient, error: patientError } = await supabase
+          .from('patients')
+          .select('user_id')
+          .eq('id', appointment.patient_id)
+          .single();
 
-      if (updateError) {
-        console.error('Error updating appointment payment status:', updateError);
-        return {
-          success: false,
-          error: 'Payment processed but failed to update appointment',
-        };
+        if (patientError || !patient?.user_id) {
+          console.error('Error fetching patient user_id:', patientError);
+          // Continue with payment processing even if notification fails
+        } else {
+          const appointmentDate = new Date(appointment.appointment_date);
+          const appointmentTime = appointment.appointment_time;
+          const formattedDate = appointmentDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          
+          // Format time (assuming it's in HH:MM format)
+          const [hours, minutes] = appointmentTime.split(':');
+          const hour = parseInt(hours);
+          const ampm = hour >= 12 ? 'PM' : 'AM';
+          const formattedHour = hour % 12 || 12;
+          const formattedTime = `${formattedHour}:${minutes} ${ampm}`;
+
+          // Check if notification already exists before creating
+          const { data: existingNotification } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('user_id', patient.user_id)
+            .eq('appointment_id', paymentRequest.appointment_id)
+            .eq('type', 'system')
+            .maybeSingle();
+
+          if (!existingNotification) {
+            const { error: insertError } = await supabase
+              .from('notifications')
+              .insert([{
+                user_id: patient.user_id, // Use patient's user_id, not patient_id
+                user_type: 'patient',
+                title: 'Appointment Confirmed & Payment Successful',
+                message: `Your appointment on ${formattedDate} at ${formattedTime} has been confirmed. Payment of ₱${paymentRequest.amount.toFixed(2)} was successful.`,
+                type: 'system',
+                is_read: false,
+                appointment_id: paymentRequest.appointment_id,
+              }]);
+
+            if (insertError) {
+              // Ignore conflict errors (409) - notification already exists
+              if (insertError.code !== '23505' && insertError.code !== '409') {
+                console.error('Error creating notification:', insertError);
+              }
+              // Log error but don't fail payment processing
+            }
+          } else {
+            // Notification already exists, which is fine
+            console.log('Notification already exists for this appointment payment');
+          }
+        }
       }
 
       return {

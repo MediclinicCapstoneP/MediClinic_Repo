@@ -55,6 +55,9 @@ export interface CreateDoctorAppointmentData {
   payment_amount?: number;
   priority?: string;
   special_instructions?: string;
+  patient_name?: string;
+  patient_email?: string;
+  patient_phone?: string;
 }
 
 export class DoctorAppointmentService {
@@ -78,10 +81,19 @@ export class DoctorAppointmentService {
         status: 'assigned',
         assigned_at: new Date().toISOString(),
         payment_status: 'pending',
-        prescription_given: false
+        prescription_given: false,
+        // Always include patient information - use empty string if not provided (database will handle null)
+        patient_name: data.patient_name || '',
+        patient_email: data.patient_email || '',
+        patient_phone: data.patient_phone || ''
       };
       
-      console.log('🔄 Inserting doctor appointment data:', appointmentData);
+      console.log('🔄 Inserting doctor appointment data:', {
+        ...appointmentData,
+        patient_name: appointmentData.patient_name || '(empty)',
+        patient_email: appointmentData.patient_email || '(empty)',
+        patient_phone: appointmentData.patient_phone || '(empty)'
+      });
 
       const { data: doctorAppointment, error } = await supabase
         .from('doctor_appointments')
@@ -172,6 +184,9 @@ export class DoctorAppointmentService {
         .eq('doctor_id', doctorId)
         .order('appointment_date', { ascending: false })
         .order('appointment_time', { ascending: false });
+      
+      // Log what we're querying
+      console.log('🔍 Querying doctor_appointments for doctor:', doctorId);
 
       // Apply filters
       if (filters?.status && filters.status !== 'all') {
@@ -205,6 +220,19 @@ export class DoctorAppointmentService {
       }
 
       console.log('✅ Successfully fetched doctor appointments:', appointments?.length || 0);
+      
+      // Log patient info for debugging
+      if (appointments && appointments.length > 0) {
+        console.log('📋 Sample appointment patient info:', {
+          first: {
+            patient_name: appointments[0].patient_name,
+            patient_email: appointments[0].patient_email,
+            patient_phone: appointments[0].patient_phone,
+            has_patient_relation: !!appointments[0].patient
+          }
+        });
+      }
+      
       return {
         success: true,
         appointments: appointments || []

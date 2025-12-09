@@ -95,12 +95,32 @@ export const prescriptionService = {
         return { success: false, error: 'Failed to create prescription record' };
       }
 
-      // Then create the medication records
-      const medicationRecords = medications.map(med => ({
-        ...med,
-        prescription_id: prescription.id,
-        status: 'active'
-      }));
+      // Then create the medication records - validate and filter out any invalid medications
+      const medicationRecords = medications
+        .filter(med => {
+          // Ensure medication_name is not null, undefined, or empty string
+          if (!med.medication_name || med.medication_name.trim() === '') {
+            console.warn('⚠️ Filtering out medication with invalid name:', med);
+            return false;
+          }
+          return true;
+        })
+        .map(med => ({
+          ...med,
+          prescription_id: prescription.id,
+          medication_name: med.medication_name.trim(), // Ensure it's trimmed
+          status: 'active'
+        }));
+
+      // Validate that we have at least one valid medication
+      if (medicationRecords.length === 0) {
+        // Clean up the prescription if no valid medications
+        await supabase
+          .from('prescriptions')
+          .delete()
+          .eq('id', prescription.id);
+        return { success: false, error: 'No valid medications provided. Each medication must have a name.' };
+      }
 
       const { data: medicationData, error: medicationError } = await supabase
         .from('prescription_medications')

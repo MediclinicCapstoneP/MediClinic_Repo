@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MapPin, Calendar, Star, Users, Award, Shield, Phone, Mail, ExternalLink, Navigation, DollarSign, Stethoscope } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { MapPin, Calendar, Star, Users, Award, Shield, Phone, Mail, ExternalLink, Navigation, DollarSign, Stethoscope, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -65,10 +66,13 @@ interface ClinicWithDistance extends ClinicProfile {
 }
 
 const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [clinics, setClinics] = useState<ClinicWithDistance[]>([]);
   const [filteredClinics, setFilteredClinics] = useState<ClinicWithDistance[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step | 'payment' | 'gcash-payment'>('home');
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+  const [showPaymentPending, setShowPaymentPending] = useState(false);
   const [selectedClinic, setSelectedClinic] = useState<ClinicProfile | null>(null);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -130,6 +134,34 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
 
 
 
+
+  // Handle payment success/pending banners from URL params
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    const bookingStatus = searchParams.get('booking');
+    
+    if (paymentStatus === 'success') {
+      if (bookingStatus === 'created') {
+        setShowPaymentSuccess(true);
+      } else if (bookingStatus === 'pending') {
+        setShowPaymentPending(true);
+      }
+      
+      // Remove query parameters from URL
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('payment');
+      newSearchParams.delete('booking');
+      setSearchParams(newSearchParams, { replace: true });
+      
+      // Auto-hide after 10 seconds
+      const timer = setTimeout(() => {
+        setShowPaymentSuccess(false);
+        setShowPaymentPending(false);
+      }, 10000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, setSearchParams]);
 
   // Fetch current patient data
   useEffect(() => {
@@ -1350,6 +1382,60 @@ const PatientHome: React.FC<PatientHomeProps> = ({ onNavigate }) => {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
+      {/* Payment Success Banner */}
+      {showPaymentSuccess && (
+        <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4 rounded-lg shadow-md">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-green-800">
+                Payment Successful & Appointment Confirmed!
+              </h3>
+              <div className="mt-2 text-sm text-green-700">
+                <p>Your payment has been processed and your appointment has been successfully created.</p>
+              </div>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setShowPaymentSuccess(false)}
+                className="inline-flex text-green-600 hover:text-green-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Pending Banner */}
+      {showPaymentPending && (
+        <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg shadow-md">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <AlertCircle className="h-6 w-6 text-yellow-600" />
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Payment Successful, Booking Pending
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>Your payment was successful, but we encountered an issue creating your appointment. Our team will process it shortly and you'll receive a confirmation once it's ready.</p>
+              </div>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setShowPaymentPending(false)}
+                className="inline-flex text-yellow-600 hover:text-yellow-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {step === 'home' && renderClinicList()}
       {step === 'clinic-details' && selectedClinic && renderClinicDetails(selectedClinic)}
       {step === 'book' && selectedClinic && renderBookingForm(selectedClinic)}

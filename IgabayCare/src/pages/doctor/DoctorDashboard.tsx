@@ -251,7 +251,7 @@ export const DoctorDashboard: React.FC = () => {
 
         const result = await prescriptionService.createMultiplePrescriptions(prescriptionsToCreate);
         
-        if (result.success) {
+        if (result.success && result.prescriptions) {
           // Reload prescriptions
           const prescriptionsResult = await prescriptionService.getPrescriptionsByDoctor(authUser.id);
           if (prescriptionsResult.success && prescriptionsResult.prescriptions) {
@@ -270,7 +270,65 @@ export const DoctorDashboard: React.FC = () => {
             )
           );
 
-          alert('Prescription created successfully!');
+          // Add to patient medical history
+          try {
+            const medicationList = prescriptionsToCreate.map(p => 
+              `${p.medication_name} - ${p.dosage}, ${p.frequency}${p.duration ? ` for ${p.duration}` : ''}`
+            ).join('; ');
+
+            const { error: historyError } = await supabase
+              .from('medical_records')
+              .insert([{
+                patient_id: selectedPatient.id,
+                doctor_id: authUser.id,
+                clinic_id: doctorProfile?.clinic_id || '',
+                appointment_id: selectedAppointment.id,
+                visit_date: new Date().toISOString().split('T')[0],
+                chief_complaint: 'Prescription issued',
+                diagnosis: 'Prescription medications prescribed',
+                treatment: medicationList,
+                notes: `Prescription issued with ${prescriptionsToCreate.length} medication(s)`,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }]);
+
+            if (historyError) {
+              console.warn('⚠️ Failed to add to medical history (non-critical):', historyError);
+            } else {
+              console.log('✅ Added prescription to patient medical history');
+            }
+          } catch (historyError) {
+            console.warn('⚠️ Error adding to medical history (non-critical):', historyError);
+          }
+
+          // Send notification to patient
+          try {
+            // Get patient's user_id
+            const { data: patientData } = await supabase
+              .from('patients')
+              .select('user_id')
+              .eq('id', selectedPatient.id)
+              .single();
+
+            if (patientData?.user_id) {
+              const { NotificationService } = await import('../../services/notificationService');
+              
+              const medicationNames = prescriptionsToCreate.map(p => p.medication_name).join(', ');
+              await NotificationService.createNotification({
+                user_id: patientData.user_id,
+                appointment_id: selectedAppointment.id,
+                title: 'New Prescription Available',
+                message: `Your doctor has prescribed: ${medicationNames}. Please check your prescriptions in the patient portal.`,
+                type: 'medical'
+              });
+              
+              console.log('✅ Notification sent to patient');
+            }
+          } catch (notifError) {
+            console.warn('⚠️ Failed to send notification (non-critical):', notifError);
+          }
+
+          alert('Prescription created successfully! The patient has been notified.');
           setShowPrescriptionModal(false);
           setSelectedPatient(null);
           setSelectedAppointment(null);

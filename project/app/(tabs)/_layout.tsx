@@ -1,20 +1,18 @@
 import { Tabs } from 'expo-router';
-import { Home, Calendar, User, Stethoscope, Settings, Users, FileText, Activity, Search, Hospital, Bell, MessageCircle } from 'lucide-react-native';
+import { Home, Calendar, Search, Bell, Users } from 'lucide-react-native';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Dimensions, Platform, View, Text } from 'react-native';
+import { Dimensions, View, Text } from 'react-native';
 
 export default function TabLayout() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   
-  // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
   const isTablet = screenWidth >= 768;
   const isSmallScreen = screenWidth < 375;
-  
-  // If no user, show loading or redirect to auth
+
   if (!user) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -22,33 +20,34 @@ export default function TabLayout() {
       </View>
     );
   }
-  
-  // Calculate responsive dimensions
+
   const getResponsiveTabBarHeight = () => {
     if (isTablet) return 80;
     if (isSmallScreen) return 65;
     return 70;
   };
-  
+
   const getResponsiveIconSize = () => {
     if (isTablet) return 28;
     if (isSmallScreen) return 20;
     return 24;
   };
-  
+
   const getResponsiveFontSize = () => {
     if (isTablet) return 14;
     if (isSmallScreen) return 10;
     return 12;
   };
-  
+
   const getResponsivePadding = () => {
     if (isTablet) return 12;
     if (isSmallScreen) return 6;
     return 8;
   };
 
-  // Render Patient Navigation
+  // -------------------------------------------
+  // PATIENT TABS
+  // -------------------------------------------
   if (user.role === 'patient') {
     return (
       <ProtectedRoute>
@@ -85,49 +84,50 @@ export default function TabLayout() {
             name="patient"
             options={{
               title: 'Home',
-              tabBarIcon: ({ color }) => (
-                <Home size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Home size={getResponsiveIconSize()} color={color} />,
             }}
           />
+
           <Tabs.Screen
             name="appointments/index"
             options={{
               title: 'My Appointments',
-              tabBarIcon: ({ color }) => (
-                <Calendar size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Calendar size={getResponsiveIconSize()} color={color} />,
             }}
           />
+
           <Tabs.Screen
             name="clinics"
             options={{
               title: 'Find Clinics',
-              tabBarIcon: ({ color }) => (
-                <Search size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Search size={getResponsiveIconSize()} color={color} />,
             }}
           />
+
           <Tabs.Screen
             name="notifications/index"
             options={{
               title: 'Notifications',
-              tabBarIcon: ({ color }) => (
-                <Bell size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Bell size={getResponsiveIconSize()} color={color} />,
             }}
           />
-          {/* Hide other role's screens */}
-          <Tabs.Screen
-            name="doctor"
-            options={{ href: null }}
-          />
+
+          {/* 🔥 Hide Doctor/Clinic Tabs */}
+          <Tabs.Screen name="doctor" options={{ href: null }} />
+          <Tabs.Screen name="patients" options={{ href: null }} />
+
+          {/* 🔥 Hide Profile + Patients Tab completely */}
+          <Tabs.Screen name="profile/index" options={{ href: null }} />
+          <Tabs.Screen name="patients/index" options={{ href: null }} />
+
         </Tabs>
       </ProtectedRoute>
     );
   }
 
-  // Render Doctor/Clinic Navigation
+  // -------------------------------------------
+  // DOCTOR / CLINIC TABS
+  // -------------------------------------------
   if (user.role === 'doctor' || user.role === 'clinic') {
     return (
       <ProtectedRoute>
@@ -160,57 +160,55 @@ export default function TabLayout() {
             },
           }}
         >
+
           <Tabs.Screen
-            name="doctor/index"
+            name="doctor"
             options={{
               title: 'Home',
-              tabBarIcon: ({ color }) => (
-                <Activity size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Home size={getResponsiveIconSize()} color={color} />,
             }}
           />
+
           <Tabs.Screen
             name="appointments/index"
             options={{
               title: 'Appointments',
-              tabBarIcon: ({ color }) => (
-                <Calendar size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Calendar size={getResponsiveIconSize()} color={color} />,
             }}
           />
+
           <Tabs.Screen
-            name="doctor/patients"
+            name="patients"
             options={{
               title: 'Patients',
-              tabBarIcon: ({ color }) => (
-                <Users size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Users size={getResponsiveIconSize()} color={color} />,
             }}
           />
+
           <Tabs.Screen
             name="notifications/index"
             options={{
               title: 'Notifications',
-              tabBarIcon: ({ color }) => (
-                <Bell size={getResponsiveIconSize()} color={color} />
-              ),
+              tabBarIcon: ({ color }) => <Bell size={getResponsiveIconSize()} color={color} />,
             }}
           />
-          {/* Hide patient-only screens */}
-          <Tabs.Screen
-            name="patient"
-            options={{ href: null }}
-          />
-          <Tabs.Screen
-            name="clinics"
-            options={{ href: null }}
-          />
+
+          {/* 🔥 Hide Patient Tabs */}
+          <Tabs.Screen name="patient" options={{ href: null }} />
+          <Tabs.Screen name="clinics" options={{ href: null }} />
+
+          {/* 🔥 Hide Profile + Patients Tab for doctor */}
+          <Tabs.Screen name="profile/index" options={{ href: null }} />
+          <Tabs.Screen name="patients/index" options={{ href: null }} />
+
         </Tabs>
       </ProtectedRoute>
     );
   }
 
-  // Default fallback for unknown roles
+  // -------------------------------------------
+  // FALLBACK
+  // -------------------------------------------
   return (
     <ProtectedRoute>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

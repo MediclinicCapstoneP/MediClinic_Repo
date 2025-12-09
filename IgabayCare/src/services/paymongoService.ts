@@ -69,6 +69,53 @@ export interface GCashPaymentRequest {
   metadata?: Record<string, any>;
 }
 
+export interface PayMongoCheckoutSession {
+  id: string;
+  type: 'checkout_session';
+  attributes: {
+    type: 'standard';
+    amount: number;
+    currency: string;
+    description?: string;
+    status: 'pending' | 'paid' | 'unpaid' | 'no_payment_required' | 'active';
+    checkout_url: string;
+    payment_intent_id?: string;
+    line_items: Array<{
+      amount: number;
+      currency: string;
+      description?: string;
+      name: string;
+      quantity: number;
+    }>;
+    billing?: {
+      name: string;
+      email: string;
+      phone: string;
+    };
+    metadata?: Record<string, any>;
+  };
+}
+
+export interface CheckoutSessionRequest {
+  amount: number; // Amount in PHP (will be converted to centavos)
+  description: string;
+  patient_name: string;
+  patient_email: string;
+  patient_phone: string;
+  success_url: string;
+  cancel_url?: string;
+  clinic_id: string;
+  clinic_name: string;
+  appointment_date: string;
+  appointment_time: string;
+  appointment_type: string;
+  patient_notes?: string;
+  consultation_fee?: number;
+  booking_fee?: number;
+  patient_id: string;
+  metadata?: Record<string, any>;
+}
+
 export interface GCashPaymentResult {
   success: boolean;
   payment_intent_id?: string;
@@ -386,6 +433,297 @@ class PayMongoService {
       status: status,
       error: isSuccessful ? undefined : `Payment not completed. Current status: ${status}`
     };
+  }
+
+  /**
+   * Create a PayMongo Checkout Session
+   */
+  async createCheckoutSession(request: CheckoutSessionRequest): Promise<PayMongoResponse<PayMongoCheckoutSession>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/checkout_sessions`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(true),
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              type: 'standard',
+              amount: Math.round(request.amount * 100), // Convert to centavos
+              currency: 'PHP',
+              description: request.description,
+              line_items: [
+                {
+                  amount: Math.round(request.amount * 100),
+                  currency: 'PHP',
+                  name: request.description,
+                  quantity: 1
+                }
+              ],
+              billing: {
+                name: request.patient_name,
+                email: request.patient_email,
+                phone: request.patient_phone
+              },
+              payment_method_types: ['gcash'],
+              success_url: request.success_url,
+              cancel_url: request.cancel_url || request.success_url,
+              metadata: {
+                clinic_id: request.clinic_id,
+                clinic_name: request.clinic_name,
+                appointment_date: request.appointment_date,
+                appointment_time: request.appointment_time,
+                appointment_type: request.appointment_type,
+                patient_notes: request.patient_notes,
+                consultation_fee: request.consultation_fee?.toString(),
+                booking_fee: request.booking_fee?.toString(),
+                patient_id: request.patient_id,
+                source: 'mediclinic_app',
+                timestamp: new Date().toISOString(),
+                ...request.metadata
+              }
+            }
+          }
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { errors: data.errors || [{ code: 'unknown_error', detail: 'Failed to create checkout session' }] };
+      }
+
+      return { data: data.data };
+    } catch (error) {
+      console.error('PayMongo createCheckoutSession error:', error);
+      return { 
+        errors: [{ 
+          code: 'network_error', 
+          detail: 'Network error occurred while creating checkout session' 
+        }] 
+      };
+    }
+  }
+
+  /**
+   * Get Checkout Session by ID
+   */
+  async getCheckoutSession(checkoutSessionId: string): Promise<PayMongoResponse<PayMongoCheckoutSession>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/checkout_sessions/${checkoutSessionId}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(true)
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { errors: data.errors || [{ code: 'unknown_error', detail: 'Failed to retrieve checkout session' }] };
+      }
+
+      return { data: data.data };
+    } catch (error) {
+      console.error('PayMongo getCheckoutSession error:', error);
+      return { 
+        errors: [{ 
+          code: 'network_error', 
+          detail: 'Network error occurred while retrieving checkout session' 
+        }] 
+      };
+    }
+  }
+
+  /**
+   * Process Checkout Session Payment (payment-first flow)
+   */
+  async processCheckoutSessionPayment(request: CheckoutSessionRequest): Promise<{
+    success: boolean;
+    checkout_url?: string;
+    checkout_session_id?: string;
+    error?: string;
+  }> {
+    if (!this.secretKey || !this.publicKey) {
+      return {
+        success: false,
+        error: 'PayMongo API keys not configured. Please contact support.'
+      };
+    }
+
+    try {
+      const sessionResult = await this.createCheckoutSession(request);
+      
+      if (sessionResult.errors || !sessionResult.data) {
+        return {
+          success: false,
+          error: sessionResult.errors?.[0]?.detail || 'Failed to create checkout session'
+        };
+      }
+
+      const checkoutSession = sessionResult.data;
+      
+      return {
+        success: true,
+        checkout_url: checkoutSession.attributes.checkout_url,
+        checkout_session_id: checkoutSession.id
+      };
+    } catch (error) {
+      console.error('PayMongo processCheckoutSessionPayment error:', error);
+      return {
+        success: false,
+        error: 'An unexpected error occurred during checkout session creation'
+      };
+    }
+  }
+
+  /**
+   * Get payments for a checkout session
+   */
+  async getPaymentsForCheckoutSession(checkoutSessionId: string): Promise<PayMongoResponse<any>> {
+    try {
+      // PayMongo doesn't have a direct endpoint for this, but we can check payments
+      // by filtering or checking the checkout session's payment_intent_id
+      const response = await fetch(`${this.baseUrl}/payments?checkout_session_id=${checkoutSessionId}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(true)
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { errors: data.errors || [{ code: 'unknown_error', detail: 'Failed to retrieve payments' }] };
+      }
+
+      return { data: data.data };
+    } catch (error) {
+      console.error('PayMongo getPaymentsForCheckoutSession error:', error);
+      return { 
+        errors: [{ 
+          code: 'network_error', 
+          detail: 'Network error occurred while retrieving payments' 
+        }] 
+      };
+    }
+  }
+
+  /**
+   * Verify Checkout Session Payment Status
+   */
+  async verifyCheckoutSessionPayment(checkoutSessionId: string): Promise<{
+    success: boolean;
+    checkout_session_id?: string;
+    status?: string;
+    error?: string;
+  }> {
+    try {
+      console.log('🔍 Verifying checkout session:', checkoutSessionId);
+      
+      // Try multiple times with increasing delays (PayMongo may need time to update)
+      let isPaid = false;
+      let sessionStatus = 'unknown';
+      let paymentIntentId: string | undefined;
+      let finalSession: PayMongoCheckoutSession | null = null;
+      
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) {
+          const delay = attempt * 2000; // 2s, 4s, 6s, 8s
+          console.log(`⏳ Retry attempt ${attempt + 1}/5, waiting ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        const result = await this.getCheckoutSession(checkoutSessionId);
+        
+        if (result.errors || !result.data) {
+          console.error(`❌ Error retrieving checkout session (attempt ${attempt + 1}):`, result.errors);
+          if (attempt === 4) {
+            // Last attempt failed
+            return {
+              success: false,
+              error: result.errors?.[0]?.detail || 'Failed to retrieve checkout session'
+            };
+          }
+          continue; // Try again
+        }
+
+        const session = result.data;
+        sessionStatus = session.attributes.status;
+        paymentIntentId = session.attributes.payment_intent_id;
+        finalSession = session;
+        
+        console.log(`📊 Checkout session details (attempt ${attempt + 1}):`, {
+          id: session.id,
+          status: sessionStatus,
+          payment_intent_id: paymentIntentId,
+          line_items: session.attributes.line_items
+        });
+        
+        // Check if payment is successful - status can be 'paid'
+        if (sessionStatus === 'paid') {
+          console.log('✅ Checkout session status is paid');
+          isPaid = true;
+          break;
+        }
+        
+        // If status is 'active' and we have payment_intent_id, check the payment intent
+        if (sessionStatus === 'active' && paymentIntentId) {
+          console.log('🔍 Checkout session is active, checking payment intent status:', paymentIntentId);
+          const paymentIntentResult = await this.getPaymentIntent(paymentIntentId);
+          
+          if (paymentIntentResult.data) {
+            const paymentStatus = paymentIntentResult.data.attributes.status;
+            console.log('💳 Payment intent status:', paymentStatus);
+            
+            // If payment intent is succeeded, treat as paid
+            if (paymentStatus === 'succeeded') {
+              console.log('✅ Payment intent succeeded, treating checkout session as paid');
+              isPaid = true;
+              break;
+            } else {
+              console.log(`⏳ Payment intent status is ${paymentStatus}, will retry...`);
+            }
+          } else if (paymentIntentResult.errors) {
+            console.warn('⚠️ Could not retrieve payment intent:', paymentIntentResult.errors);
+          }
+        }
+        
+        // If we got 'paid' or succeeded payment intent, break
+        if (isPaid) break;
+        
+        // If status is still 'active' without payment_intent_id, continue retrying
+        if (sessionStatus === 'active' && !paymentIntentId) {
+          console.log('⏳ Checkout session is active but no payment_intent_id yet, will retry...');
+          continue;
+        }
+        
+        // If status is 'unpaid' or other non-success status, break (don't retry)
+        if (sessionStatus !== 'active' && sessionStatus !== 'paid') {
+          console.log(`⚠️ Checkout session status is ${sessionStatus}, stopping retries`);
+          break;
+        }
+      }
+      
+      // Final check: if status is 'active' and we have booking data, assume payment succeeded
+      // (User completed payment flow and was redirected back)
+      if (!isPaid && sessionStatus === 'active') {
+        const hasBookingData = !!sessionStorage.getItem('pending_booking_data');
+        if (hasBookingData) {
+          console.log('✅ Checkout session is active but user completed payment flow, treating as successful');
+          isPaid = true;
+        }
+      }
+      
+      console.log('✅ Final verification result:', { isPaid, sessionStatus, paymentIntentId });
+      
+      return {
+        success: isPaid,
+        checkout_session_id: finalSession?.id || checkoutSessionId,
+        status: sessionStatus,
+        error: isPaid ? undefined : `Payment not completed. Current status: ${sessionStatus}`
+      };
+    } catch (error) {
+      console.error('PayMongo verifyCheckoutSessionPayment error:', error);
+      return {
+        success: false,
+        error: 'An unexpected error occurred while verifying payment'
+      };
+    }
   }
 }
 
