@@ -119,41 +119,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('[Auth] Fetching user profile for user ID:', userId);
 
-      // Run all three queries in parallel with timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 20000)
-      );
+      // Get the current Supabase user to check their role from metadata
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const userRole = currentUser?.user_metadata?.role;
+      
+      console.log('[Auth] User role from metadata:', userRole);
 
-      const [patientRes, clinicRes, doctorRes] = await Promise.race([
-        Promise.all([
+      // Run queries based on the user's role from metadata for efficiency
+      let profileRes, otherRes1, otherRes2;
+      
+      if (userRole === 'patient') {
+        [profileRes, otherRes1, otherRes2] = await Promise.all([
           supabase.from('patients').select('*').eq('user_id', userId).maybeSingle(),
+          supabase.from('clinics').select('id').eq('user_id', userId).maybeSingle(),
+          supabase.from('doctors').select('id').eq('user_id', userId).maybeSingle(),
+        ]);
+      } else if (userRole === 'clinic') {
+        [profileRes, otherRes1, otherRes2] = await Promise.all([
           supabase.from('clinics').select('*').eq('user_id', userId).maybeSingle(),
+          supabase.from('patients').select('id').eq('user_id', userId).maybeSingle(),
+          supabase.from('doctors').select('id').eq('user_id', userId).maybeSingle(),
+        ]);
+      } else if (userRole === 'doctor') {
+        [profileRes, otherRes1, otherRes2] = await Promise.all([
           supabase.from('doctors').select('*').eq('user_id', userId).maybeSingle(),
-        ]),
-        timeoutPromise
-      ]) as [any, any, any];
+          supabase.from('patients').select('id').eq('user_id', userId).maybeSingle(),
+          supabase.from('clinics').select('id').eq('user_id', userId).maybeSingle(),
+        ]);
+      } else {
+        // Fallback: check all tables
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile fetch timeout')), 20000)
+        );
 
-      // If profiles exist, choose active role from sessionStorage or default to first
+        [profileRes, otherRes1, otherRes2] = await Promise.race([
+          Promise.all([
+            supabase.from('patients').select('*').eq('user_id', userId).maybeSingle(),
+            supabase.from('clinics').select('*').eq('user_id', userId).maybeSingle(),
+            supabase.from('doctors').select('*').eq('user_id', userId).maybeSingle(),
+          ]),
+          timeoutPromise
+        ]) as [any, any, any];
+      }
+
+      // If profiles exist, choose active role from sessionStorage or default to metadata role
       const roles: ('patient' | 'clinic' | 'doctor')[] = [];
-      if (patientRes?.data) roles.push('patient');
-      if (clinicRes?.data) roles.push('clinic');
-      if (doctorRes?.data) roles.push('doctor');
+      if (profileRes?.data) roles.push((userRole || 'patient') as any);
+      if (otherRes1?.data) roles.push(otherRes1 === profileRes ? (userRole || 'patient') as any : 'patient');
+      if (otherRes2?.data) roles.push(otherRes2 === profileRes ? (userRole || 'patient') as any : 'patient');
 
       setAvailableRoles(roles);
 
-      // Determine active role: prefer sessionStorage, otherwise first available
+      // Determine active role: prefer sessionStorage, otherwise metadata role
       const persisted = loadActiveRoleFromSession();
       let activeRole: 'patient' | 'clinic' | 'doctor' | undefined;
+      
       if (persisted && roles.includes(persisted)) {
         activeRole = persisted;
+      } else if (userRole && ['patient', 'clinic', 'doctor'].includes(userRole)) {
+        activeRole = userRole;
+        saveActiveRoleToSession(activeRole);
       } else if (roles.length > 0) {
         activeRole = roles[0];
         saveActiveRoleToSession(activeRole);
       }
 
       // Build user profile depending on role
-      if (activeRole === 'patient' && patientRes?.data) {
-        const p = patientRes.data;
+      if (activeRole === 'patient' && profileRes?.data) {
+        const p = profileRes.data;
         setUser({
           id: userId,
           email: p.email ?? supabaseUserRef.current?.email ?? '',
@@ -164,8 +197,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (activeRole === 'clinic' && clinicRes?.data) {
-        const c = clinicRes.data;
+      if (activeRole === 'clinic' && profileRes?.data) {
+        const c = profileRes.data;
         setUser({
           id: userId,
           email: c.email ?? supabaseUserRef.current?.email ?? '',
@@ -176,8 +209,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (activeRole === 'doctor' && doctorRes?.data) {
-        const d = doctorRes.data;
+      if (activeRole === 'doctor' && profileRes?.data) {
+        const d = profileRes.data;
         setUser({
           id: userId,
           email: d.email ?? supabaseUserRef.current?.email ?? '',
@@ -188,28 +221,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // No profile found: create a minimal fallback user
+      // No profile found: create a minimal fallback user based on metadata role
       console.warn('[Auth] No profile found; creating minimal fallback user');
       setUser({
         id: userId,
         email: supabaseUserRef.current?.email ?? '',
-        role: (roles.includes('patient') ? 'patient' : roles[0]) ?? 'patient',
+        role: (userRole && ['patient', 'clinic', 'doctor'].includes(userRole)) ? userRole : 'patient',
         createdAt: new Date().toISOString(),
       });
     } catch (err: any) {
       console.error('[Auth] fetchUserProfile error', err);
       // Create fallback user even on error to prevent redirect loop
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const userRole = currentUser?.user_metadata?.role;
+      
       const fallbackUser = {
         id: userId,
         email: supabaseUserRef.current?.email ?? '',
-        role: 'patient' as const, // Default to patient on error
+        role: (userRole && ['patient', 'clinic', 'doctor'].includes(userRole)) ? userRole : 'patient' as const,
         createdAt: new Date().toISOString(),
       };
       console.log('[Auth] Creating fallback user due to error:', fallbackUser);
       setUser(fallbackUser);
       setError(err instanceof Error ? err : new Error(String(err)));
     }
-  }, []); // Remove supabaseUser dependency
+  }, []);
 
   const fetchAvailableRoles = useCallback(async (userId: string) => {
     try {
@@ -264,6 +300,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         setSupabaseUser(session.user);
         sessionManager.setCurrentUserId(session.user.id);
+        
+        // Check user role from metadata first
+        const userRole = session.user.user_metadata?.role;
+        if (!userRole || !['patient', 'clinic', 'doctor'].includes(userRole)) {
+          throw new Error('Invalid user role. Please use the correct sign-in page for your account type.');
+        }
+        
         // fetch profile + roles
         await Promise.all([
           fetchUserProfile(session.user.id),

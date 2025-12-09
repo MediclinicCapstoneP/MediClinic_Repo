@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Card, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { SkeletonTable, Skeleton } from '../../components/ui/Skeleton';
 import { prescriptionService, PrescriptionWithPatient } from '../../features/auth/utils/prescriptionService';
 import { 
-  Pill, Calendar, Clock, User, Search, Filter, Eye, Edit, Trash2,
+  Pill, Calendar, Clock, User, Search, Filter, Eye,
   AlertCircle, CheckCircle, XCircle, Plus, RefreshCw, FileText,
-  Activity, TrendingUp, Users, Download, Mail, Phone
+  Activity, TrendingUp, Users, Mail, Phone
 } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
 interface DoctorPrescriptionsProps {
   doctorId: string;
@@ -23,6 +24,37 @@ interface PrescriptionStats {
   uniquePatients: number;
   mostPrescribedMedication: string;
 }
+
+interface PatientOption {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email?: string | null;
+}
+
+interface NewPrescriptionFormState {
+  patient_id: string;
+  medication_name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+  prescribed_date: string;
+  expiry_date: string;
+  refills_remaining: number;
+}
+
+const createEmptyPrescription = (): NewPrescriptionFormState => ({
+  patient_id: '',
+  medication_name: '',
+  dosage: '',
+  frequency: '',
+  duration: '',
+  instructions: '',
+  prescribed_date: new Date().toISOString().split('T')[0],
+  expiry_date: '',
+  refills_remaining: 0,
+});
 
 export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctorId }) => {
   const [prescriptions, setPrescriptions] = useState<PrescriptionWithPatient[]>([]);
@@ -41,10 +73,17 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [patients, setPatients] = useState<PatientOption[]>([]);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [newPrescription, setNewPrescription] = useState<NewPrescriptionFormState>(createEmptyPrescription());
+  const [doctorClinicId, setDoctorClinicId] = useState<string>('');
 
   useEffect(() => {
     if (doctorId) {
       loadPrescriptions();
+      loadPatients();
+      loadDoctorClinic();
     } else {
       setLoading(false);
     }
@@ -62,12 +101,18 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
 
     try {
       setLoading(true);
-      
+
       const result = await prescriptionService.getPrescriptionsByDoctor(doctorId);
-      
+
       if (result.success && result.prescriptions) {
         setPrescriptions(result.prescriptions);
         calculateStats(result.prescriptions);
+        if (!doctorClinicId && result.prescriptions.length > 0) {
+          const existingClinicId = result.prescriptions.find(p => p.clinic_id)?.clinic_id;
+          if (existingClinicId) {
+            setDoctorClinicId(existingClinicId);
+          }
+        }
       } else {
         console.error('Error loading prescriptions:', result.error);
       }
@@ -78,11 +123,80 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
     }
   };
 
+  const loadPatients = async () => {
+    if (!doctorId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          patient:patients(id, first_name, last_name, email)
+        `)
+        .eq('doctor_id', doctorId)
+        .not('patient', 'is', null);
+
+      if (error) {
+        console.error('Error loading patients for prescriptions:', error);
+        return;
+      }
+
+      type AppointmentPatientRow = { patient: PatientOption | null };
+      const rows = (((data ?? []) as unknown) as AppointmentPatientRow[]);
+
+      const uniquePatientsMap = new Map<string, PatientOption>();
+      rows.forEach(({ patient }) => {
+        if (patient?.id) {
+          uniquePatientsMap.set(patient.id, {
+            id: patient.id,
+            first_name: patient.first_name,
+            last_name: patient.last_name,
+            email: patient.email,
+          });
+        }
+      });
+
+      setPatients(Array.from(uniquePatientsMap.values()).sort((a, b) => {
+        const nameA = `${a.first_name} ${a.last_name}`.toLowerCase();
+        const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      }));
+    } catch (error) {
+      console.error('Error loading patients for prescriptions:', error);
+    }
+  };
+
+  const loadDoctorClinic = async () => {
+    if (!doctorId || doctorClinicId) return doctorClinicId;
+
+    try {
+      const { data, error } = await supabase
+        .from('doctors')
+        .select('clinic_id')
+        .eq('id', doctorId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching doctor clinic id:', error);
+        return '';
+      }
+
+      if (data?.clinic_id) {
+        setDoctorClinicId(data.clinic_id);
+        return data.clinic_id as string;
+      }
+    } catch (error) {
+      console.error('Error loading doctor clinic id:', error);
+    }
+
+    return '';
+  };
+
   const calculateStats = (prescriptionList: PrescriptionWithPatient[]) => {
     const total = prescriptionList.length;
     const active = prescriptionList.filter(p => p.status === 'active').length;
     const expired = prescriptionList.filter(p => p.status === 'expired').length;
     const completed = prescriptionList.filter(p => p.status === 'completed').length;
+
     
     const uniquePatients = new Set(prescriptionList.map(p => p.patient_id)).size;
     
@@ -170,7 +284,77 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
   };
 
   const handleCreateNewPrescription = () => {
+    setCreateError(null);
+    setNewPrescription(createEmptyPrescription());
     setShowCreateModal(true);
+  };
+
+  const closeCreatePrescriptionModal = () => {
+    setShowCreateModal(false);
+    setCreateError(null);
+    setNewPrescription(createEmptyPrescription());
+  };
+
+  const handleNewPrescriptionChange = <K extends keyof NewPrescriptionFormState>(field: K, value: NewPrescriptionFormState[K]) => {
+    setNewPrescription((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSubmitNewPrescription = async () => {
+    if (!doctorId) {
+      setCreateError('Doctor information is missing. Please try again later.');
+      return;
+    }
+
+    if (!newPrescription.patient_id || !newPrescription.medication_name || !newPrescription.dosage || !newPrescription.frequency || !newPrescription.duration) {
+      setCreateError('Please fill in all required fields before creating the prescription.');
+      return;
+    }
+
+    setCreateLoading(true);
+    setCreateError(null);
+
+    try {
+      let clinicId = doctorClinicId;
+      if (!clinicId) {
+        clinicId = await loadDoctorClinic();
+      }
+
+      if (!clinicId) {
+        setCreateError('Unable to determine your clinic. Please update your profile or contact support.');
+        return;
+      }
+
+      const result = await prescriptionService.createPrescription({
+        patient_id: newPrescription.patient_id,
+        doctor_id: doctorId,
+        clinic_id: clinicId,
+        medication_name: newPrescription.medication_name,
+        dosage: newPrescription.dosage,
+        frequency: newPrescription.frequency,
+        duration: newPrescription.duration,
+        instructions: newPrescription.instructions || undefined,
+        prescribed_date: newPrescription.prescribed_date,
+        expiry_date: newPrescription.expiry_date || undefined,
+        refills_remaining: newPrescription.refills_remaining,
+        status: 'active',
+      });
+
+      if (!result.success) {
+        setCreateError(result.error || 'Failed to create prescription. Please try again.');
+        return;
+      }
+
+      await loadPrescriptions();
+      closeCreatePrescriptionModal();
+    } catch (error) {
+      console.error('Error creating prescription:', error);
+      setCreateError('Unexpected error creating prescription. Please try again.');
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -748,7 +932,7 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
       {showCreateModal && (
         <Modal
           isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
+          onClose={closeCreatePrescriptionModal}
           title="Create New Prescription"
           size="lg"
         >
@@ -758,44 +942,133 @@ export const DoctorPrescriptions: React.FC<DoctorPrescriptionsProps> = ({ doctor
                 <Plus className="h-6 w-6 text-blue-600" />
                 <div>
                   <h3 className="text-lg font-semibold text-blue-900">New Prescription</h3>
-                  <p className="text-blue-700">Create a new prescription for your patient</p>
+                  <p className="text-blue-700">Fill out the form below to prescribe medication to a patient.</p>
                 </div>
               </div>
             </div>
-            
-            <div className="text-center py-8">
-              <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Prescription Creation</h3>
-              <p className="text-gray-600 mb-4">
-                The full prescription creation form will be implemented here.
-                This will include patient selection, medication search, dosage settings, and more.
-              </p>
-              <div className="space-y-3 text-left max-w-md mx-auto">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <User className="h-4 w-4" />
-                  <span>Select patient</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Pill className="h-4 w-4" />
-                  <span>Search and add medications</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock className="h-4 w-4" />
-                  <span>Set dosage and frequency</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <FileText className="h-4 w-4" />
-                  <span>Add instructions and notes</span>
-                </div>
+
+            {createError && (
+              <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
+                {createError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Patient<span className="text-red-500">*</span></label>
+                <select
+                  value={newPrescription.patient_id}
+                  onChange={(e) => handleNewPrescriptionChange('patient_id', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select a patient</option>
+                  {patients.length === 0 && <option disabled>No patients found for your appointments</option>}
+                  {patients.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.first_name} {patient.last_name}{patient.email ? ` - ${patient.email}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Medication Name<span className="text-red-500">*</span></label>
+                <Input
+                  value={newPrescription.medication_name}
+                  onChange={(e) => handleNewPrescriptionChange('medication_name', e.target.value)}
+                  placeholder="e.g., Amoxicillin"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Dosage<span className="text-red-500">*</span></label>
+                <Input
+                  value={newPrescription.dosage}
+                  onChange={(e) => handleNewPrescriptionChange('dosage', e.target.value)}
+                  placeholder="e.g., 500mg"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Frequency<span className="text-red-500">*</span></label>
+                <Input
+                  value={newPrescription.frequency}
+                  onChange={(e) => handleNewPrescriptionChange('frequency', e.target.value)}
+                  placeholder="e.g., Twice daily"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Duration<span className="text-red-500">*</span></label>
+                <Input
+                  value={newPrescription.duration}
+                  onChange={(e) => handleNewPrescriptionChange('duration', e.target.value)}
+                  placeholder="e.g., 7 days"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Refills Remaining</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={newPrescription.refills_remaining}
+                  onChange={(e) => handleNewPrescriptionChange('refills_remaining', Math.max(0, parseInt(e.target.value, 10) || 0))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prescribed Date<span className="text-red-500">*</span></label>
+                <Input
+                  type="date"
+                  value={newPrescription.prescribed_date}
+                  onChange={(e) => handleNewPrescriptionChange('prescribed_date', e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                <Input
+                  type="date"
+                  value={newPrescription.expiry_date}
+                  onChange={(e) => handleNewPrescriptionChange('expiry_date', e.target.value)}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                <textarea
+                  value={newPrescription.instructions}
+                  onChange={(e) => handleNewPrescriptionChange('instructions', e.target.value)}
+                  rows={3}
+                  placeholder="Add any specific instructions for the patient..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+              <Button variant="outline" onClick={closeCreatePrescriptionModal} disabled={createLoading}>
                 Cancel
               </Button>
-              <Button disabled>
-                Create Prescription (Coming Soon)
+              <Button onClick={handleSubmitNewPrescription} disabled={createLoading} className="flex items-center gap-2">
+                {createLoading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Create Prescription
+                  </>
+                )}
               </Button>
             </div>
           </div>
