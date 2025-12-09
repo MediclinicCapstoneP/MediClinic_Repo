@@ -16,19 +16,22 @@ const LandingPage = () => {
       icon: Calendar,
       title: "Smart Booking",
       description: "AI-powered appointment scheduling with real-time availability and automated reminders",
-      color: "bg-gradient-primary"
+      color: "bg-gradient-primary",
+      className: ""
     },
     {
       icon: Shield,
       title: "HIPAA Compliant",
       description: "Bank-level security with end-to-end encryption for patient data protection",
-      color: "bg-gradient-medical"
+      color: "bg-gradient-medical",
+      className: ""
     },
     {
       icon: Activity,
       title: "Digital Health Records",
       description: "Comprehensive electronic health records with seamless provider integration",
-      color: "bg-gradient-clinical"
+      color: "bg-gradient-clinical",
+      className: ""
     }
   ];
 
@@ -74,10 +77,10 @@ const LandingPage = () => {
       <header className="border-b border-blue-200 bg-white/95 backdrop-blur-sm sticky top-0 z-50 shadow-lg relative">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-500 to-sky-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-sky-600 rounded-xl shadow-lg transition-all duration-300">
               <Heart className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">IgabayCare</span>
+            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">iGabayAtiCare</span>
             <span className="text-xs text-blue-600 font-medium px-2 py-1 bg-blue-50 rounded-full border border-blue-200">Medical Platform</span>
           </div>
           <nav className="hidden md:flex items-center gap-6">
@@ -89,10 +92,10 @@ const LandingPage = () => {
               <Shield className="h-4 w-4 mr-1" />
               About
             </a>
-            <Button variant="outline" size="sm" onClick={() => navigate("/signin")} className="border-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400">
+            <Button variant="outline" size="sm" onClick={() => navigate("/signin")} className="border-2 border-blue-300 text-blue-700">
               Patient Portal
             </Button>
-            <Button variant="medical" size="sm" onClick={() => navigate("/clinic-signin")} className="bg-gradient-to-r from-sky-500 to-cyan-600 hover:from-sky-600 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl">
+            <Button variant="medical" size="sm" onClick={() => navigate("/clinic-signin")} className="bg-gradient-to-r from-sky-500 to-cyan-600">
               Provider Access
             </Button>
           </nav>
@@ -130,7 +133,7 @@ const LandingPage = () => {
             variant="primary" 
             size="lg" 
             onClick={() => navigate("/signup")} 
-            className="text-lg px-8 py-4 bg-gradient-to-r from-blue-500 to-sky-600 hover:from-blue-600 hover:to-sky-700 shadow-lg hover:shadow-xl transform hover:scale-105"
+            className="text-lg px-8 py-4 bg-gradient-to-r from-blue-500 to-sky-600"
           >
             <Heart className="mr-2 h-5 w-5" />
             Start Your Healthcare Journey
@@ -139,7 +142,7 @@ const LandingPage = () => {
           <Button 
             variant="outline" 
             size="lg" 
-            className="text-lg px-8 py-4 border-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+            className="text-lg px-8 py-4 border-2 border-blue-300 text-blue-700"
           >
             <Link to="/learn-more" className="flex items-center">
               <Shield className="mr-2 h-5 w-5" />
@@ -174,19 +177,18 @@ const LandingPage = () => {
             {features.map((feature, index) => (
               <div
                 key={index}
-                className={`transform transition-all duration-300 hover:scale-105 hover:shadow-xl cursor-pointer ${
+                className={`cursor-pointer ${
                   hoveredFeature === index ? 'ring-2 ring-primary-300 shadow-primary-glow' : ''
                 }`}
-                style={{ animationDelay: `${index * 0.1}s` }}
                 onMouseEnter={() => setHoveredFeature(index)}
                 onMouseLeave={() => setHoveredFeature(null)}
               >
-                <Card className="text-center transition-all duration-300 bg-white border border-neutral-200 shadow-medical-card group animate-fade-in h-full w-80">
+                <Card className="bg-white border border-neutral-200 shadow-medical-card group animate-fade-in h-full w-80">
                   <CardHeader className="pb-4">
-                    <div className={`mx-auto p-4 ${feature.color} rounded-2xl w-fit shadow-lg group-hover:scale-110 transition-transform duration-300 mb-4`}>
+                    <div className={`mx-auto p-4 ${feature.color} rounded-2xl w-fit shadow-lg mb-4`}>
                       <feature.icon className="h-8 w-8 text-white" />
                     </div>
-                    <CardTitle className="text-xl text-foreground group-hover:text-primary-600 transition-colors mb-2">
+                    <CardTitle className="text-xl text-foreground mb-2">
                       {feature.title}
                     </CardTitle>
                   </CardHeader>
@@ -222,17 +224,16 @@ const LandingPage = () => {
             {userTypes.map((type, index) => (
               <div
                 key={index}
-                className={`transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer ${
+                className={`cursor-pointer ${
                   hoveredUserType === index ? 'ring-2 ring-primary-300 shadow-primary-glow' : ''
                 }`}
-                style={{ animationDelay: `${index * 0.2}s` }}
                 onMouseEnter={() => setHoveredUserType(index)}
                 onMouseLeave={() => setHoveredUserType(null)}
                 onClick={type.action}
               >
-                <Card className="hover:shadow-hover transition-all duration-300 bg-white border border-neutral-200 shadow-medical-card group animate-scale-in h-full">
+                <Card className="transition-all duration-300 bg-white border border-neutral-200 shadow-medical-card group animate-scale-in h-full">
                   <CardHeader className="text-center pb-4">
-                    <div className={`mx-auto p-4 ${type.gradient} rounded-2xl w-fit shadow-lg group-hover:scale-110 transition-transform duration-300 mb-4`}>
+                    <div className={`mx-auto p-4 ${type.gradient} rounded-2xl w-fit shadow-lg mb-4`}>
                       <type.icon className="h-8 w-8 text-white" />
                     </div>
                     <CardTitle className="text-2xl text-foreground mb-2">{type.title}</CardTitle>
@@ -254,10 +255,10 @@ const LandingPage = () => {
                     <Button 
                       variant="primary" 
                       size="md" 
-                      className="w-full group-hover:shadow-glow bg-primary-500 hover:bg-primary-600 transition-all duration-300"
+                      className="w-full bg-primary-500"
                     >
                       Get Started 
-                      <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </CardContent>
                 </Card>
@@ -319,7 +320,7 @@ const LandingPage = () => {
             <Button 
               variant="outline" 
               size="lg" 
-              className="bg-white/10 border-white/30 text-white hover:bg-white/20 backdrop-blur-sm"
+              className="bg-white/10 border-white/30 text-white backdrop-blur-sm"
               onClick={() => navigate("/signup")}
             >
               Join Our Healthcare Network
@@ -338,7 +339,7 @@ const LandingPage = () => {
                 <div className="p-2 bg-gradient-primary rounded-lg shadow-lg">
                   <Heart className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-xl font-bold">IgabayCare</span>
+                <span className="text-xl font-bold">iGabayAtiCare</span>
               </div>
               <p className="text-neutral-300 text-sm leading-relaxed mb-4">
                 Professional healthcare technology platform designed for modern medical practice 
@@ -365,7 +366,6 @@ const LandingPage = () => {
                 <li className="hover:text-primary-400 transition-colors cursor-pointer">For Patients</li>
                 <li className="hover:text-primary-400 transition-colors cursor-pointer">For Clinics</li>
                 <li className="hover:text-primary-400 transition-colors cursor-pointer">For Doctors</li>
-                <li className="hover:text-primary-400 transition-colors cursor-pointer">For Administrators</li>
               </ul>
             </div>
             <div>
@@ -395,16 +395,13 @@ const LandingPage = () => {
           </div>
           <div className="border-t border-neutral-800 mt-12 pt-8">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-sm text-neutral-400 mb-4 md:mb-0">
-                © 2024 IgabayCare. All rights reserved. HIPAA Compliant Healthcare Platform.
-              </div>
               <div className="flex items-center space-x-6">
                 <span className="text-xs text-neutral-500 flex items-center">
-                  <Shield className="h-3 w-3 mr-1" />
+                  <Shield className="h-3 w-3 mr-2" />
                   SOC 2 Certified
                 </span>
                 <span className="text-xs text-neutral-500 flex items-center">
-                  <Award className="h-3 w-3 mr-1" />
+                  <Award className="h-3 w-3 mr-2" />
                   Medical Grade
                 </span>
               </div>

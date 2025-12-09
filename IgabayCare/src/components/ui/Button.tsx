@@ -4,11 +4,11 @@ import { useMedicalTheme } from '../../core/providers/MedicalThemeProvider';
 
 // Button variant styles following medical design system
 const getButtonVariants = (userRole: string) => ({
-  primary: 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 focus:ring-blue-500 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95',
+  primary: 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 focus:ring-blue-500 shadow-lg hover:shadow-xl ',
   secondary: 'bg-gradient-to-r from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 focus:ring-gray-500 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95',
-  outline: 'border-2 border-blue-300 text-blue-700 bg-white hover:bg-blue-50 focus:ring-blue-500 transition-all duration-200 transform hover:scale-105 active:scale-95',
+  outline: 'border-2 border-blue-300 text-blue-700 bg-white hover:bg-blue-50 focus:ring-blue-500 ',
   ghost: 'text-blue-700 hover:bg-blue-50 focus:ring-blue-500 transition-all duration-200 transform hover:scale-105 active:scale-95',
-  medical: 'bg-gradient-to-r from-blue-500 to-sky-600 text-white hover:from-blue-600 hover:to-sky-700 focus:ring-blue-500 shadow-md transition-all duration-200 transform hover:scale-105 active:scale-95',
+  medical: 'bg-gradient-to-r from-blue-500 to-sky-600 text-white hover:from-blue-600 hover:to-sky-700 focus:ring-blue-500 shadow-md',
   danger: 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 focus:ring-red-500 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95',
   gradient: 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 focus:ring-purple-500 transition-all duration-200 transform hover:scale-105 active:scale-95',
   success: 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 focus:ring-green-500 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95',
