@@ -315,15 +315,15 @@ class PatientHistoryService {
         `,
         )
         .eq('patient_id', patientId)
-        .order('administered_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
 
+      // Use created_at for date filtering since administered_at column may not exist
       if (dateRange?.start) {
-        query = query.gte('administered_at', dateRange.start);
+        query = query.gte('created_at', dateRange.start);
       }
 
       if (dateRange?.end) {
-        query = query.lte('administered_at', dateRange.end);
+        query = query.lte('created_at', dateRange.end);
       }
 
       const { data, error } = await query;
@@ -333,12 +333,21 @@ class PatientHistoryService {
           console.warn('[patientHistoryService] vaccination_records table not found.');
           return [];
         }
-        console.error('[patientHistoryService] Error fetching vaccinations:', error);
+        
+        // If error is about missing column (like administered_at), log and continue
+        if (error.code === '42703') {
+          console.warn('[patientHistoryService] Column not found in vaccination_records, using created_at as fallback.');
+        } else {
+          console.error('[patientHistoryService] Error fetching vaccinations:', error);
+        }
         return [];
       }
 
       return (data || []).map((record: any) => ({
         ...record,
+        // Map created_at to administered_at for compatibility with interface
+        // If administered_at exists in DB, use it; otherwise use created_at
+        administered_at: record.administered_at || record.created_at,
         clinic: record.clinic ?? null,
         doctor: record.doctor ?? null,
       })) as VaccinationRecord[];

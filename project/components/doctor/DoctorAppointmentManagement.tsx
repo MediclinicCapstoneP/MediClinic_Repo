@@ -8,16 +8,19 @@ import {
   Alert,
   TextInput,
   Modal,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { doctorAppointmentService, DoctorAppointment, AppointmentFilters } from '../../services/doctorAppointmentService';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { CreatePrescriptionModal } from './CreatePrescriptionModal';
 
 const { width } = Dimensions.get('window');
 
-type AppointmentStatus = 'all' | 'scheduled' | 'confirmed' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled';
+type AppointmentStatus = 'all' | 'scheduled' | 'confirmed' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'assigned';
 
 interface DoctorAppointmentManagementProps {
   onPatientPress?: (patientId: string) => void;
@@ -31,6 +34,7 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<AppointmentStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -43,6 +47,8 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [consultationNotes, setConsultationNotes] = useState('');
   const [doctorId, setDoctorId] = useState<string | null>(null);
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [selectedAppointmentForPrescription, setSelectedAppointmentForPrescription] = useState<DoctorAppointment | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -88,11 +94,14 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
       const { data, error } = await doctorAppointmentService.getAppointments(doctorId, filters);
 
       if (error) {
+        console.error('Error fetching appointments:', error);
         Alert.alert('Error', error);
+        setAppointments([]);
         return;
       }
 
-      setAppointments(data);
+      console.log('Fetched appointments:', data?.length || 0, 'appointments');
+      setAppointments(data || []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
       Alert.alert('Error', 'Failed to load appointments');
@@ -235,6 +244,7 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
       case 'payment_confirmed':
         return '#10B981';
       case 'scheduled':
+      case 'assigned':
         return '#3B82F6';
       case 'in_progress':
         return '#F59E0B';
@@ -260,6 +270,8 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
         return 'checkmark-done-circle';
       case 'cancelled':
         return 'close-circle';
+      case 'assigned':
+        return 'person-add';
       default:
         return 'help-circle';
     }
@@ -292,7 +304,7 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
       showsHorizontalScrollIndicator={false}
       style={styles.statusFilterContainer}
     >
-      {(['all', 'scheduled', 'confirmed', 'payment_confirmed', 'in_progress', 'completed', 'cancelled'] as AppointmentStatus[]).map((status) => (
+      {(['all', 'scheduled', 'confirmed', 'payment_confirmed', 'in_progress', 'completed', 'cancelled', 'assigned'] as AppointmentStatus[]).map((status) => (
         <TouchableOpacity
           key={status}
           style={[
@@ -413,6 +425,16 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
               <Text style={styles.actionButtonText}>Complete</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={[styles.actionButton, styles.prescriptionButton]}
+              onPress={() => {
+                setSelectedAppointmentForPrescription(appointment);
+                setShowPrescriptionModal(true);
+              }}
+            >
+              <Ionicons name="medical" size={16} color="white" />
+              <Text style={styles.actionButtonText}>Prescription</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.actionButton, styles.notesButton]}
               onPress={() => handleAddNotes(appointment)}
             >
@@ -421,13 +443,25 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
             </TouchableOpacity>
           </>
         ) : appointment.status === 'completed' ? (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.notesButton]}
-            onPress={() => handleAddNotes(appointment)}
-          >
-            <Ionicons name="create-outline" size={16} color="#8B5CF6" />
-            <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>Edit Notes</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.prescriptionButton]}
+              onPress={() => {
+                setSelectedAppointmentForPrescription(appointment);
+                setShowPrescriptionModal(true);
+              }}
+            >
+              <Ionicons name="medical" size={16} color="white" />
+              <Text style={styles.actionButtonText}>Prescription</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.notesButton]}
+              onPress={() => handleAddNotes(appointment)}
+            >
+              <Ionicons name="create-outline" size={16} color="#8B5CF6" />
+              <Text style={[styles.actionButtonText, { color: '#8B5CF6' }]}>Edit Notes</Text>
+            </TouchableOpacity>
+          </>
         ) : null}
       </View>
     </View>
@@ -436,6 +470,7 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563EB" />
         <Text style={styles.loadingText}>Loading appointments...</Text>
       </View>
     );
@@ -480,12 +515,35 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
 
       {renderStatusFilter()}
 
-      <ScrollView style={styles.appointmentsList}>
-        {appointments.length === 0 ? (
+      <ScrollView 
+        style={styles.appointmentsList}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await fetchAppointments();
+              setRefreshing(false);
+            }}
+            colors={['#2563EB']}
+            tintColor="#2563EB"
+          />
+        }
+      >
+        {loading && !refreshing ? (
+          <View style={styles.emptyContainer}>
+            <ActivityIndicator size="large" color="#2563EB" />
+            <Text style={styles.emptySubtitle}>Loading appointments...</Text>
+          </View>
+        ) : appointments.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyTitle}>No appointments found</Text>
-            <Text style={styles.emptySubtitle}>Try adjusting your filters</Text>
+            <Text style={styles.emptySubtitle}>
+              {selectedStatus === 'all' 
+                ? 'No appointments have been assigned to you yet' 
+                : `No ${selectedStatus} appointments found. Try adjusting your filters.`}
+            </Text>
           </View>
         ) : (
           appointments.map(renderAppointmentCard)
@@ -572,6 +630,23 @@ export const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementPr
           </View>
         </View>
       </Modal>
+
+      {/* Create Prescription Modal */}
+      {selectedAppointmentForPrescription && (
+        <CreatePrescriptionModal
+          visible={showPrescriptionModal}
+          onClose={() => {
+            setShowPrescriptionModal(false);
+            setSelectedAppointmentForPrescription(null);
+          }}
+          appointmentId={selectedAppointmentForPrescription.id}
+          patientId={selectedAppointmentForPrescription.patient.id}
+          patientName={`${selectedAppointmentForPrescription.patient.first_name} ${selectedAppointmentForPrescription.patient.last_name}`}
+          onSuccess={() => {
+            fetchAppointments();
+          }}
+        />
+      )}
     </View>
   );
 };
@@ -661,14 +736,16 @@ const styles = StyleSheet.create({
   },
   appointmentCard: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -711,9 +788,11 @@ const styles = StyleSheet.create({
   },
   patientInfo: {
     backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563EB',
   },
   patientName: {
     fontSize: 16,
@@ -785,40 +864,61 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
     paddingTop: 12,
+    marginTop: 8,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 80,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 100,
     justifyContent: 'center',
   },
   startButton: {
     backgroundColor: '#3B82F6',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   completeButton: {
     backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   rescheduleButton: {
     backgroundColor: 'white',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#3B82F6',
   },
   cancelButton: {
     backgroundColor: 'white',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#EF4444',
   },
   notesButton: {
     backgroundColor: 'white',
     borderWidth: 1,
     borderColor: '#8B5CF6',
+  },
+  prescriptionButton: {
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   actionButtonText: {
     fontSize: 12,
@@ -829,10 +929,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F9FAFB',
   },
   loadingText: {
     fontSize: 16,
     color: '#666',
+    marginTop: 12,
   },
   emptyContainer: {
     alignItems: 'center',

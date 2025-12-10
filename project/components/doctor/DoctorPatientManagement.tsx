@@ -9,7 +9,8 @@ import {
   TextInput,
   Modal,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { doctorPatientService, PatientWithStats, PatientRecord, MedicalRecord } from '../../services/doctorPatientService';
@@ -28,6 +29,7 @@ export const DoctorPatientManagement: React.FC<DoctorPatientManagementProps> = (
   const { user } = useAuth();
   const [patients, setPatients] = useState<PatientWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientWithStats | null>(null);
   const [showPatientDetails, setShowPatientDetails] = useState(false);
@@ -329,7 +331,21 @@ export const DoctorPatientManagement: React.FC<DoctorPatientManagementProps> = (
         />
       </View>
 
-      <ScrollView style={styles.patientsList}>
+      <ScrollView 
+        style={styles.patientsList}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await fetchPatients();
+              setRefreshing(false);
+            }}
+            colors={['#2563EB']}
+            tintColor="#2563EB"
+          />
+        }
+      >
         {patients.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={64} color="#D1D5DB" />

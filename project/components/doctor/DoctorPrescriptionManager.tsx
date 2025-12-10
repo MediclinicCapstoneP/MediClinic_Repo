@@ -9,12 +9,15 @@ import {
   TextInput,
   Modal,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { doctorPrescriptionService, Prescription, PrescriptionCreate, MedicationInfo } from '../../services/doctorPrescriptionService';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { CreatePrescriptionModal } from './CreatePrescriptionModal';
+import { doctorPatientService } from '../../services/doctorPatientService';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +35,7 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
   const { user } = useAuth();
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<PrescriptionStatus>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -40,6 +44,9 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [medicationSearchResults, setMedicationSearchResults] = useState<MedicationInfo[]>([]);
   const [doctorId, setDoctorId] = useState<string | null>(null);
+  const [patients, setPatients] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
+  const [showPatientSelector, setShowPatientSelector] = useState(false);
+  const [selectedPatientForPrescription, setSelectedPatientForPrescription] = useState<{ id: string; name: string } | null>(null);
   const [stats, setStats] = useState({
     totalPrescriptions: 0,
     activePrescriptions: 0,
@@ -58,7 +65,7 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
     frequency: '',
     duration: '',
     instructions: '',
-    refills: 0
+    refills_remaining: 0
   });
 
   useEffect(() => {
@@ -71,8 +78,24 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
     if (doctorId) {
       fetchPrescriptions();
       fetchStats();
+      if (!patientId) {
+        fetchPatients();
+      }
     }
   }, [doctorId, selectedStatus, searchTerm, patientId]);
+
+  const fetchPatients = async () => {
+    if (!doctorId) return;
+
+    try {
+      const { success, data, error } = await doctorPatientService.getPatients(doctorId);
+      if (success && data) {
+        setPatients(data.map(p => ({ id: p.id, first_name: p.first_name, last_name: p.last_name })));
+      }
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+    }
+  };
 
   const fetchDoctorId = async () => {
     if (!user) return;
@@ -311,22 +334,23 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
       frequency: prescription.frequency,
       duration: prescription.duration,
       instructions: prescription.instructions || '',
-      refills: prescription.refills || 0
+      refills_remaining: prescription.refills_remaining || 0
     });
     setShowEditModal(true);
   };
 
   const resetForm = () => {
     setForm({
-      patient_id: patientId || '',
+      patient_id: patientId || selectedPatientForPrescription?.id || '',
       doctor_id: doctorId || '',
       medication_name: '',
       dosage: '',
       frequency: '',
       duration: '',
       instructions: '',
-      refills: 0
+      refills_remaining: 0
     });
+    setMedicationSearchResults([]);
   };
 
   const getStatusColor = (status: string) => {
@@ -401,10 +425,10 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
           <Text style={styles.detailLabel}>Duration:</Text>
           <Text style={styles.detailValue}>{prescription.duration}</Text>
         </View>
-        {prescription.refills !== undefined && prescription.refills > 0 && (
+        {prescription.refills_remaining !== undefined && prescription.refills_remaining > 0 && (
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Refills:</Text>
-            <Text style={styles.detailValue}>{prescription.refills}</Text>
+            <Text style={styles.detailValue}>{prescription.refills_remaining}</Text>
           </View>
         )}
       </View>
@@ -434,7 +458,7 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
           <Text style={[styles.actionButtonText, { color: '#2563EB' }]}>Edit</Text>
         </TouchableOpacity>
         
-        {prescription.status === 'active' && prescription.refills && prescription.refills > 0 && (
+        {prescription.status === 'active' && prescription.refills_remaining && prescription.refills_remaining > 0 && (
           <TouchableOpacity
             style={[styles.actionButton, styles.refillButton]}
             onPress={() => handleRefillPrescription(prescription)}
@@ -506,7 +530,13 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
         <Text style={styles.headerTitle}>Prescriptions</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setShowCreateModal(true)}
+          onPress={() => {
+            if (patientId) {
+              setShowCreateModal(true);
+            } else {
+              setShowPatientSelector(true);
+            }
+          }}
         >
           <Ionicons name="add" size={20} color="white" />
         </TouchableOpacity>
@@ -526,7 +556,21 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
 
       {renderStatusFilter()}
 
-      <ScrollView style={styles.prescriptionsList}>
+      <ScrollView 
+        style={styles.prescriptionsList}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await Promise.all([fetchPrescriptions(), fetchStats()]);
+              setRefreshing(false);
+            }}
+            colors={['#2563EB']}
+            tintColor="#2563EB"
+          />
+        }
+      >
         {prescriptions.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="medical-outline" size={64} color="#D1D5DB" />
@@ -540,108 +584,68 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
         )}
       </ScrollView>
 
-      {/* Create Prescription Modal */}
+      {/* Patient Selector Modal */}
       <Modal
-        visible={showCreateModal}
+        visible={showPatientSelector}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowCreateModal(false)}
+        onRequestClose={() => setShowPatientSelector(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Prescription</Text>
-            
-            <Text style={styles.inputLabel}>Medication</Text>
-            <View style={styles.medicationInputContainer}>
-              <TextInput
-                style={styles.medicationInput}
-                placeholder="Search for medication..."
-                value={form.medication_name}
-                onChangeText={(text) => {
-                  setForm({ ...form, medication_name: text });
-                  handleSearchMedications(text);
-                }}
-              />
-              {medicationSearchResults.length > 0 && (
-                <ScrollView style={styles.medicationResults} nestedScrollEnabled={false}>
-                  {medicationSearchResults.map((med, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.medicationResultItem}
-                      onPress={() => selectMedication(med)}
-                    >
-                      <Text style={styles.medicationResultName}>{med.name}</Text>
-                      <Text style={styles.medicationResultCategory}>{med.category}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-
-            <Text style={styles.inputLabel}>Dosage</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 500mg"
-              value={form.dosage}
-              onChangeText={(text) => setForm({ ...form, dosage: text })}
-            />
-
-            <Text style={styles.inputLabel}>Frequency</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Every 8 hours"
-              value={form.frequency}
-              onChangeText={(text) => setForm({ ...form, frequency: text })}
-            />
-
-            <Text style={styles.inputLabel}>Duration</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 7 days"
-              value={form.duration}
-              onChangeText={(text) => setForm({ ...form, duration: text })}
-            />
-
-            <Text style={styles.inputLabel}>Instructions (optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Special instructions..."
-              value={form.instructions}
-              onChangeText={(text) => setForm({ ...form, instructions: text })}
-              multiline
-              numberOfLines={3}
-            />
-
-            <Text style={styles.inputLabel}>Refills</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0"
-              value={form.refills?.toString() || '0'}
-              onChangeText={(text) => setForm({ ...form, refills: parseInt(text) || 0 })}
-              keyboardType="numeric"
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowCreateModal(false);
-                  resetForm();
-                  setMedicationSearchResults([]);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleCreatePrescription}
-              >
-                <Text style={styles.saveButtonText}>Create</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.modalTitle}>Select Patient</Text>
+            <ScrollView style={styles.patientList}>
+              {patients.map((patient) => (
+                <TouchableOpacity
+                  key={patient.id}
+                  style={styles.patientItem}
+                  onPress={() => {
+                    setSelectedPatientForPrescription({
+                      id: patient.id,
+                      name: `${patient.first_name} ${patient.last_name}`,
+                    });
+                    setShowPatientSelector(false);
+                    setShowCreateModal(true);
+                  }}
+                >
+                  <Ionicons name="person-circle" size={32} color="#2563EB" />
+                  <View style={styles.patientItemInfo}>
+                    <Text style={styles.patientItemName}>
+                      {patient.first_name} {patient.last_name}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setShowPatientSelector(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* Create Prescription Modal */}
+      {(showCreateModal && (patientId || selectedPatientForPrescription)) && (
+        <CreatePrescriptionModal
+          visible={showCreateModal}
+          onClose={() => {
+            setShowCreateModal(false);
+            setSelectedPatientForPrescription(null);
+            resetForm();
+          }}
+          patientId={patientId || selectedPatientForPrescription?.id || ''}
+          patientName={selectedPatientForPrescription?.name}
+          onSuccess={() => {
+            fetchPrescriptions();
+            fetchStats();
+            setSelectedPatientForPrescription(null);
+          }}
+        />
+      )}
 
       {/* Edit Prescription Modal */}
       <Modal
@@ -694,8 +698,8 @@ export const DoctorPrescriptionManager: React.FC<DoctorPrescriptionManagerProps>
             <Text style={styles.inputLabel}>Refills</Text>
             <TextInput
               style={styles.input}
-              value={form.refills?.toString() || '0'}
-              onChangeText={(text) => setForm({ ...form, refills: parseInt(text) || 0 })}
+              value={form.refills_remaining?.toString() || '0'}
+              onChangeText={(text) => setForm({ ...form, refills_remaining: parseInt(text) || 0 })}
               keyboardType="numeric"
             />
 
@@ -745,11 +749,16 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: '#2563EB',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   statsContainer: {
     backgroundColor: 'white',
@@ -864,14 +873,16 @@ const styles = StyleSheet.create({
   },
   prescriptionCard: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1119,5 +1130,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: 'white',
+  },
+  patientList: {
+    maxHeight: 400,
+    marginBottom: 16,
+  },
+  patientItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  patientItemInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  patientItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
   },
 });

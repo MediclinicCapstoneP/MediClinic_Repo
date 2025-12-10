@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Dimensions
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import { DoctorPrescriptionManager } from './DoctorPrescriptionManager';
 import { DoctorMedicalRecords } from './DoctorMedicalRecords';
 import { DoctorAnalytics } from './DoctorAnalytics';
 import { DoctorProfileManager } from './DoctorProfileManager';
+import { PatientDetailsModal } from './PatientDetailsModal';
 
 const { width } = Dimensions.get('window');
 
@@ -42,6 +44,9 @@ export const DoctorDashboard: React.FC = () => {
   });
   const [todayAppointments, setTodayAppointments] = useState<AppointmentWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentWithDetails | null>(null);
+  const [showPatientModal, setShowPatientModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -87,6 +92,41 @@ export const DoctorDashboard: React.FC = () => {
 
       const today = new Date().toISOString().split('T')[0];
 
+      // Try doctor_appointments first
+      const { data: doctorAppointments, error: doctorApptsError } = await supabase
+        .from('doctor_appointments')
+        .select('*')
+        .eq('doctor_id', doctorData.id)
+        .eq('appointment_date', today)
+        .in('status', ['scheduled', 'confirmed', 'payment_confirmed', 'in_progress', 'assigned'])
+        .order('appointment_time', { ascending: true });
+
+      if (!doctorApptsError && doctorAppointments) {
+        // Transform doctor_appointments data to match AppointmentWithDetails
+        const transformedData = doctorAppointments.map((apt: any) => ({
+          ...apt,
+          id: apt.appointment_id || apt.id,
+          patient: {
+            id: apt.patient_id,
+            first_name: apt.patient_name?.split(' ')[0] || '',
+            last_name: apt.patient_name?.split(' ').slice(1).join(' ') || '',
+            email: apt.patient_email || '',
+            phone: apt.patient_phone || '',
+          },
+          clinic: {
+            id: apt.clinic_id,
+            clinic_name: apt.clinic_name || '',
+          },
+          symptoms: apt.special_instructions,
+          notes: apt.consultation_notes || apt.doctor_notes,
+          total_amount: apt.payment_amount ? parseFloat(apt.payment_amount) : undefined,
+          payment_status: apt.payment_status,
+        }));
+        setTodayAppointments(transformedData || []);
+        return;
+      }
+
+      // Fallback to appointments table
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -96,7 +136,7 @@ export const DoctorDashboard: React.FC = () => {
         `)
         .eq('doctor_id', doctorData.id)
         .eq('appointment_date', today)
-        .in('status', ['scheduled', 'confirmed', 'payment_confirmed', 'in_progress'])
+        .in('status', ['scheduled', 'confirmed', 'payment_confirmed', 'in_progress', 'assigned'])
         .order('appointment_time', { ascending: true });
 
       if (error) {
@@ -127,27 +167,55 @@ export const DoctorDashboard: React.FC = () => {
 
       const today = new Date().toISOString().split('T')[0];
 
-      // Today's appointments
-      const { data: todayAppts } = await supabase
-        .from('appointments')
+      // Try doctor_appointments first for stats
+      const { data: todayApptsDoctor, error: todayErrorDoctor } = await supabase
+        .from('doctor_appointments')
         .select('id, status')
         .eq('doctor_id', doctorData.id)
         .eq('appointment_date', today);
 
-      // Upcoming appointments (future dates)
-      const { data: upcomingAppts } = await supabase
-        .from('appointments')
-        .select('id')
+      const { data: upcomingApptsDoctor, error: upcomingErrorDoctor } = await supabase
+        .from('doctor_appointments')
+        .select('id, patient_id')
         .eq('doctor_id', doctorData.id)
         .gt('appointment_date', today)
-        .in('status', ['scheduled', 'confirmed', 'payment_confirmed']);
+        .in('status', ['scheduled', 'confirmed', 'payment_confirmed', 'assigned']);
 
-      // Total unique patients
-      const { data: totalPatients } = await supabase
-        .from('appointments')
+      const { data: totalPatientsDoctor, error: patientsErrorDoctor } = await supabase
+        .from('doctor_appointments')
         .select('patient_id')
         .eq('doctor_id', doctorData.id)
         .eq('status', 'completed');
+
+      let todayAppts = todayApptsDoctor;
+      let upcomingAppts = upcomingApptsDoctor;
+      let totalPatients = totalPatientsDoctor;
+
+      // Fallback to appointments table if doctor_appointments doesn't exist or has errors
+      if (todayErrorDoctor || upcomingErrorDoctor || patientsErrorDoctor) {
+        const { data: todayApptsFallback } = await supabase
+          .from('appointments')
+          .select('id, status')
+          .eq('doctor_id', doctorData.id)
+          .eq('appointment_date', today);
+
+        const { data: upcomingApptsFallback } = await supabase
+          .from('appointments')
+          .select('id')
+          .eq('doctor_id', doctorData.id)
+          .gt('appointment_date', today)
+          .in('status', ['scheduled', 'confirmed', 'payment_confirmed']);
+
+        const { data: totalPatientsFallback } = await supabase
+          .from('appointments')
+          .select('patient_id')
+          .eq('doctor_id', doctorData.id)
+          .eq('status', 'completed');
+
+        todayAppts = todayApptsFallback;
+        upcomingAppts = upcomingApptsFallback;
+        totalPatients = totalPatientsFallback;
+      }
 
       const uniquePatients = new Set(totalPatients?.map(apt => apt.patient_id));
 
@@ -231,6 +299,7 @@ export const DoctorDashboard: React.FC = () => {
       case 'payment_confirmed':
         return '#10B981';
       case 'scheduled':
+      case 'assigned':
         return '#3B82F6';
       case 'in_progress':
         return '#F59E0B';
@@ -239,18 +308,58 @@ export const DoctorDashboard: React.FC = () => {
     }
   };
 
+  const handleAppointmentPress = (appointment: AppointmentWithDetails) => {
+    setSelectedAppointment(appointment);
+    setShowPatientModal(true);
+  };
+
+  const handleModalClose = () => {
+    setShowPatientModal(false);
+    setSelectedAppointment(null);
+  };
+
+  const handleStatusUpdate = () => {
+    fetchTodayAppointments();
+    fetchStats();
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchDoctorData(),
+        fetchTodayAppointments(),
+        fetchStats(),
+      ]);
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const renderStatsCard = (title: string, value: number, icon: string, color: string) => (
-    <View style={[styles.statsCard, { backgroundColor: color + '15' }]}>
+    <TouchableOpacity 
+      style={[styles.statsCard, { backgroundColor: color + '15', borderLeftWidth: 3, borderLeftColor: color }]}
+      activeOpacity={0.7}
+    >
       <View style={styles.statsContent}>
-        <Ionicons name={icon as any} size={24} color={color} />
+        <View style={[styles.statsIconContainer, { backgroundColor: color + '20' }]}>
+          <Ionicons name={icon as any} size={28} color={color} />
+        </View>
         <Text style={[styles.statsValue, { color }]}>{value}</Text>
       </View>
       <Text style={styles.statsTitle}>{title}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderTodayAppointment = (appointment: AppointmentWithDetails) => (
-    <View key={appointment.id} style={styles.appointmentCard}>
+    <TouchableOpacity 
+      key={appointment.id} 
+      style={styles.appointmentCard}
+      onPress={() => handleAppointmentPress(appointment)}
+      activeOpacity={0.7}
+    >
       <View style={styles.appointmentHeader}>
         <View style={styles.timeContainer}>
           <Ionicons name="time" size={16} color="#666" />
@@ -258,15 +367,18 @@ export const DoctorDashboard: React.FC = () => {
             {formatTime(appointment.appointment_time)}
           </Text>
         </View>
-        <View 
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getAppointmentStatusColor(appointment.status) }
-          ]}
-        >
-          <Text style={styles.statusText}>
-            {appointment.status.replace('_', ' ').toUpperCase()}
-          </Text>
+        <View style={styles.headerRight}>
+          <View 
+            style={[
+              styles.statusBadge,
+              { backgroundColor: getAppointmentStatusColor(appointment.status) }
+            ]}
+          >
+            <Text style={styles.statusText}>
+              {appointment.status.replace('_', ' ').toUpperCase()}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" style={styles.chevronIcon} />
         </View>
       </View>
 
@@ -309,7 +421,7 @@ export const DoctorDashboard: React.FC = () => {
           </TouchableOpacity>
         ) : null}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -332,7 +444,18 @@ export const DoctorDashboard: React.FC = () => {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollContainer} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#2563EB']}
+            tintColor="#2563EB"
+          />
+        }
+      >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
@@ -442,6 +565,14 @@ export const DoctorDashboard: React.FC = () => {
         </View>
       </View>
       </ScrollView>
+
+      {/* Patient Details Modal */}
+      <PatientDetailsModal
+        visible={showPatientModal}
+        onClose={handleModalClose}
+        appointment={selectedAppointment}
+        onStatusUpdate={handleStatusUpdate}
+      />
     </LinearGradient>
   );
 
@@ -611,26 +742,41 @@ const styles = StyleSheet.create({
   statsCard: {
     flex: 1,
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginHorizontal: 6,
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   statsContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
+    width: '100%',
+  },
+  statsIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   statsValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginLeft: 8,
+    flex: 1,
   },
   statsTitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   section: {
     padding: 16,
@@ -652,20 +798,30 @@ const styles = StyleSheet.create({
   },
   appointmentCard: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   appointmentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chevronIcon: {
+    marginLeft: 4,
   },
   timeContainer: {
     flexDirection: 'row',
@@ -761,15 +917,17 @@ const styles = StyleSheet.create({
   quickActionCard: {
     width: (width - 48) / 2,
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   quickActionText: {
     fontSize: 14,

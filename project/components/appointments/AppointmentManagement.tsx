@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase, Appointment, AppointmentWithDetails } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 
-type AppointmentFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
+type AppointmentFilter = 'all' | 'upcoming' | 'completed' | 'cancelled' | 'just_now';
 
 interface AppointmentManagementProps {
   userRole: 'patient' | 'doctor' | 'clinic';
@@ -84,9 +84,16 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
         query = query.eq('status', 'completed');
       } else if (filter === 'cancelled') {
         query = query.eq('status', 'cancelled');
+      } else if (filter === 'just_now') {
+        // Filter appointments created in the last 10 minutes
+        const tenMinutesAgo = new Date();
+        tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 10);
+        query = query.gte('created_at', tenMinutesAgo.toISOString());
+        // Order by creation time for "just now" filter
+        query = query.order('created_at', { ascending: false });
+      } else {
+        query = query.order('appointment_date', { ascending: false });
       }
-
-      query = query.order('appointment_date', { ascending: false });
 
       const { data, error } = await query;
 
@@ -163,6 +170,8 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
         return 'checkmark-circle';
       case 'cancelled':
         return 'close-circle';
+      case 'just_now':
+        return 'flash';
       default:
         return 'apps';
     }
@@ -214,7 +223,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterScrollContent}
       >
-        {(['all', 'upcoming', 'completed', 'cancelled'] as AppointmentFilter[]).map((filterOption) => {
+        {(['all', 'just_now', 'upcoming', 'completed', 'cancelled'] as AppointmentFilter[]).map((filterOption) => {
           const isActive = filter === filterOption;
           return (
             <TouchableOpacity
@@ -236,7 +245,7 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
                 styles.filterButtonText,
                 isActive && styles.activeFilterButtonText
               ]}>
-                {filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
+                {filterOption === 'just_now' ? 'Just Now' : filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
               </Text>
             </TouchableOpacity>
           );
@@ -374,6 +383,8 @@ export const AppointmentManagement: React.FC<AppointmentManagementProps> = ({ us
             <Text style={styles.emptySubtitle}>
               {filter === 'all' 
                 ? 'You have no appointments yet' 
+                : filter === 'just_now'
+                ? 'No appointments created in the last 10 minutes'
                 : `No ${filter} appointments`}
             </Text>
           </View>

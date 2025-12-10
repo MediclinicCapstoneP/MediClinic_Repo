@@ -8,7 +8,7 @@ export interface DoctorAppointment {
   appointment_date: string;
   appointment_time: string;
   appointment_type: string;
-  status: 'scheduled' | 'confirmed' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'confirmed' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'assigned';
   symptoms?: string;
   notes?: string;
   total_amount?: number;
@@ -62,14 +62,10 @@ class DoctorAppointmentService {
     filters?: AppointmentFilters
   ): Promise<{ success: boolean; data: DoctorAppointment[]; error?: string }> {
     try {
+      // First try to get from doctor_appointments table
       let query = supabase
-        .from('appointments')
-        .select(`
-          *,
-          patient:patients(*),
-          clinic:clinics(*),
-          transaction:transactions(*)
-        `)
+        .from('doctor_appointments')
+        .select('*')
         .eq('doctor_id', doctorId);
 
       // Apply filters
@@ -86,14 +82,104 @@ class DoctorAppointmentService {
       }
 
       if (filters?.patientName) {
-        query = query.or(`patient.first_name.ilike.%${filters.patientName}%,patient.last_name.ilike.%${filters.patientName}%`);
+        query = query.ilike('patient_name', `%${filters.patientName}%`);
       }
 
-      const { data, error } = await query.order('appointment_date', { ascending: false });
+      const { data: doctorAppointments, error: doctorApptsError } = await query.order('appointment_date', { ascending: false });
 
-      if (error) throw error;
+      console.log('Doctor appointments query result:', {
+        hasData: !!doctorAppointments,
+        dataLength: doctorAppointments?.length || 0,
+        error: doctorApptsError,
+        filters: filters,
+        doctorId: doctorId
+      });
 
-      return { success: true, data: data || [] };
+      // If there's an error, try the appointments table as fallback
+      if (doctorApptsError) {
+        console.log('Error fetching from doctor_appointments, trying appointments table:', doctorApptsError);
+        console.log('Error details:', JSON.stringify(doctorApptsError, null, 2));
+        // Fallback to appointments table
+        let fallbackQuery = supabase
+          .from('appointments')
+          .select(`
+            *,
+            patient:patients(*),
+            clinic:clinics(*),
+            transaction:transactions(*)
+          `)
+          .eq('doctor_id', doctorId);
+
+        if (filters?.status && filters.status !== 'all') {
+          fallbackQuery = fallbackQuery.eq('status', filters.status);
+        }
+
+        if (filters?.dateFrom) {
+          fallbackQuery = fallbackQuery.gte('appointment_date', filters.dateFrom);
+        }
+
+        if (filters?.dateTo) {
+          fallbackQuery = fallbackQuery.lte('appointment_date', filters.dateTo);
+        }
+
+        if (filters?.patientName) {
+          fallbackQuery = fallbackQuery.or(`patient.first_name.ilike.%${filters.patientName}%,patient.last_name.ilike.%${filters.patientName}%`);
+        }
+
+        const { data, error } = await fallbackQuery.order('appointment_date', { ascending: false });
+        if (error) {
+          console.error('Error fetching from appointments table:', error);
+          throw error;
+        }
+        console.log('Fallback query returned:', data?.length || 0, 'appointments');
+        return { success: true, data: data || [] };
+      }
+
+      // Transform doctor_appointments data to match DoctorAppointment interface
+      if (!doctorAppointments || doctorAppointments.length === 0) {
+        console.log('No appointments found in doctor_appointments table');
+        return { success: true, data: [] };
+      }
+
+      const transformedData: DoctorAppointment[] = doctorAppointments.map((apt: any) => {
+        // Handle patient_name - it might be null or empty
+        const patientName = apt.patient_name || '';
+        const nameParts = patientName.split(' ').filter((part: string) => part.trim());
+        
+        return {
+          id: apt.appointment_id || apt.id,
+          patient_id: apt.patient_id,
+          doctor_id: apt.doctor_id,
+          clinic_id: apt.clinic_id,
+          appointment_date: apt.appointment_date,
+          appointment_time: apt.appointment_time,
+          appointment_type: apt.appointment_type,
+          status: apt.status as any,
+          symptoms: apt.special_instructions,
+          notes: apt.consultation_notes || apt.doctor_notes,
+          total_amount: apt.payment_amount ? parseFloat(String(apt.payment_amount)) : undefined,
+          payment_status: apt.payment_status,
+          created_at: apt.created_at,
+          updated_at: apt.updated_at,
+          completed_at: apt.completed_at,
+          cancelled_at: apt.cancelled_at,
+          cancelled_by: apt.cancelled_by,
+          patient: {
+            id: apt.patient_id,
+            first_name: nameParts[0] || 'Unknown',
+            last_name: nameParts.slice(1).join(' ') || '',
+            email: apt.patient_email || '',
+            phone: apt.patient_phone || '',
+          },
+          clinic: {
+            id: apt.clinic_id,
+            clinic_name: apt.clinic_name || 'Unknown Clinic',
+          },
+        };
+      });
+
+      console.log('Transformed appointments:', transformedData.length, 'appointments');
+      return { success: true, data: transformedData };
     } catch (error) {
       console.error('Error fetching appointments:', error);
       return { success: false, data: [], error: 'Failed to fetch appointments' };
@@ -104,6 +190,51 @@ class DoctorAppointmentService {
     try {
       const today = new Date().toISOString().split('T')[0];
       
+      // Try doctor_appointments first
+      const { data: doctorAppointments, error: doctorApptsError } = await supabase
+        .from('doctor_appointments')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .eq('appointment_date', today)
+        .in('status', ['scheduled', 'confirmed', 'payment_confirmed', 'in_progress', 'assigned'])
+        .order('appointment_time', { ascending: true });
+
+      if (!doctorApptsError && doctorAppointments) {
+        // Transform doctor_appointments data
+        const transformedData: DoctorAppointment[] = doctorAppointments.map((apt: any) => ({
+          id: apt.appointment_id || apt.id,
+          patient_id: apt.patient_id,
+          doctor_id: apt.doctor_id,
+          clinic_id: apt.clinic_id,
+          appointment_date: apt.appointment_date,
+          appointment_time: apt.appointment_time,
+          appointment_type: apt.appointment_type,
+          status: apt.status as any,
+          symptoms: apt.special_instructions,
+          notes: apt.consultation_notes || apt.doctor_notes,
+          total_amount: apt.payment_amount ? parseFloat(apt.payment_amount) : undefined,
+          payment_status: apt.payment_status,
+          created_at: apt.created_at,
+          updated_at: apt.updated_at,
+          completed_at: apt.completed_at,
+          cancelled_at: apt.cancelled_at,
+          cancelled_by: apt.cancelled_by,
+          patient: {
+            id: apt.patient_id,
+            first_name: apt.patient_name?.split(' ')[0] || '',
+            last_name: apt.patient_name?.split(' ').slice(1).join(' ') || '',
+            email: apt.patient_email || '',
+            phone: apt.patient_phone || '',
+          },
+          clinic: {
+            id: apt.clinic_id,
+            clinic_name: apt.clinic_name || '',
+          },
+        }));
+        return { success: true, data: transformedData };
+      }
+
+      // Fallback to appointments table
       const { data, error } = await supabase
         .from('appointments')
         .select(`

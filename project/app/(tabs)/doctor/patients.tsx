@@ -19,6 +19,7 @@ import { SkeletonBox, SkeletonStatCard, SkeletonPatientCard } from '@/components
 import { doctorPatientService, PatientWithStats } from '@/services/doctorPatientService';
 import { patientHistoryService } from '@/services/patientHistoryService';
 import { DoctorMedicalRecords } from '@/components/doctor/DoctorMedicalRecords';
+import { CreatePrescriptionModal } from '@/components/doctor/CreatePrescriptionModal';
 
 type DoctorPatientSummary = {
   totalAppointments: number;
@@ -69,6 +70,7 @@ export default function PatientsScreen() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [showPatientDetails, setShowPatientDetails] = useState(false);
   const [showMedicalRecords, setShowMedicalRecords] = useState(false);
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
 
   const filteredPatients = useMemo(() => {
     if (!searchQuery.trim()) return patients;
@@ -443,6 +445,13 @@ export default function PatientsScreen() {
                   <Text style={[styles.modalButtonText, styles.secondaryButtonText]}>Medical records workspace</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  style={[styles.modalButton, styles.prescriptionButton]}
+                  onPress={() => setShowPrescriptionModal(true)}
+                >
+                  <Ionicons name="medical" size={18} color="white" />
+                  <Text style={styles.modalPrimaryText}>Create Prescription</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={[styles.modalButton, styles.primaryButtonRounded]}
                   onPress={() => setShowMedicalRecords(true)}
                 >
@@ -473,6 +482,21 @@ export default function PatientsScreen() {
           </View>
         )}
       </ModalPanel>
+
+      {/* Create Prescription Modal */}
+      {selectedPatient && (
+        <CreatePrescriptionModal
+          visible={showPrescriptionModal}
+          onClose={() => setShowPrescriptionModal(false)}
+          patientId={selectedPatient.id}
+          patientName={`${selectedPatient.first_name} ${selectedPatient.last_name}`}
+          onSuccess={() => {
+            if (selectedPatient) {
+              loadPatientHistory(selectedPatient.id);
+            }
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1156,6 +1180,9 @@ const styles = StyleSheet.create({
   },
   primaryButtonRounded: {
     backgroundColor: '#2563EB',
+  },
+  prescriptionButton: {
+    backgroundColor: '#10B981',
   },
   modalButtonText: {
     fontSize: 14,

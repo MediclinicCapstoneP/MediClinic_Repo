@@ -9,6 +9,7 @@ import {
   Modal as RNModal,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { 
   Calendar,
   Clock,
@@ -20,11 +21,10 @@ import {
 } from 'lucide-react-native';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
-import PaymentWebView from '../payment/PaymentWebView';
 import { useAuth } from '../../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appointmentService } from '../../services/appointmentService';
-import { createCheckoutSession, retrieveCheckoutSession } from '../../services/paymongo.service';
+import { createCheckoutSession } from '../../services/paymongo.service';
 import { ClinicWithDetails, AppointmentType, PaymentMethod, supabase, Patient } from '../../lib/supabase';
 
 interface AppointmentBookingModalProps {
@@ -34,7 +34,7 @@ interface AppointmentBookingModalProps {
   onBookingSuccess?: (appointmentId: string) => void;
 }
 
-type BookingStep = 'details' | 'payment' | 'checkout' | 'verifying' | 'confirmation';
+type BookingStep = 'details' | 'payment' | 'verifying' | 'confirmation';
 
 interface BookingData {
   date: string;
@@ -86,6 +86,7 @@ export function AppointmentBookingModal({
   onBookingSuccess,
 }: AppointmentBookingModalProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState<BookingStep>('details');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +109,6 @@ export function AppointmentBookingModal({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('gcash');
   const [transactionNumber, setTransactionNumber] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState(false);
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [checkoutReference, setCheckoutReference] = useState<string | null>(null);
 
@@ -157,7 +157,6 @@ export function AppointmentBookingModal({
   const handleDateChange = (date: string) => {
     setBookingData(prev => ({ ...prev, date, time: '' }));
     setCheckoutSessionId(null);
-    setCheckoutUrl(null);
     setError(null);
   };
 
@@ -270,7 +269,6 @@ export function AppointmentBookingModal({
       totalAmount: timeSlot.consultation_fee + prev.bookingFee,
     }));
     setCheckoutSessionId(null);
-    setCheckoutUrl(null);
   };
 
   const ensurePatientId = useCallback(async (): Promise<string | null> => {
@@ -428,6 +426,28 @@ export function AppointmentBookingModal({
     setCurrentStep('payment');
   }, [computeBookingPayload]);
 
+  const resetModal = () => {
+    setCurrentStep('details');
+    setBookingData({
+      date: new Date().toISOString().split('T')[0],
+      time: '',
+      appointmentType: 'consultation',
+      notes: '',
+      duration: 30,
+      consultationFee: 500,
+      bookingFee: 50,
+      totalAmount: 550,
+    });
+    setAvailableTimeSlots([]);
+    setSelectedPaymentMethod('gcash');
+    setTransactionNumber('');
+    setCheckoutSessionId(null);
+    setCheckoutReference(null);
+    setError(null);
+    setLoading(false);
+    setVerifyingMessage(null);
+  };
+
   const handlePrepareCheckout = useCallback(async () => {
     try {
       setLoading(true);
@@ -456,12 +476,23 @@ export function AppointmentBookingModal({
         throw new Error('Checkout session missing URL or identifier');
       }
 
-      setCheckoutUrl(checkoutUrl);
       setCheckoutSessionId(sessionId);
       setCheckoutReference(session?.attributes?.reference_number || sessionId);
-      setCurrentStep('checkout');
 
       await storeBookingData(payload, sessionId);
+
+      // Navigate to the checkout page
+      router.push({
+        pathname: '/appointment-checkout',
+        params: {
+          checkoutUrl,
+          sessionId,
+        },
+      });
+
+      // Close the modal
+      resetModal();
+      onClose();
     } catch (checkoutError) {
       console.error('Error preparing PayMongo checkout:', checkoutError);
       const message = checkoutError instanceof Error ? checkoutError.message : 'Payment initialization failed';
@@ -475,156 +506,12 @@ export function AppointmentBookingModal({
     buildCustomerInfo,
     computeBookingPayload,
     storeBookingData,
+    router,
+    onClose,
   ]);
 
   const handleStartPayment = async () => {
     await handlePrepareCheckout();
-  };
-
-  const finalizeAppointment = useCallback(async (
-    payload: StoredBookingPayload,
-    sessionId: string,
-  ) => {
-    const appointmentResponse = await appointmentService.createAppointment({
-      patient_id: payload.patient_id,
-      clinic_id: payload.clinic_id,
-      appointment_date: payload.appointment_date,
-      appointment_time: payload.appointment_time,
-      appointment_type: payload.appointment_type,
-      patient_notes: payload.patient_notes,
-      duration_minutes: bookingData.duration,
-      consultation_fee: payload.consultation_fee,
-      booking_fee: payload.booking_fee,
-    });
-
-    if (!appointmentResponse.success || !appointmentResponse.appointment) {
-      throw new Error(appointmentResponse.error || 'Failed to create appointment after payment');
-    }
-
-    const appointmentId = appointmentResponse.appointment.id;
-
-    const paymentResponse = await appointmentService.processPayment({
-      appointment_id: appointmentId,
-      payment_method: selectedPaymentMethod,
-      amount: payload.total_amount,
-    });
-
-    if (!paymentResponse.success) {
-      throw new Error(paymentResponse.error || 'Failed to record payment');
-    }
-
-    setTransactionNumber(paymentResponse.transactionNumber || checkoutReference || sessionId);
-
-    if (onBookingSuccess) {
-      onBookingSuccess(appointmentId);
-    }
-  }, [bookingData.duration, checkoutReference, onBookingSuccess, selectedPaymentMethod]);
-
-  const handleCheckoutSuccess = useCallback(async () => {
-    if (!checkoutSessionId) {
-      setError('No checkout session to verify.');
-      setCurrentStep('payment');
-      return;
-    }
-
-    setLoading(true);
-    setCurrentStep('verifying');
-    setVerifyingMessage('Verifying payment with PayMongo…');
-
-    try {
-      const storedBooking = await AsyncStorage.getItem(PENDING_BOOKING_KEY);
-      if (!storedBooking) {
-        throw new Error('Booking data not found locally.');
-      }
-
-      const payload = JSON.parse(storedBooking) as StoredBookingPayload;
-
-      const verification = await verifyCheckoutSessionWithRetry(checkoutSessionId, 3);
-      if (!verification.success || verification.status !== 'paid') {
-        throw new Error('Payment not confirmed yet. Please try again.');
-      }
-
-      setVerifyingMessage('Payment confirmed. Finalizing appointment…');
-
-      await finalizeAppointment(payload, checkoutSessionId);
-
-      setVerifyingMessage('Appointment confirmed!');
-      setCurrentStep('confirmation');
-      setError(null);
-      await clearStoredBooking();
-    } catch (err) {
-      console.error('Error verifying checkout session:', err);
-      const message = err instanceof Error ? err.message : 'Unable to verify payment.';
-      setError(message);
-      setCurrentStep('payment');
-    } finally {
-      setCheckoutUrl(null);
-      setCheckoutReference(null);
-      setLoading(false);
-      setVerifyingMessage(null);
-    }
-  }, [checkoutSessionId, clearStoredBooking, finalizeAppointment]);
-
-  const verifyCheckoutSessionWithRetry = useCallback(async (sessionId: string, maxRetries: number) => {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const session = await retrieveCheckoutSession(sessionId);
-        const status = session?.attributes?.status;
-
-        if (status === 'paid') {
-          return { success: true, status };
-        }
-
-        if (status === 'unpaid') {
-          return { success: false, status };
-        }
-      } catch (verificationError) {
-        console.error('Error retrieving checkout session:', verificationError);
-      }
-
-      if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 2000));
-      }
-    }
-
-    return { success: false, status: 'timeout' } as const;
-  }, []);
-
-  const handleCheckoutError = (message: string) => {
-    console.error('PayMongo checkout error:', message);
-    setError(message || 'Payment failed. Please try again.');
-    setCheckoutUrl(null);
-    setCheckoutReference(null);
-    setCurrentStep('payment');
-  };
-
-  const handleCheckoutClose = () => {
-    setCheckoutUrl(null);
-    setCheckoutReference(null);
-    setCurrentStep('payment');
-  };
-
-  const resetModal = () => {
-    setCurrentStep('details');
-    setBookingData({
-      date: new Date().toISOString().split('T')[0],
-      time: '',
-      appointmentType: 'consultation',
-      notes: '',
-      duration: 30,
-      consultationFee: 500,
-      bookingFee: 50,
-      totalAmount: 550,
-    });
-    setAvailableTimeSlots([]);
-    setSelectedPaymentMethod('gcash');
-    setTransactionNumber('');
-    setCheckoutUrl(null);
-    setCheckoutSessionId(null);
-    setCheckoutReference(null);
-    setError(null);
-    setLoading(false);
-    setVerifyingMessage(null);
   };
 
   const handleClose = () => {
@@ -855,42 +742,6 @@ export function AppointmentBookingModal({
     </ScrollView>
   );
 
-  const renderCheckoutStep = () => (
-    <View style={styles.checkoutContainer}>
-      <Text style={styles.checkoutTitle}>Pay with GCash</Text>
-      <Text style={styles.checkoutSubtitle}>
-        Complete your payment securely via PayMongo.
-      </Text>
-
-      <View style={styles.checkoutSummary}>
-        <Text style={styles.checkoutSummaryLabel}>Amount Due</Text>
-        <Text style={styles.checkoutSummaryValue}>{formatCurrency(bookingData.totalAmount)}</Text>
-      </View>
-
-      <View style={styles.checkoutWebview}>
-        {checkoutUrl ? (
-          <PaymentWebView
-            url={checkoutUrl}
-            onSuccess={handleCheckoutSuccess}
-            onError={handleCheckoutError}
-            onClose={handleCheckoutClose}
-          />
-        ) : (
-          <View style={styles.checkoutLoading}>
-            <ActivityIndicator size="large" color="#2563EB" />
-          </View>
-        )}
-      </View>
-
-      <Button
-        title="Cancel Payment"
-        onPress={handleCheckoutClose}
-        variant="outline"
-        style={styles.checkoutCancelButton}
-      />
-    </View>
-  );
-
   const renderVerifyingStep = () => (
     <View style={styles.verifyingContainer}>
       <ActivityIndicator size="large" color="#2563EB" />
@@ -963,7 +814,6 @@ export function AppointmentBookingModal({
 
       {currentStep === 'details' && renderDetailsStep()}
       {currentStep === 'payment' && renderPaymentStep()}
-      {currentStep === 'checkout' && renderCheckoutStep()}
       {currentStep === 'verifying' && renderVerifyingStep()}
       {currentStep === 'confirmation' && renderConfirmationStep()}
       
@@ -1369,60 +1219,6 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     marginLeft: 8,
     flex: 1,
-  },
-  checkoutContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  checkoutTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  checkoutSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  checkoutSummary: {
-    backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  checkoutSummaryLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  checkoutSummaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2563EB',
-  },
-  checkoutWebview: {
-    flex: 1,
-    minHeight: 400,
-    marginBottom: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  checkoutLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 400,
-  },
-  checkoutCancelButton: {
-    marginTop: 12,
   },
   verifyingContainer: {
     flex: 1,

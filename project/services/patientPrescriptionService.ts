@@ -103,7 +103,7 @@ class PatientPrescriptionService {
             refills,
             status,
             prescribed_at,
-            doctor:doctors (
+            doctor:doctors!prescriptions_doctor_id_fkey (
               id,
               full_name,
               specialization,

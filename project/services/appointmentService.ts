@@ -71,7 +71,47 @@ class AppointmentService {
         };
       }
 
-      // Create appointment
+      // Fetch patient and doctor details for denormalized fields
+      let patientName: string | null = null;
+      let patientEmail: string | null = null;
+      let patientPhone: string | null = null;
+      let doctorName: string | null = null;
+      let doctorSpecialty: string | null = null;
+
+      try {
+        const { data: patient } = await supabase
+          .from('patients')
+          .select('first_name, last_name, email, phone')
+          .eq('id', data.patient_id)
+          .single();
+
+        if (patient) {
+          patientName = `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || null;
+          patientEmail = patient.email || null;
+          patientPhone = patient.phone || null;
+        }
+      } catch (error) {
+        console.warn('Could not fetch patient details:', error);
+      }
+
+      if (data.doctor_id) {
+        try {
+          const { data: doctor } = await supabase
+            .from('doctors')
+            .select('full_name, specialization')
+            .eq('id', data.doctor_id)
+            .single();
+
+          if (doctor) {
+            doctorName = doctor.full_name || null;
+            doctorSpecialty = doctor.specialization || null;
+          }
+        } catch (error) {
+          console.warn('Could not fetch doctor details:', error);
+        }
+      }
+
+      // Create appointment with denormalized fields
       const appointmentData = {
         ...data,
         status: 'scheduled' as AppointmentStatus,
@@ -81,6 +121,12 @@ class AppointmentService {
         consultation_fee: data.consultation_fee || 500,
         booking_fee: data.booking_fee || 50,
         total_amount: (data.consultation_fee || 500) + (data.booking_fee || 50),
+        // Denormalized fields for better querying
+        patient_name: patientName,
+        patient_email: patientEmail,
+        patient_phone: patientPhone,
+        doctor_name: doctorName,
+        doctor_specialty: doctorSpecialty,
       };
 
       const { data: appointment, error } = await supabase

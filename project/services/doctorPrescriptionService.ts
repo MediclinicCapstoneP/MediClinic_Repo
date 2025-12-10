@@ -4,15 +4,20 @@ export interface Prescription {
   id: string;
   patient_id: string;
   doctor_id: string;
+  clinic_id?: string;
   appointment_id?: string;
   medication_name: string;
   dosage: string;
   frequency: string;
   duration: string;
   instructions?: string;
-  refills?: number;
-  prescribed_at: string;
+  refills_remaining?: number;
+  prescribed_date: string;
+  expiry_date?: string;
   status: 'active' | 'completed' | 'discontinued';
+  diagnosis?: string;
+  general_instructions?: string;
+  prescription_number?: string;
   created_at: string;
   updated_at: string;
   patient?: {
@@ -30,13 +35,16 @@ export interface Prescription {
 export interface PrescriptionCreate {
   patient_id: string;
   doctor_id: string;
+  clinic_id?: string;
   appointment_id?: string;
   medication_name: string;
   dosage: string;
   frequency: string;
   duration: string;
   instructions?: string;
-  refills?: number;
+  refills_remaining?: number;
+  diagnosis?: string;
+  general_instructions?: string;
 }
 
 export interface MedicationInfo {
@@ -64,7 +72,7 @@ class DoctorPrescriptionService {
         .select(`
           *,
           patient:patients(first_name, last_name, email, phone),
-          appointment:appointments(appointment_date, appointment_time)
+          appointment:appointments!prescriptions_appointment_id_fkey(appointment_date, appointment_time)
         `)
         .eq('doctor_id', doctorId);
 
@@ -78,18 +86,18 @@ class DoctorPrescriptionService {
       }
 
       if (filters?.dateFrom) {
-        query = query.gte('prescribed_at', filters.dateFrom);
+        query = query.gte('prescribed_date', filters.dateFrom);
       }
 
       if (filters?.dateTo) {
-        query = query.lte('prescribed_at', filters.dateTo);
+        query = query.lte('prescribed_date', filters.dateTo);
       }
 
       if (filters?.medicationName) {
         query = query.ilike('medication_name', `%${filters.medicationName}%`);
       }
 
-      const { data, error } = await query.order('prescribed_at', { ascending: false });
+      const { data, error } = await query.order('prescribed_date', { ascending: false });
 
       if (error) throw error;
 
@@ -104,19 +112,67 @@ class DoctorPrescriptionService {
     prescription: PrescriptionCreate
   ): Promise<{ success: boolean; data?: Prescription; error?: string }> {
     try {
+      // Get clinic_id from appointment if not provided
+      let clinicId = prescription.clinic_id;
+      if (!clinicId && prescription.appointment_id) {
+        const { data: appointment } = await supabase
+          .from('appointments')
+          .select('clinic_id')
+          .eq('id', prescription.appointment_id)
+          .single();
+        if (appointment) {
+          clinicId = appointment.clinic_id;
+        }
+      }
+
+      // Get doctor details for denormalized fields
+      let doctorName: string | null = null;
+      let doctorSpecialty: string | null = null;
+      if (prescription.doctor_id) {
+        const { data: doctor } = await supabase
+          .from('doctors')
+          .select('full_name, specialization')
+          .eq('id', prescription.doctor_id)
+          .single();
+        if (doctor) {
+          doctorName = doctor.full_name || null;
+          doctorSpecialty = doctor.specialization || null;
+        }
+      }
+
+      // Generate prescription number
+      const prescriptionNumber = `RX-${Date.now().toString().slice(-8)}`;
+
+      // Calculate expiry date (30 days from today)
+      const today = new Date();
+      const expiryDate = new Date(today);
+      expiryDate.setDate(expiryDate.getDate() + 30);
+
       const { data, error } = await supabase
         .from('prescriptions')
         .insert({
           ...prescription,
-          prescribed_at: new Date().toISOString(),
+          clinic_id: clinicId,
+          prescribed_date: new Date().toISOString().split('T')[0], // Use date only (YYYY-MM-DD)
+          expiry_date: expiryDate.toISOString().split('T')[0],
+          prescription_number: prescriptionNumber,
+          refills_remaining: prescription.refills_remaining || 0,
+          refill_allowed: (prescription.refills_remaining || 0) > 0,
+          max_refills: prescription.refills_remaining || 0,
           status: 'active',
+          follow_up_required: false,
+          is_controlled_substance: false,
+          prescribing_doctor_name: doctorName,
+          doctor_specialty: doctorSpecialty,
+          general_instructions: prescription.general_instructions || 'Take medications as prescribed. Complete the full course even if symptoms improve. Contact your doctor if you experience any adverse effects or if symptoms persist or worsen.',
+          valid_until: expiryDate.toISOString().split('T')[0],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .select(`
           *,
           patient:patients(first_name, last_name, email, phone),
-          appointment:appointments(appointment_date, appointment_time)
+          appointment:appointments!prescriptions_appointment_id_fkey(appointment_date, appointment_time)
         `)
         .single();
 
@@ -146,7 +202,7 @@ class DoctorPrescriptionService {
         .select(`
           *,
           patient:patients(first_name, last_name, email, phone),
-          appointment:appointments(appointment_date, appointment_time)
+          appointment:appointments!prescriptions_appointment_id_fkey(appointment_date, appointment_time)
         `)
         .single();
 
@@ -189,11 +245,11 @@ class DoctorPrescriptionService {
         .select(`
           *,
           patient:patients(first_name, last_name, email, phone),
-          appointment:appointments(appointment_date, appointment_time)
+          appointment:appointments!prescriptions_appointment_id_fkey(appointment_date, appointment_time)
         `)
         .eq('doctor_id', doctorId)
         .eq('patient_id', patientId)
-        .order('prescribed_at', { ascending: false });
+        .order('prescribed_date', { ascending: false });
 
       if (error) throw error;
 
@@ -214,7 +270,7 @@ class DoctorPrescriptionService {
         .select(`
           *,
           patient:patients(first_name, last_name, email, phone),
-          appointment:appointments(appointment_date, appointment_time)
+          appointment:appointments!prescriptions_appointment_id_fkey(appointment_date, appointment_time)
         `)
         .eq('doctor_id', doctorId)
         .eq('status', 'active');
@@ -223,7 +279,7 @@ class DoctorPrescriptionService {
         query = query.eq('patient_id', patientId);
       }
 
-      const { data, error } = await query.order('prescribed_at', { ascending: false });
+      const { data, error } = await query.order('prescribed_date', { ascending: false });
 
       if (error) throw error;
 
@@ -325,7 +381,7 @@ class DoctorPrescriptionService {
       // Get all prescriptions
       const { data: allPrescriptions, error: allError } = await supabase
         .from('prescriptions')
-        .select('patient_id, medication_name, status, prescribed_at')
+        .select('patient_id, medication_name, status, prescribed_date')
         .eq('doctor_id', doctorId);
 
       if (allError) throw allError;
@@ -335,7 +391,7 @@ class DoctorPrescriptionService {
         .from('prescriptions')
         .select('id')
         .eq('doctor_id', doctorId)
-        .like('prescribed_at', `${currentMonth}%`);
+        .like('prescribed_date', `${currentMonth}%`);
 
       if (monthError) throw monthError;
 
@@ -453,7 +509,7 @@ class DoctorPrescriptionService {
         return { success: false, error: 'Prescription not found' };
       }
 
-      if (currentPrescription.refills && currentPrescription.refills <= 0) {
+      if (currentPrescription.refills_remaining && currentPrescription.refills_remaining <= 0) {
         return { success: false, error: 'No refills remaining' };
       }
 
@@ -461,13 +517,14 @@ class DoctorPrescriptionService {
       const refillData = {
         patient_id: currentPrescription.patient_id,
         doctor_id: doctorId,
+        clinic_id: currentPrescription.clinic_id,
         appointment_id: currentPrescription.appointment_id,
         medication_name: currentPrescription.medication_name,
         dosage: currentPrescription.dosage,
         frequency: currentPrescription.frequency,
         duration: currentPrescription.duration,
         instructions: currentPrescription.instructions,
-        refills: currentPrescription.refills ? currentPrescription.refills - 1 : 0
+        refills_remaining: currentPrescription.refills_remaining ? currentPrescription.refills_remaining - 1 : 0
       };
 
       const { data, error } = await this.createPrescription(refillData);
@@ -476,7 +533,7 @@ class DoctorPrescriptionService {
 
       // Update original prescription
       await this.updatePrescription(prescriptionId, {
-        refills: currentPrescription.refills ? currentPrescription.refills - 1 : 0
+        refills_remaining: currentPrescription.refills_remaining ? currentPrescription.refills_remaining - 1 : 0
       }, doctorId);
 
       return { success: true, data };
@@ -497,11 +554,11 @@ class DoctorPrescriptionService {
         .select(`
           *,
           patient:patients(first_name, last_name, email, phone),
-          appointment:appointments(appointment_date, appointment_time)
+          appointment:appointments!prescriptions_appointment_id_fkey(appointment_date, appointment_time)
         `)
         .eq('doctor_id', doctorId)
         .eq('patient_id', patientId)
-        .order('prescribed_at', { ascending: false })
+        .order('prescribed_date', { ascending: false })
         .limit(limit);
 
       if (error) throw error;
