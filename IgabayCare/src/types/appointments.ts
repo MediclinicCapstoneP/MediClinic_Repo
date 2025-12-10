@@ -14,6 +14,7 @@ export interface Appointment {
   status: AppointmentStatus;
   priority?: AppointmentPriority; // Made optional since it might not exist in DB
   patient_name?: string; // Direct patient name field in the table
+  patient_email?: string; // Direct patient email field in the table
   payment_amount?: number; // Payment amount field
   services?: string[]; // Services selected by patient
   room_number?: string;
@@ -108,6 +109,8 @@ export interface UpdateAppointmentData {
   room_number?: string;
   floor_number?: string;
   building?: string;
+  patient_name?: string;
+  patient_email?: string;
   patient_notes?: string;
   doctor_notes?: string;
   admin_notes?: string;

@@ -106,7 +106,7 @@ export const ClinicSignInForm: React.FC = () => {
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 space-y-3 text-center">
               <p className="text-sm text-gray-600">
                 Don't have a clinic account?{' '}
                 <Link
@@ -114,6 +114,15 @@ export const ClinicSignInForm: React.FC = () => {
                   className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
                 >
                   Register your clinic
+                </Link>
+              </p>
+              <p className="text-sm text-gray-600">
+                Are you a doctor?{' '}
+                <Link
+                  to="/doctor-signin"
+                  className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
+                >
+                  Sign in as Doctor
                 </Link>
               </p>
             </div>

@@ -434,28 +434,45 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         doctor_name: selectedAppointment.doctor_name,
         doctor_id: selectedAppointment.doctor_id
       });
-      
-      const doctorName = selectedAppointment.doctor_name || `Dr. ${doctorId || 'Unknown'}`;
+
+      let doctorName = selectedAppointment.doctor_name?.trim() || '';
+      let doctorSpecialty = selectedAppointment.doctor_specialty;
+
+      if ((!doctorName || doctorName === '') && doctorId) {
+        try {
+          const { data: doctorProfile, error: doctorProfileError } = await supabase
+            .from('doctors')
+            .select('full_name, doctor_name, specialization')
+            .eq('id', doctorId)
+            .maybeSingle();
+
+          if (doctorProfileError) {
+            console.warn('⚠️ Unable to fetch doctor profile:', doctorProfileError);
+          }
+
+          if (doctorProfile) {
+            const derivedName = doctorProfile.full_name?.trim() ||
+              doctorProfile.doctor_name?.trim();
+            if (derivedName && derivedName !== '') {
+              doctorName = derivedName;
+            }
+
+            if (!doctorSpecialty && doctorProfile.specialization) {
+              doctorSpecialty = doctorProfile.specialization;
+            }
+          }
+        } catch (doctorLookupError) {
+          console.warn('⚠️ Unexpected error fetching doctor profile:', doctorLookupError);
+        }
+      }
+
+      if (!doctorName || doctorName === '') {
+        doctorName = doctorId ? `Doctor ${doctorId.slice(0, 6)}` : 'Attending Doctor';
+      }
       
       // Calculate prescription expiry date (30 days from now)
       const validUntil = new Date();
       validUntil.setDate(validUntil.getDate() + 30);
-
-      // Create the main prescription record using the correct column names
-      const enhancedPrescription = {
-        appointment_id: selectedAppointment.appointment_id || selectedAppointment.id, // Try both fields
-        patient_id: selectedAppointment.patient_id,
-        clinic_id: selectedAppointment.clinic_id,
-        doctor_id: doctorId,
-        prescription_number: `RX-${Date.now().toString().substring(5)}`,
-        prescribing_doctor_name: doctorName, // Correct column name per schema
-        doctor_specialty: selectedAppointment.doctor_specialty || 'General Practitioner',
-        diagnosis: consultationNotes || selectedAppointment.doctor_notes || 'General consultation',
-        prescribed_date: new Date().toISOString().split('T')[0],
-        valid_until: validUntil.toISOString().split('T')[0],
-        status: 'active',
-        general_instructions: 'Take medications as prescribed. Complete the full course even if symptoms improve. Contact your doctor if you experience any adverse effects or if symptoms persist or worsen.'
-      };
 
       // Final validation - ensure all medications have medication_name
       const finalMedications = validMedications.filter(med => {
@@ -470,6 +487,46 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
         alert('⚠️ No valid medications to prescribe. Please ensure all medications have a name and dosage.');
         return;
       }
+
+      const primaryMedication = finalMedications[0];
+      const primaryMedicationName = primaryMedication?.medication_name?.trim();
+      const primaryDosage = primaryMedication?.dosage?.trim() || primaryMedication?.strength?.trim();
+      const primaryFrequency = primaryMedication?.frequency?.trim();
+      const primaryDuration = primaryMedication?.duration?.trim();
+
+      if (!primaryMedicationName) {
+        alert('Primary medication name is required. Please enter a medication before creating the prescription.');
+        return;
+      }
+
+      if (!primaryDosage) {
+        alert('Primary medication dosage is required. Please include dosage/strength details.');
+        return;
+      }
+
+      if (!primaryFrequency) {
+        alert('Primary medication frequency is required. Please include how often the medication should be taken.');
+        return;
+      }
+
+      const enhancedPrescription = {
+        appointment_id: selectedAppointment.appointment_id || selectedAppointment.id, // Try both fields
+        patient_id: selectedAppointment.patient_id,
+        clinic_id: selectedAppointment.clinic_id,
+        doctor_id: doctorId,
+        prescription_number: `RX-${Date.now().toString().substring(5)}`,
+        prescribing_doctor_name: doctorName, // Correct column name per schema
+        doctor_specialty: doctorSpecialty || 'General Practitioner',
+        medication_name: primaryMedicationName,
+        dosage: primaryDosage,
+        frequency: primaryFrequency,
+        duration: primaryDuration || '7 days',
+        diagnosis: consultationNotes || selectedAppointment.doctor_notes || 'General consultation',
+        prescribed_date: new Date().toISOString().split('T')[0],
+        valid_until: validUntil.toISOString().split('T')[0],
+        status: 'active',
+        general_instructions: 'Take medications as prescribed. Complete the full course even if symptoms improve. Contact your doctor if you experience any adverse effects or if symptoms persist or worsen.'
+      };
       
       console.log('📊 Creating prescription with data:');
       console.log('Prescription:', JSON.stringify(enhancedPrescription, null, 2));
@@ -526,11 +583,15 @@ export const DoctorAppointments: React.FC<DoctorAppointmentsProps> = ({ doctorId
               doctor_id: doctorId,
               clinic_id: selectedAppointment.clinic_id,
               appointment_id: selectedAppointment.appointment_id || selectedAppointment.id,
+              record_type: 'prescription',
+              title: `Prescription - ${validMedications.length} medication(s)`,
+              description: `Prescription issued with ${validMedications.length} medication(s). ${enhancedPrescription.general_instructions || ''}`,
               visit_date: new Date().toISOString().split('T')[0],
               chief_complaint: consultationNotes || selectedAppointment.doctor_notes || 'Prescription issued',
               diagnosis: enhancedPrescription.diagnosis || 'Prescription medications prescribed',
               treatment: medicationList,
-              notes: `Prescription issued with ${validMedications.length} medication(s). ${enhancedPrescription.general_instructions || ''}`,
+              prescription: medicationList,
+              is_private: false,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             }]);

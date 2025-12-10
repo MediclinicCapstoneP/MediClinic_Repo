@@ -58,6 +58,7 @@ export interface CreateDoctorAppointmentData {
   patient_name?: string;
   patient_email?: string;
   patient_phone?: string;
+  clinic_name?: string;
 }
 
 export class DoctorAppointmentService {
@@ -72,9 +73,116 @@ export class DoctorAppointmentService {
     try {
       console.log('📝 Creating doctor appointment:', data);
 
+      // Normalize patient data - convert empty strings to null
+      // IMPORTANT: Preserve provided data - don't overwrite if already set
+      let patientName: string | null = data.patient_name?.trim() || null;
+      let patientEmail: string | null = data.patient_email?.trim() || null;
+      let patientPhone: string | null = data.patient_phone?.trim() || null;
+      let clinicName: string | null = data.clinic_name?.trim() || null;
+
+      // Only fetch patient data if we don't already have it
+      // This prevents overwriting good data that was already provided
+      const needsPatientData = (!patientName || patientName === '' || patientName === 'Unknown Patient') ||
+                                (!patientEmail || patientEmail === '') ||
+                                (!patientPhone || patientPhone === '');
+
+      if (data.patient_id && needsPatientData) {
+        try {
+          console.log('🔍 Fetching patient data for patient_id:', data.patient_id, 'because we need:', {
+            needsName: !patientName || patientName === '' || patientName === 'Unknown Patient',
+            needsEmail: !patientEmail || patientEmail === '',
+            needsPhone: !patientPhone || patientPhone === ''
+          });
+          const { data: patientRecord, error: patientError } = await supabase
+            .from('patients')
+            .select('first_name, last_name, email, phone')
+            .eq('id', data.patient_id)
+            .maybeSingle();
+
+          if (patientError) {
+            console.warn('⚠️ Error fetching patient record (will use provided data):', patientError);
+          } else if (patientRecord) {
+            console.log('✅ Fetched patient record:', patientRecord);
+            const derivedName = `${patientRecord.first_name ?? ''} ${patientRecord.last_name ?? ''}`.trim();
+            
+            // Only use fetched data if we don't already have good data
+            if ((!patientName || patientName === '' || patientName === 'Unknown Patient') && derivedName) {
+              patientName = derivedName;
+            }
+            if ((!patientEmail || patientEmail === '') && patientRecord.email) {
+              patientEmail = patientRecord.email;
+            }
+            if ((!patientPhone || patientPhone === '') && patientRecord.phone) {
+              patientPhone = patientRecord.phone;
+            }
+            
+            console.log('📋 Final patient data after fetch:', {
+              patient_name: patientName,
+              patient_email: patientEmail,
+              patient_phone: patientPhone
+            });
+          } else {
+            console.warn('⚠️ Patient record not found for patient_id:', data.patient_id, '- will use provided data');
+          }
+        } catch (patientLookupError) {
+          console.warn('⚠️ Unexpected error fetching patient record (will use provided data):', patientLookupError);
+        }
+      } else if (data.patient_id && !needsPatientData) {
+        console.log('✅ Patient data already provided, skipping fetch:', {
+          patient_name: patientName,
+          patient_email: patientEmail ? '***' : null,
+          patient_phone: patientPhone ? '***' : null
+        });
+      }
+
+      if (data.clinic_id && !clinicName) {
+        try {
+          const { data: clinicRecord, error: clinicError } = await supabase
+            .from('clinics')
+            .select('clinic_name')
+            .eq('id', data.clinic_id)
+            .maybeSingle();
+
+          if (clinicError) {
+            console.warn('⚠️ Unable to fetch clinic record for doctor appointment:', clinicError);
+          }
+
+          const name = clinicRecord?.clinic_name?.trim();
+          if (name) {
+            clinicName = name;
+          }
+        } catch (clinicLookupError) {
+          console.warn('⚠️ Unexpected error fetching clinic record:', clinicLookupError);
+        }
+      }
+
+      // Final fallback for patient name ONLY if still empty after all attempts
+      // Don't overwrite if we already have a valid name
+      if (!patientName || patientName.trim() === '' || patientName === 'Unknown Patient') {
+        if (patientEmail && patientEmail.trim() !== '') {
+          patientName = patientEmail.split('@')[0];
+        } else if (data.patient_id) {
+          patientName = `Patient ${data.patient_id.substring(0, 8)}`;
+        } else {
+          patientName = 'Unknown Patient';
+        }
+      }
+
+      // Final safety check - but don't overwrite if we have something
+      if (!patientName || patientName.trim() === '') {
+        patientName = 'Unknown Patient';
+      }
+
       // Prepare the doctor appointment data with all required fields
-      const appointmentData = {
-        ...data,
+      // IMPORTANT: Explicitly set patient fields to ensure they're included in the insert
+      const appointmentData: any = {
+        doctor_id: data.doctor_id,
+        appointment_id: data.appointment_id,
+        patient_id: data.patient_id,
+        clinic_id: data.clinic_id,
+        appointment_date: data.appointment_date,
+        appointment_time: data.appointment_time,
+        appointment_type: data.appointment_type,
         duration_minutes: data.duration_minutes || 30,
         payment_amount: data.payment_amount || 0,
         priority: data.priority || 'normal',
@@ -82,27 +190,95 @@ export class DoctorAppointmentService {
         assigned_at: new Date().toISOString(),
         payment_status: 'pending',
         prescription_given: false,
-        // Always include patient information - use empty string if not provided (database will handle null)
-        patient_name: data.patient_name || '',
-        patient_email: data.patient_email || '',
-        patient_phone: data.patient_phone || ''
+        // CRITICAL: Always explicitly set patient information (use null instead of undefined)
+        patient_name: patientName || 'Unknown Patient',
+        patient_email: patientEmail || null,
+        patient_phone: patientPhone || null,
+        clinic_name: clinicName || null
       };
-      
-      console.log('🔄 Inserting doctor appointment data:', {
-        ...appointmentData,
-        patient_name: appointmentData.patient_name || '(empty)',
-        patient_email: appointmentData.patient_email || '(empty)',
-        patient_phone: appointmentData.patient_phone || '(empty)'
+
+      // Log the FULL appointment data object to see exactly what we're sending
+      console.log('🔄 Inserting doctor appointment data (FULL OBJECT):', JSON.stringify(appointmentData, null, 2));
+      console.log('🔄 Patient fields check:', {
+        patient_name: appointmentData.patient_name,
+        patient_name_type: typeof appointmentData.patient_name,
+        patient_name_length: appointmentData.patient_name?.length,
+        patient_email: appointmentData.patient_email,
+        patient_email_type: typeof appointmentData.patient_email,
+        patient_phone: appointmentData.patient_phone,
+        patient_phone_type: typeof appointmentData.patient_phone
       });
 
-      const { data: doctorAppointment, error } = await supabase
+      // Double-check patient fields before insert
+      if (!appointmentData.patient_name || appointmentData.patient_name === '') {
+        console.error('❌ CRITICAL: patient_name is empty before insert!');
+        appointmentData.patient_name = 'Unknown Patient';
+      }
+      if (!appointmentData.patient_email && appointmentData.patient_email !== null) {
+        console.warn('⚠️ patient_email is undefined, setting to null');
+        appointmentData.patient_email = null;
+      }
+      if (!appointmentData.patient_phone && appointmentData.patient_phone !== null) {
+        console.warn('⚠️ patient_phone is undefined, setting to null');
+        appointmentData.patient_phone = null;
+      }
+
+      // Check if a doctor appointment already exists (to handle duplicate key error)
+      const { data: existingAppointment } = await supabase
         .from('doctor_appointments')
-        .insert([appointmentData])
-        .select('*')
-        .single();
+        .select('id, patient_name, patient_email, patient_phone')
+        .eq('doctor_id', data.doctor_id)
+        .eq('appointment_id', data.appointment_id)
+        .maybeSingle();
+
+      let doctorAppointment;
+      let error;
+
+      if (existingAppointment) {
+        // Update existing record instead of inserting
+        console.log('🔄 Doctor appointment already exists, updating instead of inserting:', existingAppointment.id);
+        
+        const updateData: any = {
+          appointment_date: data.appointment_date,
+          appointment_time: data.appointment_time,
+          appointment_type: data.appointment_type,
+          duration_minutes: data.duration_minutes || 30,
+          payment_amount: data.payment_amount || 0,
+          priority: data.priority || 'normal',
+          status: 'assigned',
+          assigned_at: new Date().toISOString(),
+          payment_status: 'pending',
+          // Update patient info if provided
+          patient_name: appointmentData.patient_name || existingAppointment.patient_name || 'Unknown Patient',
+          patient_email: appointmentData.patient_email !== null ? appointmentData.patient_email : existingAppointment.patient_email,
+          patient_phone: appointmentData.patient_phone !== null ? appointmentData.patient_phone : existingAppointment.patient_phone,
+          clinic_name: appointmentData.clinic_name || null,
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: updatedAppointment, error: updateError } = await supabase
+          .from('doctor_appointments')
+          .update(updateData)
+          .eq('id', existingAppointment.id)
+          .select('*')
+          .single();
+
+        doctorAppointment = updatedAppointment;
+        error = updateError;
+      } else {
+        // Insert new record
+        const { data: insertedAppointment, error: insertError } = await supabase
+          .from('doctor_appointments')
+          .insert([appointmentData])
+          .select('*')
+          .single();
+
+        doctorAppointment = insertedAppointment;
+        error = insertError;
+      }
 
       if (error) {
-        console.error('❌ Error creating doctor appointment:', error);
+        console.error('❌ Error creating/updating doctor appointment:', error);
         console.error('❌ Failed appointment data:', appointmentData);
         console.error('❌ Error details:', {
           message: error.message,
@@ -124,8 +300,9 @@ export class DoctorAppointmentService {
         };
       }
 
-      console.log('✅ Doctor appointment created successfully:', doctorAppointment.id);
-      console.log('✅ Created appointment details:', {
+      const action = existingAppointment ? 'updated' : 'created';
+      console.log(`✅ Doctor appointment ${action} successfully:`, doctorAppointment.id);
+      console.log(`✅ ${action.charAt(0).toUpperCase() + action.slice(1)} appointment details:`, {
         id: doctorAppointment.id,
         patient_name: doctorAppointment.patient_name,
         patient_email: doctorAppointment.patient_email,

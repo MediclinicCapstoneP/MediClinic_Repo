@@ -135,9 +135,20 @@ export class EnhancedHistoryService {
             appointment_time,
             clinics (clinic_name),
             doctors (first_name, last_name, specialty)
+          ),
+          doctor:doctors (
+            id,
+            full_name,
+            specialization
+          ),
+          clinic:clinics (
+            id,
+            clinic_name
           )
         `)
         .eq('patient_id', patientId)
+        .is('is_private', false)
+        .order('visit_date', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (recordsError) {
@@ -164,35 +175,100 @@ export class EnhancedHistoryService {
         console.error('❌ Error fetching prescriptions:', prescriptionsError);
       }
 
-      // Calculate summary statistics
-      const completedAppointments = appointments?.filter(apt => apt.status === 'completed') || [];
-      const totalRevenue = completedAppointments.reduce((sum, apt) => sum + (apt.payment_amount || 0), 0);
-      const uniqueClinics = new Set(appointments?.map(apt => apt.clinic_id)).size;
-      const uniqueDoctors = new Set(appointments?.map(apt => apt.doctor_id).filter(Boolean)).size;
+      // Transform medical records to match expected format
+      const transformedMedicalRecords = (medicalRecords || []).map((record: any) => ({
+        ...record,
+        doctor: record.doctor || (record.doctors ? {
+          id: record.doctors.id,
+          full_name: `${record.doctors.first_name} ${record.doctors.last_name}`,
+          specialization: record.doctors.specialty
+        } : undefined),
+        clinic: record.clinic || (record.clinics ? {
+          id: record.clinics.id,
+          clinic_name: record.clinics.clinic_name
+        } : undefined)
+      }));
+
+      // Get other required data (lab results, vaccinations, allergies, etc.)
+      const { MedicalHistoryService } = await import('./medicalHistoryService');
+      const [labResultsResult, vaccinationsResult, allergiesResult, insuranceResult, emergencyContactsResult] = await Promise.all([
+        MedicalHistoryService.getLabResults(patientId),
+        MedicalHistoryService.getVaccinations(patientId),
+        MedicalHistoryService.getAllergies(patientId),
+        MedicalHistoryService.getInsuranceInfo(patientId),
+        MedicalHistoryService.getEmergencyContacts(patientId)
+      ]);
+
+      const labResults = labResultsResult.success ? labResultsResult.data || [] : [];
+      const vaccinations = vaccinationsResult.success ? vaccinationsResult.data || [] : [];
+      const allergies = allergiesResult.success ? allergiesResult.data || [] : [];
+      const insurance = insuranceResult.success ? insuranceResult.data || [] : [];
+      const emergencyContacts = emergencyContactsResult.success ? emergencyContactsResult.data || [] : [];
+
+      // Generate summary
+      const today = new Date().toISOString().split('T')[0];
+      const completedAppointments = (appointments || []).filter((apt: any) => apt.status === 'completed').length;
+      const upcomingAppointments = (appointments || []).filter((apt: any) => 
+        apt.appointment_date >= today && ['scheduled', 'confirmed'].includes(apt.status)
+      ).length;
+      const cancelledAppointments = (appointments || []).filter((apt: any) => apt.status === 'cancelled').length;
+      const activePrescriptions = (prescriptions || []).filter((p: any) => p.status === 'active').length;
+      const pendingLabResults = labResults.filter((l: any) => l.status === 'pending').length;
+      const activeAllergies = allergies.filter((a: any) => a.is_active).length;
+      
+      const lastVisitDate = (appointments || [])
+        .filter((apt: any) => apt.status === 'completed')
+        .map((apt: any) => apt.appointment_date)
+        .sort()
+        .pop();
+      
+      const nextAppointmentDate = (appointments || [])
+        .filter((apt: any) => apt.appointment_date >= today && ['scheduled', 'confirmed'].includes(apt.status))
+        .map((apt: any) => apt.appointment_date)
+        .sort()
+        .shift();
+      
+      const chronicConditions = [...new Set(
+        transformedMedicalRecords
+          .filter((r: any) => r.diagnosis && r.diagnosis.toLowerCase().includes('chronic'))
+          .map((r: any) => r.diagnosis)
+          .filter(Boolean)
+      )];
+      
+      const currentMedications = (prescriptions || [])
+        .filter((p: any) => p.status === 'active')
+        .map((p: any) => p.medication_name)
+        .filter(Boolean);
 
       const summary = {
-        totalAppointments: appointments?.length || 0,
-        completedAppointments: completedAppointments.length,
-        cancelledAppointments: appointments?.filter(apt => apt.status === 'cancelled').length || 0,
-        totalPrescriptions: prescriptions?.length || 0,
-        totalMedicalRecords: medicalRecords?.length || 0,
-        totalRevenue,
-        uniqueClinics,
-        uniqueDoctors,
-        lastAppointmentDate: appointments?.[0]?.appointment_date || null,
-        nextAppointmentDate: appointments?.find(apt => 
-          new Date(apt.appointment_date) > new Date() && apt.status === 'confirmed'
-        )?.appointment_date || null
+        total_appointments: appointments?.length || 0,
+        completed_appointments: completedAppointments,
+        upcoming_appointments: upcomingAppointments,
+        cancelled_appointments: cancelledAppointments,
+        total_prescriptions: prescriptions?.length || 0,
+        active_prescriptions: activePrescriptions,
+        total_lab_results: labResults.length,
+        pending_lab_results: pendingLabResults,
+        total_vaccinations: vaccinations.length,
+        total_allergies: allergies.length,
+        active_allergies: activeAllergies,
+        last_visit_date: lastVisitDate,
+        next_appointment_date: nextAppointmentDate,
+        chronic_conditions: chronicConditions,
+        current_medications: currentMedications
       };
 
       const medicalHistory: PatientMedicalHistory = {
-        patientId,
-        patientProfile,
+        patient_id: patientId,
         appointments: appointments || [],
-        medicalRecords: medicalRecords || [],
+        medical_records: transformedMedicalRecords,
         prescriptions: prescriptions || [],
-        summary,
-        lastUpdated: new Date().toISOString()
+        lab_results: labResults,
+        vaccinations: vaccinations,
+        allergies: allergies,
+        insurance_info: insurance,
+        emergency_contacts: emergencyContacts,
+        summary
       };
 
       console.log(`✅ Successfully fetched patient history with ${appointments?.length || 0} appointments`);
@@ -288,9 +364,20 @@ export class EnhancedHistoryService {
             status,
             clinics (clinic_name),
             doctors (first_name, last_name, specialty)
+          ),
+          doctor:doctors (
+            id,
+            full_name,
+            specialization
+          ),
+          clinic:clinics (
+            id,
+            clinic_name
           )
         `)
         .eq('patient_id', patientId)
+        .is('is_private', false)
+        .order('visit_date', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (filters?.doctorId) {
@@ -371,67 +458,53 @@ export class EnhancedHistoryService {
 
     // Add appointments to timeline
     history.appointments.forEach(appointment => {
+      const appointmentData = appointment as any;
       timelineItems.push({
-        id: `appointment_${appointment.id}`,
-        type: 'appointment',
+        id: `appointment-${appointment.id}`,
+        type: 'appointments',
         date: appointment.appointment_date,
-        time: appointment.appointment_time,
-        title: `Appointment at ${appointment.clinics?.clinic_name}`,
-        description: `${appointment.appointment_type} appointment with ${appointment.doctors?.first_name} ${appointment.doctors?.last_name}`,
+        title: `Appointment - ${appointmentData.appointment_type || 'Consultation'}`,
+        description: `${appointment.status} appointment${appointmentData.clinics?.clinic_name ? ` at ${appointmentData.clinics.clinic_name}` : ''}${appointmentData.doctors ? ` with ${appointmentData.doctors.first_name} ${appointmentData.doctors.last_name}` : ''}`,
+        doctor_name: appointmentData.doctors ? `${appointmentData.doctors.first_name} ${appointmentData.doctors.last_name}` : undefined,
+        clinic_name: appointmentData.clinics?.clinic_name,
         status: appointment.status,
-        metadata: {
-          appointmentId: appointment.id,
-          clinicName: appointment.clinics?.clinic_name,
-          doctorName: `${appointment.doctors?.first_name} ${appointment.doctors?.last_name}`,
-          specialty: appointment.doctors?.specialty
-        }
+        data: appointment
       });
     });
 
     // Add medical records to timeline
-    history.medicalRecords.forEach(record => {
+    history.medical_records.forEach(record => {
+      const recordData = record as any;
       timelineItems.push({
-        id: `record_${record.id}`,
-        type: 'medical_record',
-        date: record.created_at.split('T')[0],
-        time: record.created_at.split('T')[1]?.split('.')[0],
-        title: 'Medical Record Updated',
-        description: record.diagnosis || record.symptoms || 'Medical record entry',
-        status: 'completed',
-        metadata: {
-          recordId: record.id,
-          diagnosis: record.diagnosis,
-          symptoms: record.symptoms,
-          treatmentPlan: record.treatment_plan
-        }
+        id: `record-${record.id}`,
+        type: 'medical_records',
+        date: recordData.visit_date || record.created_at.split('T')[0],
+        title: recordData.title || `Medical Record - ${recordData.record_type || 'consultation'}`,
+        description: recordData.description || recordData.diagnosis || recordData.chief_complaint || 'Medical record entry',
+        doctor_name: record.doctor?.full_name,
+        clinic_name: record.clinic?.clinic_name,
+        data: record
       });
     });
 
     // Add prescriptions to timeline
     history.prescriptions.forEach(prescription => {
+      const prescriptionData = prescription as any;
       timelineItems.push({
-        id: `prescription_${prescription.id}`,
-        type: 'prescription',
-        date: prescription.created_at.split('T')[0],
-        time: prescription.created_at.split('T')[1]?.split('.')[0],
-        title: 'Prescription Issued',
-        description: `${prescription.medication_name} - ${prescription.dosage}`,
-        status: 'completed',
-        metadata: {
-          prescriptionId: prescription.id,
-          medicationName: prescription.medication_name,
-          dosage: prescription.dosage,
-          frequency: prescription.frequency
-        }
+        id: `prescription-${prescription.id}`,
+        type: 'prescriptions',
+        date: prescriptionData.prescribed_date || prescription.created_at.split('T')[0],
+        title: `Prescription - ${prescription.medication_name}`,
+        description: `${prescription.dosage}, ${prescription.frequency}`,
+        doctor_name: prescription.doctor?.full_name,
+        clinic_name: prescription.clinic?.clinic_name,
+        status: prescription.status,
+        data: prescription
       });
     });
 
-    // Sort by date and time (most recent first)
-    return timelineItems.sort((a, b) => {
-      const dateA = new Date(`${a.date}T${a.time || '00:00:00'}`);
-      const dateB = new Date(`${b.date}T${b.time || '00:00:00'}`);
-      return dateB.getTime() - dateA.getTime();
-    });
+    // Sort by date (most recent first)
+    return timelineItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   /**

@@ -6,38 +6,28 @@ import { Platform } from 'react-native';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Conditional storage to prevent "window is not defined" error
+// Conditional storage to prevent "window is not defined" error and still persist sessions
 const getStorage = () => {
-  // Check if we're in a browser environment
-  if (typeof window !== 'undefined') {
-    // Web environment - use localStorage if available, fallback to AsyncStorage
-    if (Platform.OS === 'web') {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
       return {
-        getItem: (key: string) => {
-          if (typeof localStorage !== 'undefined') {
-            return Promise.resolve(localStorage.getItem(key));
-          }
-          return Promise.resolve(null);
-        },
+        getItem: (key: string) => Promise.resolve(window.localStorage.getItem(key)),
         setItem: (key: string, value: string) => {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(key, value);
-          }
+          window.localStorage.setItem(key, value);
           return Promise.resolve();
         },
         removeItem: (key: string) => {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem(key);
-          }
+          window.localStorage.removeItem(key);
           return Promise.resolve();
         },
       };
     }
-    // Native environment - use AsyncStorage
-    return AsyncStorage;
+
+    return undefined;
   }
-  // Server-side or Node.js environment - return undefined to disable storage
-  return undefined;
+
+  // Native (iOS/Android) - rely on AsyncStorage so refresh tokens persist
+  return AsyncStorage;
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -248,6 +238,164 @@ export interface ClinicService {
   is_available: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export type MedicalRecordType =
+  | 'consultation'
+  | 'lab_result'
+  | 'prescription'
+  | 'vaccination'
+  | 'surgery'
+  | 'imaging'
+  | 'other';
+
+export interface MedicalRecordEntry {
+  id: string;
+  patient_id: string;
+  doctor_id?: string | null;
+  clinic_id?: string | null;
+  appointment_id?: string | null;
+  record_type: MedicalRecordType;
+  title: string;
+  description?: string | null;
+  diagnosis?: string | null;
+  treatment?: string | null;
+  prescription?: string | null;
+  lab_results?: Record<string, any> | null;
+  vital_signs?: Record<string, any> | null;
+  attachments?: string[] | null;
+  is_private?: boolean | null;
+  visit_date?: string | null;
+  chief_complaint?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MedicalRecordWithRelations extends MedicalRecordEntry {
+  doctor?: Doctor | null;
+  clinic?: Clinic | null;
+  appointment?: Appointment | null;
+}
+
+export interface LabResultRecord {
+  id: string;
+  patient_id: string;
+  doctor_id?: string | null;
+  clinic_id?: string | null;
+  appointment_id?: string | null;
+  test_type?: string | null;
+  status?: string | null;
+  result_summary?: string | null;
+  result_details?: Record<string, any> | null;
+  notes?: string | null;
+  result_date?: string | null;
+  created_at: string;
+  updated_at?: string;
+  doctor?: Doctor | null;
+  clinic?: Clinic | null;
+}
+
+export interface VaccinationRecord {
+  id: string;
+  patient_id: string;
+  vaccine_name?: string | null;
+  dose_number?: number | null;
+  administered_at?: string | null;
+  clinic_id?: string | null;
+  doctor_id?: string | null;
+  site?: string | null;
+  notes?: string | null;
+  next_dose_due?: string | null;
+  created_at: string;
+  updated_at?: string;
+  clinic?: Clinic | null;
+  doctor?: Doctor | null;
+}
+
+export interface AllergyRecord {
+  id: string;
+  patient_id: string;
+  allergen: string;
+  reaction?: string | null;
+  severity?: string | null;
+  notes?: string | null;
+  is_active?: boolean | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface InsuranceInfoRecord {
+  id: string;
+  patient_id: string;
+  provider_name?: string | null;
+  policy_number?: string | null;
+  coverage_details?: string | null;
+  effective_date?: string | null;
+  expiration_date?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface EmergencyContactRecord {
+  id: string;
+  patient_id: string;
+  name: string;
+  relationship?: string | null;
+  phone: string;
+  is_primary?: boolean | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export type HistoryTimelineItemType =
+  | 'appointments'
+  | 'medical_records'
+  | 'prescriptions'
+  | 'lab_results'
+  | 'vaccinations';
+
+export interface HistoryTimelineItem {
+  id: string;
+  type: HistoryTimelineItemType;
+  date: string;
+  title: string;
+  description?: string;
+  status?: string;
+  metadata?: Record<string, any>;
+  tags?: string[];
+}
+
+export interface HistorySummary {
+  total_appointments: number;
+  completed_appointments: number;
+  upcoming_appointments: number;
+  cancelled_appointments: number;
+  total_medical_records: number;
+  total_prescriptions: number;
+  active_prescriptions: number;
+  total_lab_results: number;
+  pending_lab_results: number;
+  total_vaccinations: number;
+  total_allergies: number;
+  active_allergies: number;
+  last_visit_date?: string | null;
+  next_appointment_date?: string | null;
+  chronic_conditions: string[];
+  current_medications: string[];
+}
+
+export interface PatientMedicalHistory {
+  patient_id: string;
+  summary: HistorySummary;
+  appointments: AppointmentWithDetails[];
+  medical_records: MedicalRecordWithRelations[];
+  prescriptions: any[];
+  lab_results: LabResultRecord[];
+  vaccinations: VaccinationRecord[];
+  allergies: AllergyRecord[];
+  insurance_info: InsuranceInfoRecord[];
+  emergency_contacts: EmergencyContactRecord[];
+  timeline: HistoryTimelineItem[];
 }
 
 // Review types

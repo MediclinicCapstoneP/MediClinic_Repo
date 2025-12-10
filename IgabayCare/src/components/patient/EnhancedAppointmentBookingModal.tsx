@@ -804,14 +804,6 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
                         Cancel
                       </Button>
                       <Button
-                        onClick={() => handleBookAppointment(false)}
-                        disabled={loading}
-                        loading={loading}
-                        className="bg-blue-600 hover:bg-blue-700 text-white sm:w-auto"
-                      >
-                        Book Without Payment
-                      </Button>
-                      <Button
                         onClick={() => handleBookAppointment(true)}
                         disabled={loading}
                         loading={loading}

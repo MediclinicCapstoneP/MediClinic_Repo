@@ -256,13 +256,20 @@ class DoctorPatientRecordsService {
     patientId: string,
     doctorId: string,
     recordData: {
-      visit_date: string;
-      chief_complaint: string;
-      diagnosis: string;
-      treatment_plan?: string;
-      notes?: string;
+      record_type: 'consultation' | 'lab_result' | 'prescription' | 'vaccination' | 'surgery' | 'imaging' | 'other';
+      title: string;
+      description?: string;
+      visit_date?: string;
+      chief_complaint?: string;
+      diagnosis?: string;
+      treatment?: string;
+      prescription?: string;
+      lab_results?: any;
       vital_signs?: any;
+      attachments?: string[];
+      is_private?: boolean;
       appointment_id?: string;
+      clinic_id?: string;
     }
   ): Promise<{ success: boolean; record?: any; error?: string }> {
     try {
@@ -271,7 +278,20 @@ class DoctorPatientRecordsService {
         .insert([{
           patient_id: patientId,
           doctor_id: doctorId,
-          ...recordData,
+          record_type: recordData.record_type,
+          title: recordData.title,
+          description: recordData.description,
+          visit_date: recordData.visit_date || new Date().toISOString().split('T')[0],
+          chief_complaint: recordData.chief_complaint,
+          diagnosis: recordData.diagnosis,
+          treatment: recordData.treatment,
+          prescription: recordData.prescription,
+          lab_results: recordData.lab_results,
+          vital_signs: recordData.vital_signs,
+          attachments: recordData.attachments,
+          is_private: recordData.is_private || false,
+          appointment_id: recordData.appointment_id,
+          clinic_id: recordData.clinic_id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }])

@@ -167,17 +167,7 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
     try {
       const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
       
-      // 1. Update the main appointment with doctor info
-      await AppointmentService.updateAppointment(selectedAppointment.id, {
-        doctor_id: selectedDoctorId,
-        doctor_name: selectedDoctor?.full_name || '',
-        doctor_specialty: selectedDoctor?.specialization || ''
-      });
-      
-      // 2. Create doctor appointment in the doctor_appointments table
-      console.log('🎆 Creating doctor appointment for assignment...');
-      
-      // Get patient information from the appointment
+      // Get patient information from the appointment first
       const patientName = selectedAppointment.patient_name || 
         (selectedAppointment.patient 
           ? `${selectedAppointment.patient.first_name} ${selectedAppointment.patient.last_name}`.trim()
@@ -215,6 +205,18 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
         console.warn('⚠️ No patient_id in appointment:', selectedAppointment.id);
       }
       
+      // 1. Update the main appointment with doctor info AND patient info
+      await AppointmentService.updateAppointment(selectedAppointment.id, {
+        doctor_id: selectedDoctorId,
+        doctor_name: selectedDoctor?.full_name || '',
+        doctor_specialty: selectedDoctor?.specialization || '',
+        patient_name: finalPatientName || 'Unknown Patient',
+        patient_email: finalPatientEmail || null
+      });
+      
+      // 2. Create doctor appointment in the doctor_appointments table
+      console.log('🎆 Creating doctor appointment for assignment...');
+      
       // Use payment_amount if available, otherwise use total_amount (if it exists)
       const paymentAmount = selectedAppointment.payment_amount || 
                            (selectedAppointment as any).total_amount || 
@@ -227,6 +229,8 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
         patient_id: selectedAppointment.patient_id
       });
       
+      // Ensure we have valid patient data before creating doctor appointment
+      // Pass the actual values we fetched - the service will preserve them
       const doctorAppointmentResult = await DoctorAppointmentService.createDoctorAppointment({
         doctor_id: selectedDoctorId,
         appointment_id: selectedAppointment.id,
@@ -238,40 +242,23 @@ export const Appointment: React.FC<AppointmentProps> = ({ clinicId }) => {
         duration_minutes: selectedAppointment.duration_minutes || 30,
         payment_amount: paymentAmount,
         priority: selectedAppointment.priority || 'normal',
-        patient_name: finalPatientName || 'Unknown Patient',
-        patient_email: finalPatientEmail || '',
-        patient_phone: finalPatientPhone || ''
+        // Pass the actual values - service will preserve them and only fetch if missing
+        patient_name: finalPatientName && finalPatientName.trim() !== '' ? finalPatientName : undefined,
+        patient_email: finalPatientEmail && finalPatientEmail.trim() !== '' ? finalPatientEmail : undefined,
+        patient_phone: finalPatientPhone && finalPatientPhone.trim() !== '' ? finalPatientPhone : undefined,
+        clinic_name: selectedAppointment.clinic?.clinic_name || 'OHARA'
       });
       
       if (doctorAppointmentResult.success && doctorAppointmentResult.appointment) {
         console.log('✅ Doctor appointment created successfully!');
+        console.log('✅ Patient info in created appointment:', {
+          patient_name: doctorAppointmentResult.appointment.patient_name,
+          patient_email: doctorAppointmentResult.appointment.patient_email,
+          patient_phone: doctorAppointmentResult.appointment.patient_phone
+        });
         
-        // Always update patient info to ensure it's set (even if it was set initially)
-        const createdAppointment = doctorAppointmentResult.appointment;
-        try {
-          const updateResult = await supabase
-            .from('doctor_appointments')
-            .update({
-              patient_name: finalPatientName || 'Unknown Patient',
-              patient_email: finalPatientEmail || null,
-              patient_phone: finalPatientPhone || null
-            })
-            .eq('id', createdAppointment.id)
-            .select('patient_name, patient_email, patient_phone')
-            .single();
-          
-          if (updateResult.error) {
-            console.warn('⚠️ Failed to update patient info:', updateResult.error);
-          } else {
-            console.log('✅ Patient info updated in doctor appointment:', {
-              patient_name: updateResult.data?.patient_name,
-              patient_email: updateResult.data?.patient_email,
-              patient_phone: updateResult.data?.patient_phone
-            });
-          }
-        } catch (updateError) {
-          console.warn('⚠️ Failed to update patient info (non-critical):', updateError);
-        }
+        // No need to update again - the service already set the patient info correctly
+        // The redundant update was causing the trigger to overwrite the values
       } else {
         console.error('❌ Error creating doctor appointment:', doctorAppointmentResult.error);
         // Still continue - the main appointment assignment worked

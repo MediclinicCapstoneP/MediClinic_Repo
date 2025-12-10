@@ -406,20 +406,57 @@ export class ConsultationHistoryService {
 
       // Create or update medical record
       if (updateData.diagnosis || updateData.treatment_plan || updateData.vital_signs) {
-        const { error: medicalRecordError } = await supabase
-          .from('medical_records')
-          .upsert({
-            appointment_id: appointmentId,
-            diagnosis: updateData.diagnosis,
-            treatment_plan: updateData.treatment_plan,
-            vital_signs: updateData.vital_signs,
-            notes: updateData.doctor_notes,
-            updated_at: new Date().toISOString()
-          });
+        // First, get appointment details to fetch patient_id and clinic_id
+        const { data: appointmentData } = await supabase
+          .from('appointments')
+          .select('patient_id, clinic_id, doctor_id, appointment_date')
+          .eq('id', appointmentId)
+          .single();
 
-        if (medicalRecordError) {
-          console.warn('⚠️ Error updating medical record:', medicalRecordError);
-          // Don't fail the entire operation if medical record update fails
+        if (appointmentData) {
+          // Check if medical record exists for this appointment
+          const { data: existingRecord } = await supabase
+            .from('medical_records')
+            .select('id')
+            .eq('appointment_id', appointmentId)
+            .single();
+
+          const recordData: any = {
+            patient_id: appointmentData.patient_id,
+            doctor_id: appointmentData.doctor_id,
+            clinic_id: appointmentData.clinic_id,
+            appointment_id: appointmentId,
+            record_type: 'consultation',
+            title: updateData.diagnosis ? `Consultation - ${updateData.diagnosis.substring(0, 50)}` : 'Consultation Record',
+            description: updateData.doctor_notes || '',
+            diagnosis: updateData.diagnosis,
+            treatment: updateData.treatment_plan,
+            vital_signs: updateData.vital_signs,
+            visit_date: appointmentData.appointment_date || new Date().toISOString().split('T')[0],
+            updated_at: new Date().toISOString()
+          };
+
+          if (existingRecord) {
+            // Update existing record
+            const { error: medicalRecordError } = await supabase
+              .from('medical_records')
+              .update(recordData)
+              .eq('id', existingRecord.id);
+
+            if (medicalRecordError) {
+              console.warn('⚠️ Error updating medical record:', medicalRecordError);
+            }
+          } else {
+            // Create new record
+            recordData.created_at = new Date().toISOString();
+            const { error: medicalRecordError } = await supabase
+              .from('medical_records')
+              .insert([recordData]);
+
+            if (medicalRecordError) {
+              console.warn('⚠️ Error creating medical record:', medicalRecordError);
+            }
+          }
         }
       }
 

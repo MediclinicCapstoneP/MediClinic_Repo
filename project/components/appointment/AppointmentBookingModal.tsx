@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -22,9 +22,10 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import PaymentWebView from '../payment/PaymentWebView';
 import { useAuth } from '../../contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appointmentService } from '../../services/appointmentService';
-import { createCheckoutSession } from '../../services/paymongo.service';
-import { ClinicWithDetails, AppointmentType, PaymentMethod, supabase } from '../../lib/supabase';
+import { createCheckoutSession, retrieveCheckoutSession } from '../../services/paymongo.service';
+import { ClinicWithDetails, AppointmentType, PaymentMethod, supabase, Patient } from '../../lib/supabase';
 
 interface AppointmentBookingModalProps {
   visible: boolean;
@@ -33,7 +34,7 @@ interface AppointmentBookingModalProps {
   onBookingSuccess?: (appointmentId: string) => void;
 }
 
-type BookingStep = 'details' | 'payment' | 'checkout' | 'confirmation';
+type BookingStep = 'details' | 'payment' | 'checkout' | 'verifying' | 'confirmation';
 
 interface BookingData {
   date: string;
@@ -45,6 +46,21 @@ interface BookingData {
   bookingFee: number;
   totalAmount: number;
 }
+
+interface StoredBookingPayload {
+  patient_id: string;
+  clinic_id: string;
+  appointment_date: string;
+  appointment_time: string;
+  appointment_type: AppointmentType;
+  patient_notes?: string;
+  consultation_fee: number;
+  booking_fee: number;
+  total_amount: number;
+}
+
+const PENDING_BOOKING_KEY = 'pending_booking_data';
+const CHECKOUT_SESSION_KEY = 'checkout_session_id';
 
 const appointmentTypes: { value: AppointmentType; label: string; duration: number }[] = [
   { value: 'consultation', label: 'General Consultation', duration: 30 },
@@ -73,6 +89,7 @@ export function AppointmentBookingModal({
   const [currentStep, setCurrentStep] = useState<BookingStep>('details');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verifyingMessage, setVerifyingMessage] = useState<string | null>(null);
   
   // Booking data
   const [bookingData, setBookingData] = useState<BookingData>({
@@ -89,10 +106,10 @@ export function AppointmentBookingModal({
   // Time slots and payment
   const [availableTimeSlots, setAvailableTimeSlots] = useState<any[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('gcash');
-  const [createdAppointmentId, setCreatedAppointmentId] = useState<string>('');
   const [transactionNumber, setTransactionNumber] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [checkoutReference, setCheckoutReference] = useState<string | null>(null);
 
   // Load available time slots when date changes
@@ -101,6 +118,11 @@ export function AppointmentBookingModal({
       loadAvailableTimeSlots();
     }
   }, [visible, bookingData.date, clinic.id]);
+
+  useEffect(() => {
+    if (!visible) return;
+    preloadStoredBooking();
+  }, [visible]);
 
   // Update total amount when appointment type changes
   useEffect(() => {
@@ -134,6 +156,8 @@ export function AppointmentBookingModal({
 
   const handleDateChange = (date: string) => {
     setBookingData(prev => ({ ...prev, date, time: '' }));
+    setCheckoutSessionId(null);
+    setCheckoutUrl(null);
     setError(null);
   };
 
@@ -245,149 +269,326 @@ export function AppointmentBookingModal({
       consultationFee: timeSlot.consultation_fee,
       totalAmount: timeSlot.consultation_fee + prev.bookingFee,
     }));
+    setCheckoutSessionId(null);
+    setCheckoutUrl(null);
   };
 
-  const handleCreateAppointment = async () => {
-    // Get patient ID - either from authenticated user or use first available patient for demo
-    let patientId = user?.profile?.data?.id;
-    
+  const ensurePatientId = useCallback(async (): Promise<string | null> => {
+    let patientId: string | undefined;
+
+    if (user?.profile?.role === 'patient') {
+      patientId = (user.profile.data as Patient).id;
+    }
+
     if (!patientId) {
-      // For demo purposes, get the first patient from database
       const { data: patients, error: patientsError } = await supabase
         .from('patients')
         .select('id')
         .limit(1)
         .single();
-      
+
       if (patientsError || !patients) {
-        setError('No patients available. Please create a patient account first.');
-        return;
+        return null;
       }
+
       patientId = patients.id;
     }
 
+    return patientId;
+  }, [user?.profile?.role, user?.profile?.data]);
+
+  const computeBookingPayload = useCallback(async (): Promise<StoredBookingPayload | null> => {
+    const patientId = await ensurePatientId();
     if (!patientId) {
-      setError('Patient ID is required');
-      return;
+      setError('No patient profile found. Please create a patient account first.');
+      return null;
     }
 
     if (!bookingData.date || !bookingData.time) {
       setError('Please select date and time for your appointment');
-      return;
+      return null;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
+    const payload: StoredBookingPayload = {
+      patient_id: patientId,
+      clinic_id: clinic.id,
+      appointment_date: bookingData.date,
+      appointment_time: bookingData.time,
+      appointment_type: bookingData.appointmentType,
+      patient_notes: bookingData.notes,
+      consultation_fee: bookingData.consultationFee,
+      booking_fee: bookingData.bookingFee,
+      total_amount: bookingData.totalAmount,
+    };
 
-      const appointmentData = {
-        patient_id: patientId,
-        clinic_id: clinic.id,
-        appointment_date: bookingData.date,
-        appointment_time: bookingData.time,
-        appointment_type: bookingData.appointmentType,
-        duration_minutes: bookingData.duration,
-        patient_notes: bookingData.notes,
-        consultation_fee: bookingData.consultationFee,
-        booking_fee: bookingData.bookingFee,
+    return payload;
+  }, [bookingData, clinic.id, ensurePatientId]);
+
+  const storeBookingData = useCallback(async (payload: StoredBookingPayload, sessionId: string) => {
+    await AsyncStorage.setItem(PENDING_BOOKING_KEY, JSON.stringify(payload));
+    await AsyncStorage.setItem(CHECKOUT_SESSION_KEY, sessionId);
+  }, []);
+
+  const preloadStoredBooking = useCallback(async () => {
+    try {
+      const storedBooking = await AsyncStorage.getItem(PENDING_BOOKING_KEY);
+      const storedSession = await AsyncStorage.getItem(CHECKOUT_SESSION_KEY);
+
+      if (storedBooking) {
+        const parsed = JSON.parse(storedBooking) as StoredBookingPayload;
+        setBookingData(prev => ({
+          ...prev,
+          date: parsed.appointment_date,
+          time: parsed.appointment_time,
+          appointmentType: parsed.appointment_type,
+          notes: parsed.patient_notes || '',
+          consultationFee: parsed.consultation_fee,
+          bookingFee: parsed.booking_fee,
+          totalAmount: parsed.total_amount,
+        }));
+      }
+
+      if (storedSession) {
+        setCheckoutSessionId(storedSession);
+      }
+    } catch (storageError) {
+      console.error('Error preloading booking data:', storageError);
+    }
+  }, []);
+
+  const clearStoredBooking = useCallback(async () => {
+    await AsyncStorage.removeItem(PENDING_BOOKING_KEY);
+    await AsyncStorage.removeItem(CHECKOUT_SESSION_KEY);
+  }, []);
+
+  const buildCheckoutDescription = useCallback(() => {
+    return `${clinic.clinic_name} Appointment`;
+  }, [clinic.clinic_name]);
+
+  const buildCheckoutMetadata = useCallback(
+    (payload: StoredBookingPayload, patientName?: string | null, patientEmail?: string | null) => ({
+      clinic_id: payload.clinic_id,
+      clinic_name: clinic.clinic_name,
+      appointment_date: payload.appointment_date,
+      appointment_time: payload.appointment_time,
+      appointment_type: payload.appointment_type,
+      patient_notes: payload.patient_notes || '',
+      consultation_fee: String(payload.consultation_fee),
+      booking_fee: String(payload.booking_fee),
+      patient_id: payload.patient_id,
+      source: 'mediclinic_app_mobile',
+      patient_name: patientName || '',
+      patient_email: patientEmail || '',
+      timestamp: new Date().toISOString(),
+    }),
+    [clinic.clinic_name]
+  );
+
+  const buildCustomerInfo = useCallback(() => {
+    if (user?.profile?.role === 'patient') {
+      const patientProfile = user.profile.data as Patient;
+      const fullName = `${patientProfile.first_name ?? ''} ${patientProfile.last_name ?? ''}`.trim();
+
+      return {
+        name: fullName || user.email || 'Patient',
+        email: patientProfile.email || user.email || 'patient@example.com',
+        phone: patientProfile.phone || '',
+        address: {
+          line1: patientProfile.address || clinic.address || 'N/A',
+          line2: '',
+          city: clinic.city || 'N/A',
+          state: clinic.state || 'N/A',
+          postal_code: clinic.zip_code || '0000',
+          country: 'PH',
+        },
       };
-
-      const response = await appointmentService.createAppointment(appointmentData);
-      
-      if (response.success && response.appointment) {
-        setCreatedAppointmentId(response.appointment.id);
-        setCurrentStep('payment');
-      } else {
-        setError(response.error || 'Failed to create appointment');
-      }
-    } catch (error) {
-      console.error('Error creating appointment:', error);
-      setError('An unexpected error occurred');
-    } finally {
-      setLoading(false);
     }
-  };
 
-  const handleStartPayment = async () => {
-    if (!createdAppointmentId) {
-      setError('No appointment to process payment for');
+    return {
+      name: user?.email?.split('@')[0] || 'Patient',
+      email: user?.email || 'patient@example.com',
+      phone: '',
+      address: {
+        line1: clinic.address || 'N/A',
+        line2: '',
+        city: clinic.city || 'N/A',
+        state: clinic.state || 'N/A',
+        postal_code: clinic.zip_code || '0000',
+        country: 'PH',
+      },
+    };
+  }, [clinic.address, clinic.city, clinic.state, clinic.zip_code, user]);
+
+  const handleContinueToPayment = useCallback(async () => {
+    const payload = await computeBookingPayload();
+    if (!payload) {
       return;
     }
 
+    setCurrentStep('payment');
+  }, [computeBookingPayload]);
+
+  const handlePrepareCheckout = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const session = await createCheckoutSession(
-        bookingData.totalAmount,
-        `${clinic.clinic_name} Appointment`,
-        {
-          paymentMethodTypes: ['gcash'],
-          metadata: {
-            appointment_id: createdAppointmentId,
-            clinic_id: clinic.id,
-            appointment_date: bookingData.date,
-            appointment_time: bookingData.time,
-            patient_id: user?.profile?.data?.id || '',
-          },
-        }
-      );
-
-      const url = session?.attributes?.checkout_url;
-
-      if (!url) {
-        throw new Error('Checkout URL was not provided by PayMongo');
+      const payload = await computeBookingPayload();
+      if (!payload) {
+        setLoading(false);
+        return;
       }
 
-      setCheckoutUrl(url);
-      setCheckoutReference(session?.attributes?.reference_number || session.id || null);
+      const customerInfo = buildCustomerInfo();
+      const metadata = buildCheckoutMetadata(payload, customerInfo.name, customerInfo.email);
+      const description = buildCheckoutDescription();
+
+      const session = await createCheckoutSession(payload.total_amount, description, {
+        paymentMethodTypes: ['gcash'],
+        customerInfo,
+        metadata,
+      });
+
+      const checkoutUrl = session?.attributes?.checkout_url;
+      const sessionId = session?.id;
+
+      if (!checkoutUrl || !sessionId) {
+        throw new Error('Checkout session missing URL or identifier');
+      }
+
+      setCheckoutUrl(checkoutUrl);
+      setCheckoutSessionId(sessionId);
+      setCheckoutReference(session?.attributes?.reference_number || sessionId);
       setCurrentStep('checkout');
-    } catch (error) {
-      console.error('Error initializing PayMongo checkout:', error);
-      const message = error instanceof Error ? error.message : 'Payment initialization failed';
+
+      await storeBookingData(payload, sessionId);
+    } catch (checkoutError) {
+      console.error('Error preparing PayMongo checkout:', checkoutError);
+      const message = checkoutError instanceof Error ? checkoutError.message : 'Payment initialization failed';
       setError(message);
     } finally {
       setLoading(false);
     }
+  }, [
+    buildCheckoutDescription,
+    buildCheckoutMetadata,
+    buildCustomerInfo,
+    computeBookingPayload,
+    storeBookingData,
+  ]);
+
+  const handleStartPayment = async () => {
+    await handlePrepareCheckout();
   };
 
-  const handleCheckoutSuccess = async () => {
-    if (!createdAppointmentId) {
-      setError('No appointment to finalize payment for');
+  const finalizeAppointment = useCallback(async (
+    payload: StoredBookingPayload,
+    sessionId: string,
+  ) => {
+    const appointmentResponse = await appointmentService.createAppointment({
+      patient_id: payload.patient_id,
+      clinic_id: payload.clinic_id,
+      appointment_date: payload.appointment_date,
+      appointment_time: payload.appointment_time,
+      appointment_type: payload.appointment_type,
+      patient_notes: payload.patient_notes,
+      duration_minutes: bookingData.duration,
+      consultation_fee: payload.consultation_fee,
+      booking_fee: payload.booking_fee,
+    });
+
+    if (!appointmentResponse.success || !appointmentResponse.appointment) {
+      throw new Error(appointmentResponse.error || 'Failed to create appointment after payment');
+    }
+
+    const appointmentId = appointmentResponse.appointment.id;
+
+    const paymentResponse = await appointmentService.processPayment({
+      appointment_id: appointmentId,
+      payment_method: selectedPaymentMethod,
+      amount: payload.total_amount,
+    });
+
+    if (!paymentResponse.success) {
+      throw new Error(paymentResponse.error || 'Failed to record payment');
+    }
+
+    setTransactionNumber(paymentResponse.transactionNumber || checkoutReference || sessionId);
+
+    if (onBookingSuccess) {
+      onBookingSuccess(appointmentId);
+    }
+  }, [bookingData.duration, checkoutReference, onBookingSuccess, selectedPaymentMethod]);
+
+  const handleCheckoutSuccess = useCallback(async () => {
+    if (!checkoutSessionId) {
+      setError('No checkout session to verify.');
       setCurrentStep('payment');
       return;
     }
 
+    setLoading(true);
+    setCurrentStep('verifying');
+    setVerifyingMessage('Verifying payment with PayMongo…');
+
     try {
-      setLoading(true);
-      const response = await appointmentService.processPayment({
-        appointment_id: createdAppointmentId,
-        payment_method: selectedPaymentMethod,
-        amount: bookingData.totalAmount,
-      });
-
-      if (response.success) {
-        setTransactionNumber(response.transactionNumber || checkoutReference || '');
-        setCurrentStep('confirmation');
-        setError(null);
-
-        if (onBookingSuccess) {
-          onBookingSuccess(createdAppointmentId);
-        }
-      } else {
-        setError(response.error || 'Failed to record payment');
-        setCurrentStep('payment');
+      const storedBooking = await AsyncStorage.getItem(PENDING_BOOKING_KEY);
+      if (!storedBooking) {
+        throw new Error('Booking data not found locally.');
       }
-    } catch (error) {
-      console.error('Error finalizing payment:', error);
-      setError('An unexpected error occurred while finalizing payment');
+
+      const payload = JSON.parse(storedBooking) as StoredBookingPayload;
+
+      const verification = await verifyCheckoutSessionWithRetry(checkoutSessionId, 3);
+      if (!verification.success || verification.status !== 'paid') {
+        throw new Error('Payment not confirmed yet. Please try again.');
+      }
+
+      setVerifyingMessage('Payment confirmed. Finalizing appointment…');
+
+      await finalizeAppointment(payload, checkoutSessionId);
+
+      setVerifyingMessage('Appointment confirmed!');
+      setCurrentStep('confirmation');
+      setError(null);
+      await clearStoredBooking();
+    } catch (err) {
+      console.error('Error verifying checkout session:', err);
+      const message = err instanceof Error ? err.message : 'Unable to verify payment.';
+      setError(message);
       setCurrentStep('payment');
     } finally {
-      setLoading(false);
       setCheckoutUrl(null);
       setCheckoutReference(null);
+      setLoading(false);
+      setVerifyingMessage(null);
     }
-  };
+  }, [checkoutSessionId, clearStoredBooking, finalizeAppointment]);
+
+  const verifyCheckoutSessionWithRetry = useCallback(async (sessionId: string, maxRetries: number) => {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const session = await retrieveCheckoutSession(sessionId);
+        const status = session?.attributes?.status;
+
+        if (status === 'paid') {
+          return { success: true, status };
+        }
+
+        if (status === 'unpaid') {
+          return { success: false, status };
+        }
+      } catch (verificationError) {
+        console.error('Error retrieving checkout session:', verificationError);
+      }
+
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 2000));
+      }
+    }
+
+    return { success: false, status: 'timeout' } as const;
+  }, []);
 
   const handleCheckoutError = (message: string) => {
     console.error('PayMongo checkout error:', message);
@@ -417,12 +618,13 @@ export function AppointmentBookingModal({
     });
     setAvailableTimeSlots([]);
     setSelectedPaymentMethod('gcash');
-    setCreatedAppointmentId('');
     setTransactionNumber('');
     setCheckoutUrl(null);
+    setCheckoutSessionId(null);
     setCheckoutReference(null);
     setError(null);
     setLoading(false);
+    setVerifyingMessage(null);
   };
 
   const handleClose = () => {
@@ -578,9 +780,9 @@ export function AppointmentBookingModal({
 
       <Button
         title="Continue to Payment"
-        onPress={handleCreateAppointment}
+        onPress={handleContinueToPayment}
         loading={loading}
-        disabled={!bookingData.date || !bookingData.time}
+        disabled={!bookingData.date || !bookingData.time || loading}
         fullWidth
         style={styles.continueButton}
       />
@@ -643,7 +845,7 @@ export function AppointmentBookingModal({
           style={styles.backButton}
         />
         <Button
-          title="Pay with GCash"
+          title={checkoutSessionId ? 'Resume Payment' : 'Pay with GCash'}
           onPress={handleStartPayment}
           loading={loading}
           disabled={loading}
@@ -686,6 +888,16 @@ export function AppointmentBookingModal({
         variant="outline"
         style={styles.checkoutCancelButton}
       />
+    </View>
+  );
+
+  const renderVerifyingStep = () => (
+    <View style={styles.verifyingContainer}>
+      <ActivityIndicator size="large" color="#2563EB" />
+      <Text style={styles.verifyingTitle}>Finishing up…</Text>
+      <Text style={styles.verifyingSubtitle}>
+        {verifyingMessage || 'We are confirming your payment and booking your appointment.'}
+      </Text>
     </View>
   );
 
@@ -752,6 +964,7 @@ export function AppointmentBookingModal({
       {currentStep === 'details' && renderDetailsStep()}
       {currentStep === 'payment' && renderPaymentStep()}
       {currentStep === 'checkout' && renderCheckoutStep()}
+      {currentStep === 'verifying' && renderVerifyingStep()}
       {currentStep === 'confirmation' && renderConfirmationStep()}
       
       {renderCalendar()}
@@ -1156,6 +1369,78 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     marginLeft: 8,
     flex: 1,
+  },
+  checkoutContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  checkoutTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  checkoutSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  checkoutSummary: {
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  checkoutSummaryLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  checkoutSummaryValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2563EB',
+  },
+  checkoutWebview: {
+    flex: 1,
+    minHeight: 400,
+    marginBottom: 16,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  checkoutLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 400,
+  },
+  checkoutCancelButton: {
+    marginTop: 12,
+  },
+  verifyingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  verifyingTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  verifyingSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
   },
 });
 

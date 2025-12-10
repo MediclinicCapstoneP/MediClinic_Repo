@@ -635,23 +635,13 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
                         )}
                       </div>
                     ) : (
-                      <>
-                        <Button
-                          onClick={handleProceedToGCashPayment}
-                          disabled={!selectedDate || !selectedTime || loading}
-                          className="bg-green-600 hover:bg-green-700 text-white sm:w-auto"
-                        >
-                          Pay with GCash (₱{calculateAppointmentCost().total_amount})
-                        </Button>
-                        <Button
-                          onClick={handleBookAppointment}
-                          disabled={!selectedDate || !selectedTime || loading}
-                          loading={loading}
-                          className="bg-blue-600 hover:bg-blue-700 text-white sm:w-auto"
-                        >
-                          Book Without Payment
-                        </Button>
-                      </>
+                      <Button
+                        onClick={handleProceedToGCashPayment}
+                        disabled={!selectedDate || !selectedTime || loading}
+                        className="bg-green-600 hover:bg-green-700 text-white sm:w-auto"
+                      >
+                        Pay with GCash (₱{calculateAppointmentCost().total_amount})
+                      </Button>
                     )}
                   </div>
                 </div>

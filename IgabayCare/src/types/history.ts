@@ -5,18 +5,20 @@ export interface MedicalRecord {
   id: string;
   patient_id: string;
   doctor_id?: string;
-  clinic_id: string;
+  clinic_id?: string;
   appointment_id?: string;
-  visit_date: string;
-  chief_complaint: string;
-  diagnosis: string;
-  treatment_plan: string;
-  notes?: string;
-  vital_signs?: VitalSigns;
-  physical_examination?: string;
-  assessment?: string;
-  plan?: string;
-  follow_up_date?: string;
+  record_type: 'consultation' | 'lab_result' | 'prescription' | 'vaccination' | 'surgery' | 'imaging' | 'other';
+  title: string;
+  description?: string;
+  diagnosis?: string;
+  treatment?: string;
+  prescription?: string;
+  lab_results?: any; // jsonb
+  vital_signs?: VitalSigns; // jsonb
+  attachments?: string[]; // text array
+  is_private?: boolean;
+  visit_date?: string; // date
+  chief_complaint?: string;
   created_at: string;
   updated_at: string;
 }

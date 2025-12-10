@@ -91,18 +91,27 @@ class EnhancedChatbotService {
 **To book an appointment:**
 1. Go to the "Find Clinics" section
 2. Search for your preferred clinic or doctor
-3. Select a date and time
-4. Complete the booking process with payment
+3. Select a date and time from the calendar
+4. Complete payment via PayMongo checkout session
+5. Your appointment will be confirmed automatically after successful payment
 
-**Payment Policy:**
-- All appointments require upfront payment (₱500 consultation fee + ₱50 booking fee)
+**Payment Process:**
+- All appointments require upfront payment (consultation fee + booking fee)
+- Payment is processed securely through PayMongo checkout sessions
+- You'll be redirected to PayMongo's secure payment page
+- After payment, you'll be redirected back and your appointment will be automatically booked
+- Supports GCash, PayMaya, and card payments
 - Payment secures your booking and reduces no-shows
-- GCash and other payment methods are available
+
+**After Booking:**
+- You'll receive a confirmation notification
+- View your appointment in "My Appointments"
+- Access appointment details and medical records in "Patient History"
 
 If you need to reschedule or cancel an existing appointment, visit the "My Appointments" section.
 
 Need help with a specific step?`,
-        suggestions: ['Find clinics', 'Check appointment status', 'Reschedule appointment', 'Payment help']
+        suggestions: ['Find clinics', 'Check appointment status', 'Reschedule appointment', 'Payment help', 'View medical history']
       };
     }
     
@@ -199,21 +208,94 @@ Would you like me to help you find a specific type of clinic or healthcare provi
       };
     }
     
+    // Medical history related
+    if (lowerMessage.includes('medical history') || lowerMessage.includes('medical record') || lowerMessage.includes('history') || lowerMessage.includes('past visit') || lowerMessage.includes('consultation record')) {
+      return {
+        message: `I can help you with your medical history! 
+
+**Your Medical History includes:**
+- **Appointments**: All past and upcoming appointments
+- **Medical Records**: Consultation records, lab results, surgeries, imaging
+- **Prescriptions**: Current and past medications
+- **Vaccinations**: Vaccination history and next dose dates
+- **Allergies**: Known allergies and reactions
+- **Insurance**: Insurance information and coverage
+- **Emergency Contacts**: Your emergency contact information
+
+**How to Access:**
+1. Go to your Patient Dashboard
+2. Click on "Patient History" or "Medical History"
+3. View timeline, dashboard summary, or filter by date/type
+
+**Features:**
+- **Timeline View**: Chronological view of all medical events
+- **Dashboard Summary**: Quick overview with statistics
+- **Filtering**: Search by date, record type, doctor, or clinic
+- **Privacy**: Private records are hidden from general view
+
+Your complete medical history helps you and your doctors make informed healthcare decisions.
+
+Would you like help accessing a specific part of your medical history?`,
+        suggestions: ['View timeline', 'Check prescriptions', 'Lab results', 'Vaccination records', 'Medical records']
+      };
+    }
+
+    // Payment related
+    if (lowerMessage.includes('payment') || lowerMessage.includes('pay') || lowerMessage.includes('gcash') || lowerMessage.includes('checkout') || lowerMessage.includes('paymongo')) {
+      return {
+        message: `I can help you with payment information!
+
+**Payment Policy:**
+- All appointments require upfront payment to secure your booking
+- Payment includes consultation fee + booking fee
+- This policy helps ensure appointment availability and reduces no-shows
+
+**Payment Process (PayMongo Checkout):**
+1. Select your appointment date and time
+2. System creates a secure PayMongo checkout session
+3. You'll be redirected to PayMongo's secure payment page
+4. Complete payment via GCash, PayMaya, or card
+5. After successful payment, you'll be redirected back
+6. Your appointment is automatically confirmed
+
+**Supported Payment Methods:**
+- GCash (primary method for Filipino users)
+- PayMaya
+- Credit/Debit Cards
+
+**After Payment:**
+- You'll receive a payment confirmation
+- Appointment booking is completed automatically
+- You'll receive appointment confirmation notification
+- All payment receipts are saved in your account
+
+**Need Help?**
+- Payment issues: Check payment status in appointment details
+- Refunds: Contact clinic for cancellation refunds
+- Payment failed: You can retry or use a different payment method
+
+Is there a specific payment question I can help with?`,
+        suggestions: ['Payment process', 'Payment methods', 'Payment status', 'Refund policy', 'Payment troubleshooting']
+      };
+    }
+
     // Role-specific responses
     if (userRole === 'patient') {
       return {
         message: `Hello! I'm MediBot, your healthcare assistant. I can help you with:
 
-🏥 **Appointments:** Booking, rescheduling, and cancellations
+🏥 **Appointments:** Booking, rescheduling, and cancellations via PayMongo checkout
+📋 **Medical History:** Access your complete medical records, prescriptions, lab results, and vaccination history
 💊 **Medications:** General information and reminders
 🔍 **Symptoms:** General guidance (not diagnoses)
 📋 **Health Tips:** Wellness and preventive care
 🏥 **Clinic Info:** Finding the right healthcare provider
+💳 **Payment Help:** PayMongo checkout process and payment questions
 
 Type your question or choose from the suggested topics. For emergencies, call emergency services immediately!
 
 What would you like to know?`,
-        suggestions: ['Book appointment', 'Find clinics', 'Medication help', 'Health tips', 'Emergency info']
+        suggestions: ['Book appointment', 'View medical history', 'Find clinics', 'Payment help', 'Health tips', 'Emergency info']
       };
     } else if (userRole === 'doctor') {
       return {
@@ -245,19 +327,27 @@ What would you like help with today?`,
     
     // Default response
     return {
-      message: `Hello! I'm MediBot, your healthcare assistant. I'm here to help with general health information, appointment questions, and wellness advice.
+      message: `Hello! I'm MediBot, your healthcare assistant for IgabayCare. I'm here to help with general health information, appointment questions, medical history access, and wellness advice.
 
 🏥 **How I Can Help:**
-- Appointment booking and scheduling
+- Appointment booking and scheduling (with PayMongo payment)
+- Medical history access (records, prescriptions, lab results, vaccinations)
+- Payment assistance (PayMongo checkout process)
 - General health information
 - Medication guidance (general)
 - Wellness and preventive care tips
-- Clinic navigation assistance
+- Clinic navigation and search assistance
 
-⚠️ **Important:** I'm not a substitute for professional medical advice. Always consult healthcare providers for medical concerns.
+💡 **Quick Access:**
+- Book appointments via "Find Clinics"
+- View medical history in "Patient History"
+- Check payment status in appointment details
+- Access prescriptions and lab results in your medical timeline
+
+⚠️ **Important:** I'm not a substitute for professional medical advice. Always consult healthcare providers for medical concerns. For emergencies, call emergency services immediately.
 
 What would you like to know?`,
-      suggestions: ['Book appointment', 'Find clinics', 'Medication info', 'Health tips', 'Emergency guidance']
+      suggestions: ['Book appointment', 'View medical history', 'Find clinics', 'Payment help', 'Medication info', 'Health tips', 'Emergency guidance']
     };
   }
 

@@ -69,6 +69,8 @@ export const enhancedPatientService = {
           clinic:clinics(clinic_name)
         `)
         .eq('patient_id', patientId)
+        .is('is_private', false)
+        .order('visit_date', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (error) {

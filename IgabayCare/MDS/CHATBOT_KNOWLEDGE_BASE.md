@@ -31,8 +31,12 @@
 - **Geolocation API** for user location
 
 ### Payment Integration
-- **PayMongo API** for GCash payments
-- **Payment Intent workflow** for secure transactions
+- **PayMongo API** for GCash payments via checkout sessions
+- **Checkout Session Workflow**: Create session → Redirect to PayMongo → Payment verification → Appointment booking
+- **Success/Cancel URLs**: Publicly accessible HTTPS pages (e.g., `https://yourdomain.com/patient/payment-return`)
+- **Payment Methods**: GCash (primary), PayMaya, and card payments
+- **Payment-First Policy**: All appointments require upfront payment to secure booking
+- **Mobile Support**: Fixed public URLs required for mobile app integration
 
 ---
 
@@ -168,24 +172,46 @@ src/
 
 ## 💳 Payment Systems
 
-### PayMongo GCash Integration
-- **Payment Intent Workflow**: Create Intent → Create Payment Method → Attach → Verify
+### PayMongo Checkout Session Integration
+- **Checkout Session Workflow**: Create Session → Redirect to PayMongo → Payment → Return to App → Verify → Book Appointment
 - **GCash Support**: Native GCash payment processing for Filipino users
-- **Real-time Status**: Polling for payment status updates
+- **Mobile App Support**: Requires fixed public HTTPS URLs for success/cancel redirects
 - **Security**: Public key for frontend, secret key for backend verification
 
 ### Payment Components
-- `PayMongoGCashPayment.tsx`: GCash payment interface
+- `PayMongoGCashPayment.tsx`: GCash payment interface (legacy payment intent flow)
 - `PaymentForm.tsx`: Generic payment form
-- `PaymentReturn.tsx`: Payment confirmation handler
-- `paymongoService.ts`: PayMongo API integration
+- `PaymentReturn.tsx`: Payment verification and appointment booking handler
+- `paymongoService.ts`: PayMongo API integration with checkout sessions
+- `AppointmentBookingModal.tsx`: Integrated checkout session payment flow
 
-### Payment Flow
-1. User selects GCash payment option
-2. PayMongo creates payment intent
-3. User redirected to GCash for authorization
-4. System polls for payment status
-5. Appointment confirmed on successful payment
+### Checkout Session Flow
+1. User selects appointment date/time
+2. System creates PayMongo checkout session with:
+   - Amount (consultation fee + booking fee)
+   - Success URL: `https://yourdomain.com/patient/payment-return`
+   - Cancel URL: Same as success URL
+   - Metadata: Clinic, appointment, patient details
+3. User redirected to PayMongo checkout page
+4. User completes GCash payment
+5. PayMongo redirects to success URL with `checkout_session_id`
+6. `PaymentReturn.tsx` verifies payment status
+7. Appointment automatically created after successful payment verification
+8. User receives confirmation notification
+
+### Payment URLs
+- **API Endpoint**: `https://api.paymongo.com/v1/checkout_sessions` (for creating sessions)
+- **Success URL**: Must be publicly accessible HTTPS page (e.g., `/patient/payment-return`)
+- **Cancel URL**: Same requirements as success URL
+- **Checkout URL**: Returned by PayMongo, used to redirect user to payment page
+
+### Payment Metadata
+Checkout sessions include metadata for appointment creation:
+- `clinic_id`, `clinic_name`
+- `appointment_date`, `appointment_time`, `appointment_type`
+- `patient_id`, `patient_notes`
+- `consultation_fee`, `booking_fee`
+- `selected_services` (if applicable)
 
 ---
 
@@ -227,15 +253,61 @@ src/
 
 ### Appointment Features
 - **Multiple Types**: Consultation, follow-up, emergency, checkup, etc.
-- **Status Tracking**: Scheduled → Confirmed → Completed
+- **Status Tracking**: Scheduled → Confirmed → In Progress → Completed
 - **Priority Levels**: Low, normal, high, urgent
 - **Notifications**: Automatic notifications for booking confirmations
-- **Payment Integration**: GCash payment before confirmation
+- **Payment Integration**: PayMongo checkout session payment before confirmation
+- **Payment Flow**: Payment first → Booking confirmation after successful payment
 
 ### Key Components
-- `AppointmentBookingModal.tsx`: Main booking interface
+- `AppointmentBookingModal.tsx`: Main booking interface with PayMongo checkout
 - `appointmentBookingService.ts`: Booking logic and notifications
 - `AppointmentService.ts`: CRUD operations for appointments
+- `PaymentReturn.tsx`: Handles payment verification and appointment creation after payment
+
+## 📋 Medical Records & History System
+
+### Comprehensive Medical History
+- **Unified Medical Records Table**: Single table supporting multiple record types
+- **Record Types**: consultation, lab_result, prescription, vaccination, surgery, imaging, other
+- **Full Patient History**: Complete medical timeline with all records in one place
+
+### Medical Records Features
+- **Record Types Supported**:
+  - Consultation records with diagnosis, treatment, vital signs
+  - Lab results with JSONB data storage
+  - Prescription records linked to appointments
+  - Vaccination history with next dose tracking
+  - Surgery and imaging records
+  - Custom record types for other medical events
+
+### Medical History Components
+- **Medical History Dashboard**: Summary statistics, chronic conditions, current medications
+- **Medical History Timeline**: Chronological view with filtering and search
+- **Patient History Page**: Comprehensive overview with appointments, records, prescriptions
+
+### Key Services
+- `MedicalHistoryService.ts`: Comprehensive medical history fetching with parallel queries
+- `EnhancedHistoryService.ts`: Extended history with enhanced filtering
+- `ConsultationHistoryService.ts`: Consultation-specific record management
+- `doctorPatientRecordsService.ts`: Doctor's view of patient records
+
+### Database Schema
+- **medical_records table**:
+  - `record_type`: Enum for consultation/lab_result/prescription/vaccination/surgery/imaging/other
+  - `title`, `description`: Record information
+  - `diagnosis`, `treatment`, `prescription`: Medical details
+  - `lab_results`, `vital_signs`: JSONB fields for structured data
+  - `attachments`: Array of file references
+  - `is_private`: Privacy flag for sensitive records
+  - `visit_date`, `chief_complaint`: Visit information
+  - Links to: `patient_id`, `doctor_id`, `clinic_id`, `appointment_id`
+
+### History Features
+- **Timeline View**: All medical events in chronological order
+- **Filtering**: By date, record type, doctor, clinic
+- **Search**: Across all record types and fields
+- **Privacy**: Respects `is_private` flag for sensitive records
 
 ---
 
@@ -600,17 +672,36 @@ VITE_PAYMONGO_SECRET_KEY=sk_test_your_secret_key
 
 ## 🤖 Chatbot Integration
 
-### FloatingChatBot Component
-- **Global Availability**: Accessible from all pages
-- **Context-Aware**: Understands current page and user state
-- **Medical Knowledge**: Healthcare-specific responses
-- **Appointment Assistance**: Help with booking and management
+### Enhanced Chatbot System
+- **Global Availability**: Accessible from all pages via floating chat button
+- **Context-Aware**: Understands current page, user role, and state
+- **Medical Knowledge**: Healthcare-specific responses with up-to-date platform information
+- **Appointment Assistance**: Help with booking, payment, and management
+- **Medical History Support**: Guidance on accessing and understanding medical records
+
+### Chatbot Services
+- **AIChatbotService**: OpenAI-based conversational AI with intent recognition
+- **EnhancedChatbotService**: Groq-powered AI with local fallback responses
+- **Knowledge Base**: Comprehensive platform knowledge in `MDS/CHATBOT_KNOWLEDGE_BASE.md`
 
 ### Chatbot Features
-- **Natural Language**: Conversational interface
+- **Natural Language**: Conversational interface with Filipino and English support
 - **Quick Actions**: Common tasks via chat commands
 - **Help System**: Contextual help and guidance
-- **Multi-language**: Support for Filipino and English
+- **Role-Based Responses**: Different suggestions and help based on user role (patient/doctor/clinic)
+- **Emergency Detection**: Automatic detection of emergency keywords with immediate guidance
+- **Payment Assistance**: Help with PayMongo checkout process and payment questions
+- **Medical History Guidance**: Help accessing records, prescriptions, lab results, and vaccinations
+
+### Chatbot Knowledge Areas
+- Appointment booking and PayMongo checkout process
+- Medical history access and understanding
+- Payment methods and policies
+- Clinic search and filtering
+- Medication information (general guidance)
+- Symptom guidance (non-diagnostic)
+- Health and wellness tips
+- Technical support and troubleshooting
 
 ---
 

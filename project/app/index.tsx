@@ -66,7 +66,7 @@ export default function SplashScreen() {
           <Heart size={64} color="#FFFFFF" fill="#FFFFFF" />
         </View>
         
-        <Text style={styles.appName}>MediClinic</Text>
+        <Text style={styles.appName}>iGabayAtiCare</Text>
         <Text style={styles.tagline}>Your Health, Our Priority</Text>
         
         <View style={styles.loadingContainer}>

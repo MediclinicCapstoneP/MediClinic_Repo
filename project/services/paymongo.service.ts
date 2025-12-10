@@ -10,16 +10,17 @@ const btoaFunction = (str: string): string => {
 const PAYMONGO_SECRET_KEY = process.env.EXPO_PUBLIC_PAYMONGO_SECRET_KEY;
 const API_URL = 'https://api.paymongo.com/v1';
 
-// Get the app's URL scheme for deep linking
+// Ensure success/cancel URLs use an HTTPS host (PayMongo rejects custom schemes)
+const WEB_APP_BASE_URL = (process.env.EXPO_PUBLIC_APP_WEB_URL || 'https://igabaycare.com').replace(/\/$/, '');
+
 const getAppUrl = (path: string): string => {
-  if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}${path}`;
-    }
-    return `https://igabaycare.com${path}`;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return `${window.location.origin}${normalizedPath}`;
   }
-  // For React Native, use the app's URL scheme
-  return `igabaycare://${path}`;
+
+  return `${WEB_APP_BASE_URL}${normalizedPath}`;
 };
 
 export interface CheckoutSession {

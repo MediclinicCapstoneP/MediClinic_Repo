@@ -257,19 +257,35 @@ const MedicalHistoryTimeline: React.FC<MedicalHistoryTimelineProps> = ({
         );
       
       case 'medical_records':
+        const recordData = data as any;
         return (
           <div className="space-y-2 text-sm">
-            {(data as any).chief_complaint && (
-              <div><strong>Chief Complaint:</strong> {(data as any).chief_complaint}</div>
+            {recordData.record_type && (
+              <div><strong>Record Type:</strong> {recordData.record_type}</div>
             )}
-            {(data as any).diagnosis && (
-              <div><strong>Diagnosis:</strong> {(data as any).diagnosis}</div>
+            {recordData.description && (
+              <div><strong>Description:</strong> {recordData.description}</div>
             )}
-            {(data as any).treatment_plan && (
-              <div><strong>Treatment Plan:</strong> {(data as any).treatment_plan}</div>
+            {recordData.chief_complaint && (
+              <div><strong>Chief Complaint:</strong> {recordData.chief_complaint}</div>
             )}
-            {(data as any).notes && (
-              <div><strong>Notes:</strong> {(data as any).notes}</div>
+            {recordData.diagnosis && (
+              <div><strong>Diagnosis:</strong> {recordData.diagnosis}</div>
+            )}
+            {recordData.treatment && (
+              <div><strong>Treatment:</strong> {recordData.treatment}</div>
+            )}
+            {recordData.prescription && (
+              <div><strong>Prescription:</strong> {recordData.prescription}</div>
+            )}
+            {recordData.lab_results && (
+              <div><strong>Lab Results:</strong> <pre className="text-xs bg-gray-50 p-2 rounded">{JSON.stringify(recordData.lab_results, null, 2)}</pre></div>
+            )}
+            {recordData.vital_signs && (
+              <div><strong>Vital Signs:</strong> <pre className="text-xs bg-gray-50 p-2 rounded">{JSON.stringify(recordData.vital_signs, null, 2)}</pre></div>
+            )}
+            {recordData.attachments && recordData.attachments.length > 0 && (
+              <div><strong>Attachments:</strong> {recordData.attachments.join(', ')}</div>
             )}
           </div>
         );

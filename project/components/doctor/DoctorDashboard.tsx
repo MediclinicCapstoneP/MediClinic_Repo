@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase, AppointmentWithDetails, Doctor } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import UserProfileDropdown from '../UserProfileDropdown';
 import { DoctorAppointmentManagement } from './DoctorAppointmentManagement';
 import { DoctorPatientManagement } from './DoctorPatientManagement';
 import { DoctorScheduleManager } from './DoctorScheduleManager';
@@ -334,10 +335,15 @@ export const DoctorDashboard: React.FC = () => {
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.welcomeText}>Welcome back,</Text>
-        <Text style={styles.doctorName}>
-          {doctor ? `Dr. ${doctor.full_name}` : 'Doctor'}
-        </Text>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerTextGroup}>
+            <Text style={styles.welcomeText}>Welcome back,</Text>
+            <Text style={styles.doctorName}>
+              {doctor ? `Dr. ${doctor.full_name}` : 'Doctor'}
+            </Text>
+          </View>
+          <UserProfileDropdown />
+        </View>
         <Text style={styles.dateText}>
           {new Date().toLocaleDateString('en-US', { 
             weekday: 'long',
@@ -568,6 +574,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  headerTextGroup: {
+    flexShrink: 1,
+    paddingRight: 12,
   },
   welcomeText: {
     fontSize: 16,

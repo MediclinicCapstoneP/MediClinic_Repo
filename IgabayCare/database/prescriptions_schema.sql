@@ -203,6 +203,26 @@ CREATE POLICY "Clinics can manage prescription medications" ON prescription_medi
         )
     );
 
+DROP POLICY IF EXISTS "Doctors can manage prescription medications" ON prescription_medications;
+CREATE POLICY "Doctors can manage prescription medications" ON prescription_medications
+    FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1 FROM prescriptions p
+            JOIN doctors d ON d.id = p.doctor_id
+            WHERE p.id = prescription_medications.prescription_id
+            AND d.user_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM prescriptions p
+            JOIN doctors d ON d.id = p.doctor_id
+            WHERE p.id = prescription_medications.prescription_id
+            AND d.user_id = auth.uid()
+        )
+    );
+
 -- Dispensing log policies
 DROP POLICY IF EXISTS "Users can view dispensing logs they have access to" ON prescription_dispensing_log;
 CREATE POLICY "Users can view dispensing logs they have access to" ON prescription_dispensing_log

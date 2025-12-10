@@ -283,11 +283,15 @@ export const DoctorDashboard: React.FC = () => {
                 doctor_id: authUser.id,
                 clinic_id: doctorProfile?.clinic_id || '',
                 appointment_id: selectedAppointment.id,
+                record_type: 'prescription',
+                title: `Prescription - ${prescriptionsToCreate.length} medication(s)`,
+                description: `Prescription issued with ${prescriptionsToCreate.length} medication(s)`,
                 visit_date: new Date().toISOString().split('T')[0],
                 chief_complaint: 'Prescription issued',
                 diagnosis: 'Prescription medications prescribed',
                 treatment: medicationList,
-                notes: `Prescription issued with ${prescriptionsToCreate.length} medication(s)`,
+                prescription: medicationList,
+                is_private: false,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               }]);

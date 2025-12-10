@@ -247,7 +247,8 @@ export class MedicalHistoryService {
                 appointment_time
               )
             `)
-            .eq('patient_id', patientId);
+            .eq('patient_id', patientId)
+            .is('is_private', false); // Only show non-private records by default
 
           // Apply filters
           if (filters?.date_from) {
@@ -262,8 +263,12 @@ export class MedicalHistoryService {
           if (filters?.clinic_id) {
             query = query.eq('clinic_id', filters.clinic_id);
           }
+          // Filter by record_type if specified in search_term or filters
+          if (filters?.record_type && filters.record_type.length > 0) {
+            query = query.in('record_type', filters.record_type);
+          }
 
-          return await query.order('visit_date', { ascending: false });
+          return await query.order('visit_date', { ascending: false }).order('created_at', { ascending: false });
         } catch {
           // Fallback without appointment relationship
           let query = supabase
@@ -280,7 +285,8 @@ export class MedicalHistoryService {
                 clinic_name
               )
             `)
-            .eq('patient_id', patientId);
+            .eq('patient_id', patientId)
+            .is('is_private', false);
 
           // Apply filters
           if (filters?.date_from) {
@@ -294,6 +300,9 @@ export class MedicalHistoryService {
           }
           if (filters?.clinic_id) {
             query = query.eq('clinic_id', filters.clinic_id);
+          }
+          if (filters?.record_type && filters.record_type.length > 0) {
+            query = query.in('record_type', filters.record_type);
           }
 
           return await query.order('created_at', { ascending: false });
@@ -577,9 +586,9 @@ export class MedicalHistoryService {
         timeline.push({
           id: `record-${record.id}`,
           type: 'medical_records',
-          date: record.visit_date,
-          title: `Medical Record - ${record.chief_complaint}`,
-          description: record.diagnosis,
+          date: record.visit_date || record.created_at.split('T')[0],
+          title: record.title || `Medical Record - ${record.record_type}`,
+          description: record.description || record.diagnosis || record.chief_complaint || 'Medical record entry',
           doctor_name: record.doctor?.full_name,
           clinic_name: record.clinic?.clinic_name,
           data: record
@@ -689,11 +698,13 @@ export class MedicalHistoryService {
       medicalRecords
         .filter(r => r.diagnosis && r.diagnosis.toLowerCase().includes('chronic'))
         .map(r => r.diagnosis)
+        .filter(Boolean)
     )];
 
     const currentMedications = prescriptions
       .filter(p => p.status === 'active')
-      .map(p => p.medication_name);
+      .map(p => p.medication_name)
+      .filter(Boolean);
 
     return {
       total_appointments: appointments.length,
