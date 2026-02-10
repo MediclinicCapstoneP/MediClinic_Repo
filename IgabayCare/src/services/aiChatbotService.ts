@@ -50,33 +50,22 @@ export interface BookingAssistanceContext {
 
 export class AIChatbotService {
   private systemPrompt = `
-You are an AI assistant for IgabayCare (formerly iGabayAtiCare), a comprehensive healthcare platform in the Philippines that connects patients with clinics. Your role is to help users with:
+You are an AI assistant for IgabayCare, a healthcare platform in the Philippines. Help users with:
 
-1. **Appointment Booking**: Guide patients through finding clinics, checking availability, and booking appointments using PayMongo checkout sessions
-2. **Clinic Information**: Provide details about clinics, services, doctors, and specialties
-3. **Medical History**: Help patients access and understand their medical records, prescriptions, lab results, and vaccination history
-4. **Payment Assistance**: Explain the payment-first policy, PayMongo checkout process, and payment verification
-5. **Account Help**: Assist with profile management, appointment history, and settings
-6. **Technical Support**: Help with app navigation and troubleshooting
-7. **General Healthcare Guidance**: Provide general health information (not medical advice)
-
-**Key Platform Features:**
-- **Medical Records System**: Comprehensive medical history with consultation records, lab results, prescriptions, vaccinations, and more
-- **Payment System**: PayMongo checkout sessions with GCash integration (payment required upfront to secure booking)
-- **Multiple User Roles**: Patients, Doctors, and Clinics with role-specific features
-- **Real-time Features**: Live notifications, appointment status updates, payment confirmations
+1. **Appointment Booking**: Find clinics, check availability, book appointments (PayMongo payment required)
+2. **Clinic Info**: Provide clinic details, services, doctors, specialties
+3. **Medical Records**: Help access consultation history, prescriptions, lab results
+4. **Payment**: Explain payment-first policy and PayMongo checkout process
+5. **Account Help**: Profile management, appointment history, settings
+6. **Tech Support**: App navigation and troubleshooting
+7. **General Health**: Provide general health information (not medical advice)
 
 **Guidelines:**
-- Be helpful, professional, and empathetic
-- Always clarify if you're providing general information vs. requiring professional medical advice
-- Use simple, clear language appropriate for Filipino users
-- Offer specific next steps and actionable guidance
-- When booking appointments, always mention the payment-first policy and explain PayMongo checkout process
-- For medical history questions, explain how to access records through the Patient History section
-- If you cannot help, escalate to human support
-
-**Payment Context**: 
-- All appointments require upfront payment (consultation fee + booking fee)
+- Be helpful, professional, concise
+- Use simple language for Filipino users
+- Always mention payment-first policy for bookings
+- For medical advice, direct to professionals
+- Escalate to human support when needed
 - Payment is processed via PayMongo checkout sessions
 - After payment, the appointment is automatically confirmed
 - Supports GCash (primary), PayMaya, and card payments
@@ -214,7 +203,7 @@ You are an AI assistant for IgabayCare (formerly iGabayAtiCare), a comprehensive
       console.error('Error processing message:', error);
       
       // Return error response
-      const errorMessage = "I'm sorry, I encountered an issue processing your request. Please try again or contact support if the problem persists.";
+      const errorMessage = "Sorry, I had trouble processing that. Please try again or contact support.";
       await this.sendMessage(conversationId, errorMessage, 'bot');
       
       return {
@@ -594,11 +583,11 @@ You are an AI assistant for IgabayCare (formerly iGabayAtiCare), a comprehensive
 
   private getWelcomeMessage(userType: string, conversationType: string): string {
     const welcomeMessages = {
-      'booking_assistance': "Hi! I'm here to help you book an appointment. I can help you find clinics, check availability, and guide you through the booking process. What kind of medical service are you looking for?",
-      'clinic_search': "Hello! I can help you find clinics and healthcare providers. What type of medical service or specialty are you looking for?",
-      'account_help': "Hi! I'm here to help you with your account. Whether you need help with your profile, password, or navigating the app, I'm here to assist you.",
-      'technical_support': "Hello! I'm here to help you with any technical issues you might be experiencing. What seems to be the problem?",
-      'general_inquiry': "Hi! I'm your iGabayAtiCare assistant. I can help you book appointments, find clinics, manage your account, or answer questions about our services. How can I help you today?"
+      'booking_assistance': "Hi! I'll help you book an appointment. What type of care do you need?",
+      'clinic_search': "Hello! I can help you find clinics. What specialty are you looking for?",
+      'account_help': "Hi! How can I help with your account today?",
+      'technical_support': "Hi! What technical issue are you experiencing?",
+      'general_inquiry': "Hi! I can help you book appointments, find clinics, or answer questions. How can I help?"
     };
 
     return welcomeMessages[conversationType as keyof typeof welcomeMessages] || welcomeMessages.general_inquiry;
@@ -696,25 +685,23 @@ You are an AI assistant for IgabayCare (formerly iGabayAtiCare), a comprehensive
 
     await this.sendMessage(
       conversationId,
-      "I'm connecting you with a human support representative who can better assist you. Please wait a moment.",
+      "Connecting you with human support. Please wait...",
       'system'
     );
   }
 
-  private async handleAvailabilityCheck(conversationId: string, criteria: any) {
-    // Placeholder for availability checking logic
+  private async handleAvailabilityCheck(conversationId: string, _criteria: any) {
     await this.sendMessage(
       conversationId,
-      "Let me check the availability for you. Could you please specify which clinic and what date you prefer?",
+      "Which clinic and date do you prefer?",
       'bot'
     );
   }
 
-  private async handleBookingInitiation(conversationId: string, bookingData: any) {
-    // Placeholder for booking initiation logic
+  private async handleBookingInitiation(conversationId: string, _bookingData: any) {
     await this.sendMessage(
       conversationId,
-      "Great! I'll help you book an appointment. Please note that payment is required upfront to secure your booking. Let's start by confirming your details.",
+      "Great! I'll help you book. Payment is required upfront. Let's confirm your details.",
       'bot'
     );
   }
