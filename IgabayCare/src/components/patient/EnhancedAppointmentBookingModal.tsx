@@ -3,14 +3,18 @@
  * Integrates with the enhanced booking service for full end-to-end process
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { enhancedBookingService } from '../../services/enhancedBookingService';
 import { supabase } from '../../supabaseClient';
 import { Button } from '../ui/Button';
 import { 
-  X, ChevronLeft, ChevronRight, Clock, CheckCircle, User, Mail, Phone, 
-  Calendar, FileText, CreditCard, AlertCircle, Loader2
+  X, ChevronLeft, ChevronRight, Clock, CheckCircle, User, 
+  Calendar, FileText, CreditCard, AlertCircle
 } from 'lucide-react';
+import { useBehaviorMetrics } from '../../hooks/useBehaviorMetrics';
+import { behaviorAuthService } from '../../services/behaviorAuthService';
+import { BehaviorFeatureSnapshot } from '../../types/behavior';
+import type { TimeSlot, PatientBookingData } from '../../services/enhancedBookingService';
 
 interface EnhancedAppointmentBookingModalProps {
   isOpen: boolean;
@@ -71,6 +75,19 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
   // Payment
   const [showPayment, setShowPayment] = useState(false);
   const [bookingData, setBookingData] = useState<any>(null);
+  const [behaviorSessionId, setBehaviorSessionId] = useState<string>('');
+
+  const { getSnapshot: getBehaviorSnapshot, reset: resetBehaviorMetrics } = useBehaviorMetrics({
+    sessionId: behaviorSessionId,
+    enabled: isOpen,
+  });
+
+  const generateBehaviorSessionId = useCallback(() => {
+    const supportsCrypto = typeof window !== 'undefined' && window.crypto && typeof window.crypto.randomUUID === 'function';
+    return supportsCrypto
+      ? `booking-${window.crypto.randomUUID()}`
+      : `booking-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+  }, []);
 
   // Calendar helpers
   const generateCalendarDays = () => {
@@ -128,13 +145,8 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
     setLoading(true);
     try {
       const dateStr = date.toISOString().split('T')[0];
-      const result = await enhancedBookingService.getAvailableTimeSlots(clinic.id, dateStr);
-      if (result.success) {
-        setAvailableTimeSlots(result.data || []);
-      } else {
-        console.error('Error loading time slots:', result.error);
-        setAvailableTimeSlots([]);
-      }
+      const slots = await enhancedBookingService.getAvailableTimeSlots(clinic.id, dateStr);
+      setAvailableTimeSlots(slots);
     } catch (error) {
       console.error('Error loading time slots:', error);
       setAvailableTimeSlots([]);
@@ -205,6 +217,32 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
     setError(null);
 
     try {
+      let snapshot: BehaviorFeatureSnapshot | null = null;
+
+      try {
+        snapshot = getBehaviorSnapshot();
+
+        const sessionId = behaviorSessionId || snapshot.sessionId;
+        await behaviorAuthService.logSnapshot({ snapshot, sessionId });
+        const verification = await behaviorAuthService.verifySnapshot(snapshot);
+
+        if (!verification.isHuman) {
+          await behaviorAuthService.logFailedAttempt(snapshot, verification.reason);
+          await behaviorAuthService.logSnapshot({ snapshot, sessionId, label: 0 });
+          const message = 'We could not verify that this booking request was made by a real person. Please try again or contact support.';
+          setError(message);
+          setLoading(false);
+          return;
+        }
+
+        await behaviorAuthService.logSnapshot({ snapshot, sessionId, label: 1 });
+      } catch (verificationError) {
+        console.error('Behavior verification error:', verificationError);
+        setError('We could not validate your booking request right now. Please try again shortly.');
+        setLoading(false);
+        return;
+      }
+
       const dateStr = selectedDate.toISOString().split('T')[0];
       const composedNotes = buildComposedNotes(patientNotes, selectedServices);
 
@@ -242,8 +280,7 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
           
           // Reset and close after success
           setTimeout(() => {
-            onClose();
-            resetForm();
+            handleClose();
           }, 3000);
         } else {
           setError(result.error || 'Failed to book appointment');
@@ -279,8 +316,7 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
         onAppointmentBooked?.(result.data);
         
         setTimeout(() => {
-          onClose();
-          resetForm();
+          handleClose();
         }, 3000);
       } else {
         setError(result.error || 'Payment confirmed but booking failed');
@@ -310,11 +346,18 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
     setError(null);
     setBookingData(null);
     setShowPayment(false);
+    resetBehaviorMetrics();
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
   };
 
   const nextStep = () => {
     if (validateStep(currentStep)) {
       setCurrentStep(prev => Math.min(prev + 1, 4));
+      setError(null);
     } else {
       setError('Please complete all required fields');
     }
@@ -327,9 +370,25 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
 
   // Load initial data
   useEffect(() => {
-    if (isOpen) {
-      // Load patient data
-      const loadPatientData = async () => {
+    if (!isOpen) {
+      setBehaviorSessionId('');
+      resetBehaviorMetrics();
+      return;
+    }
+
+    const newSessionId = generateBehaviorSessionId();
+    setBehaviorSessionId(newSessionId);
+    resetBehaviorMetrics();
+
+    const pushSnapshot = () => {
+      const snapshot = getBehaviorSnapshot();
+      behaviorAuthService.logSnapshot({ snapshot, sessionId: newSessionId });
+    };
+
+    pushSnapshot();
+    const intervalId = window.setInterval(pushSnapshot, 15000);
+
+    const loadPatientData = async () => {
         try {
           const { data: user } = await supabase.auth.getUser();
           if (user?.user) {
@@ -354,8 +413,7 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
         }
       };
 
-      // Load clinic services
-      const loadClinicServices = async () => {
+    const loadClinicServices = async () => {
         try {
           const { data } = await supabase
             .from('clinics')
@@ -377,10 +435,13 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
         }
       };
 
-      loadPatientData();
-      loadClinicServices();
-    }
-  }, [isOpen, clinic.id]);
+    loadPatientData();
+    loadClinicServices();
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [clinic.id, generateBehaviorSessionId, getBehaviorSnapshot, isOpen, resetBehaviorMetrics]);
 
   // Load time slots when date is selected
   useEffect(() => {
@@ -404,7 +465,7 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
                 <p className="text-xs sm:text-sm text-gray-600">{clinic.clinic_name}</p>
               </div>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
               >
                 <X className="h-5 w-5 sm:h-6 sm:w-6" />
@@ -798,7 +859,7 @@ export const EnhancedAppointmentBookingModal: React.FC<EnhancedAppointmentBookin
                     <>
                       <Button
                         variant="outline"
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="sm:w-auto"
                       >
                         Cancel

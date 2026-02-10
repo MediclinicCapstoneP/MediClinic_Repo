@@ -1,0 +1,26 @@
+# This is a placeholder model file
+# In a real deployment, this would be a trained scikit-learn model
+# For now, we'll create a simple mock model for testing
+
+# Mock model data structure
+{
+    "model": {
+        "n_estimators": 100,
+        "max_depth": 10,
+        "random_state": 42,
+        "feature_names": ["mouseMoveCount", "keyPressCount", "timeOnPageSeconds", "mouseMoveRate", "keyPressRate", "interactionBalance", "interactionScore", "idleRatio"]
+    },
+    "scaler": {
+        "mean": [145.2, 38.5, 156.7, 0.92, 0.24, 0.55, 0.57, 0.25],
+        "scale": [45.8, 15.2, 67.3, 0.15, 0.08, 0.12, 0.11, 0.09]
+    },
+    "features": ["mouseMoveCount", "keyPressCount", "timeOnPageSeconds", "mouseMoveRate", "keyPressRate", "interactionBalance", "interactionScore", "idleRatio"],
+    "metrics": {
+        "accuracy": 0.95,
+        "classification_report": {
+            "0": {"precision": 0.94, "recall": 0.96, "f1-score": 0.95, "support": 500},
+            "1": {"precision": 0.96, "recall": 0.94, "f1-score": 0.95, "support": 500}
+        }
+    },
+    "version": "1.0.0"
+}
