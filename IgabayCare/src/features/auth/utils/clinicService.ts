@@ -1,6 +1,7 @@
 import { supabase } from '../../../supabaseClient';
 import type { ClinicProfile, CreateClinicData } from '../../../types/auth';
 import type { ClinicService } from '../../../types/clinicServices';
+import { ClinicRiskAssessmentService } from '../../../services/clinicRiskAssessmentService';
 
 // Interface for clinics with services and pricing
 interface ClinicWithServices extends ClinicProfile {
